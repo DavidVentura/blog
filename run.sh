@@ -1,5 +1,6 @@
 #!/bin/bash
 source credentials
+COMMIT=$(git rev-parse HEAD)
 docker run -v "$PWD/scripts":/root/scripts/ \
            -v "$PWD/blog/raw/":/root/raw \
            -v "$PWD/blog/images":/root/images \
