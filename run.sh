@@ -17,6 +17,7 @@ fi
 
 docker run -v "$PWD/scripts":/root/scripts/ \
            -v "$PWD/blog/raw/$TARGET":/root/target \
+           -v "$PWD/blog/raw/":/root/raw \
            -v "$PWD/blog/images":/root/images \
            -v "$PWD/blog/template":/root/template \
            -v "$PWD/blog/html":/root/html \

@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
+import glob
 import json
 import markdown2
-import re
 import os
-import tinys3
+import re
 import sys
+import tinys3
 
 from datetime import datetime
 from jinja2 import Template
 
 BUCKET = 'blog-davidventura'
 ENDPOINT = 's3-sa-east-1.amazonaws.com'
+valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
 
 
 def parse_images(fname, conn, safe_title):
@@ -70,7 +72,6 @@ def generate_post(header, body):
 
 
 def sanitize_title(title):
-    valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
     tmp_title = title.replace(' ', '-').lower().strip('-')
     return valid_title_chars.sub('', tmp_title).strip('-')
 
@@ -89,5 +90,19 @@ def main():
     open(html_fname, 'w', encoding='utf-8').write(blog_post)
 
 
+def generate_index():
+    items = []
+    for f in glob.glob("raw/*/metadata.json"):
+        item = parse_metadata(f)
+        item['path'] = "/%s.html" % sanitize_title(item['title'])
+        items.append(item)
+
+    s_items = sorted(items, key=lambda k: k['date'], reverse=True)
+    template = Template(open('template/index.html', 'r').read())
+    rendered = template.render(index=s_items)
+    print(rendered)
+
+
 if __name__ == '__main__':
-    main()
+    # main()
+    generate_index()

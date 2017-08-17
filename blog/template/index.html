@@ -1,0 +1,25 @@
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="/css/style.css" rel="stylesheet" type="text/css">
+    </head>
+    <body>
+        <div id="indexheader">
+            <h1>Grouch mumbling about computers</h1>
+            <h4>Thoughts, ideas.</h4>
+        </div>
+        <div id="indexlist">
+            {% for post in index %}
+            <div class="post">
+                <h2>
+                    <a href="{{post['path']}}">
+                        {{ post['title'] }}
+                    </a>
+                </h2>
+                <h4>{{post['date']}}</h4>
+            </div>
+            {% endfor %}
+        </div>
+    </body>
+</html>
+
