@@ -13,7 +13,7 @@ BUCKET = 'blog-davidventura'
 ENDPOINT = 's3-sa-east-1.amazonaws.com'
 
 
-def parse_images(fname, conn):
+def parse_images(fname, conn, safe_title):
     lines = open(fname).readlines()
     inline = re.compile(r'!\[.*?\]\((?P<cap>.*?)(?: |\))')
     ref = re.compile(r'^\[.*?\]: (?P<cap>.*?)(?: |$)')
@@ -32,9 +32,10 @@ def parse_images(fname, conn):
             return
 
         f = open(image_fname, 'rb')
-        # nname = os.path.basename(image_fname)
-        conn.upload(image_fname, f, BUCKET, expires='max')
-        target = 'https://%s/%s/%s' % (ENDPOINT, BUCKET, image_fname)
+        nname = os.path.basename(image_fname)
+        dest = "%s/%s" % (safe_title, nname)
+        conn.upload(dest, f, BUCKET, expires='max')
+        target = 'https://%s/%s/%s' % (ENDPOINT, BUCKET, dest)
         lines[idx] = lines[idx].replace(image_fname, target)
 
     return "".join(lines)
@@ -64,7 +65,7 @@ def generate_header(metadata):
 def generate_post(header, body):
     template = Template(open('template/body.html', 'r').read())
     rendered = template.render(header=header, post=body)
-    print(rendered)
+    return rendered
 
 
 def main():
@@ -72,10 +73,13 @@ def main():
     conn = tinys3.Connection(S3_ACCESS_KEY, S3_SECRET_KEY,
                              endpoint=ENDPOINT)
     r = parse_metadata('target/metadata.json')
+    safe_title = r['title'].replace(' ', '-').lower()
     header = generate_header(r)
-    parsed = parse_images('target/POST.md', conn)
+    parsed = parse_images('target/POST.md', conn, safe_title)
     body = markdown2.markdown(parsed, extras=["fenced-code-blocks"])
-    generate_post(header, body)
+    blog_post = generate_post(header, body)
+    html_fname = 'html/%s.html' % safe_title
+    open(html_fname, 'w').write(blog_post)
 
 
 if __name__ == '__main__':
