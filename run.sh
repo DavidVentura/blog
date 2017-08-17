@@ -21,6 +21,7 @@ if [[ "$COMMIT_MSG" != *"deploy"* ]]; then
 #    exit 0
 fi
 
+docker build -t blogging .
 docker run -v "$PWD/scripts":/root/scripts/ \
            -v "$PWD/blog/raw/$TARGET":/root/target \
            -v "$PWD/blog/raw/":/root/raw \
