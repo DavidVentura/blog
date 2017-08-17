@@ -56,7 +56,7 @@ def setup_keys():
 def parse_metadata(target):
     data = open(target, 'r', encoding='utf-8').read()
     j = json.loads(data)
-    j['date'] = datetime.strptime(j['date'], "%Y-%m-%dT%H:%M:%SZ")
+    j['date'] = datetime.strptime(j['date'], "%Y-%m-%d")
     return j
 
 
