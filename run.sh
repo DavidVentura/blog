@@ -19,7 +19,7 @@ fi
 
 function run {
     TARGET="$1"
-    echo "$TARGET"
+    echo "$TARGET" | ts
     docker run -v "$PWD/scripts":/root/scripts/ \
                -v "$PWD/blog/raw/$TARGET":/root/target \
                -v "$PWD/blog/raw/":/root/raw \
