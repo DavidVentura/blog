@@ -3,4 +3,5 @@ RUN apt-get update && apt-get -y --no-install-recommends install python3 python3
 RUN pip3 install tinys3 markdown2 pygments
 WORKDIR "/root/"
 # RUN mkdir -p html && pygmentize -S default -f html > html/style.css
+ENV PYTHONIOENCODING UTF-8
 ENTRYPOINT /usr/bin/python3 /root/scripts/test.py
