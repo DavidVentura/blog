@@ -4,7 +4,6 @@ set -eu
 source credentials
 COMMIT=$(git rev-parse HEAD)
 COMMIT_MSG=$(git log --format=%B -n 1)
-COMMIT_MSG="deploy everything"
 
 TARGET=$(echo "$COMMIT_MSG" | grep -oP "^deploy \K([a-zA-Z0-9._-]+)" || true)
 
