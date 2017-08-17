@@ -1,12 +1,8 @@
 html, body { max-width: 100%; }
 body { width: 70%; margin: 0px 15%}
-@media only screen and (max-width: 1000px) {
-  body {
-    width: 95% !important;
-    margin: 10px 15px !important;
-  }
 
-#indexheader { margin: 0px auto; text-align: center; } 
+h1, h2, h4 { margin: 7px 0px; }
+#indexheader { padding: 5px; margin: 0px auto; text-align: center; } 
 #indexheader h1 {block-size:  color: #333}
 #indexlist{
   max-width: 80%;
@@ -14,6 +10,17 @@ body { width: 70%; margin: 0px 15%}
   text-align: left;
 }
 
-#indexlist a { text-decoration: underline; color: black;}
-
+#indexlist a { text-decoration: none; color: black;}
+.post {
+    margin: 15px 0px;
+    border-bottom: 1px solid rgba(0,0,0,0.2);
+}
 pre, code, .codehilite { max-width:  100%; overflow-x: scroll }
+
+@media only screen and (max-width: 1000px) {
+  #blogpost {
+    padding: 10px 15px !important;
+  }
+  body { width: 100%; margin: 0px 0px}
+  #blogheader { padding: 0px 10px; } 
+}
