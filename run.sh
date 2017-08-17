@@ -1,24 +1,24 @@
 #!/bin/bash
 set -eu
 
-if [ $# -ne 1 ]; then
-    echo "Usage: 1 argument, target blog root"
-    exit 1
-fi
-
 source credentials
 COMMIT=$(git rev-parse HEAD)
 COMMIT_MSG=$(git log --format=%B -n 1)
-TARGET="$1"
+TARGET=$(echo "$COMMIT_MSG" | grep -oP "^deploy \K([a-zA-Z0-9._-]+)" || true)
+
+if [[ "$COMMIT_MSG" != "deploy"* ]]; then
+    echo 'No need to deploy'
+    exit 0
+fi
+
+if [[ -z "${TARGET// }" ]]; then
+    echo "Invalid target"
+    exit 1
+fi
 
 if [ ! -d "$PWD/blog/raw/$TARGET" ]; then
     echo "Target path does not exist"
     exit 1
-fi
-
-if [[ "$COMMIT_MSG" != *"deploy"* ]]; then
-    echo 'No need to deploy'
-#    exit 0
 fi
 
 docker build -t blogging .
