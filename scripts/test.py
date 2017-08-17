@@ -100,9 +100,9 @@ def generate_index():
     s_items = sorted(items, key=lambda k: k['date'], reverse=True)
     template = Template(open('template/index.html', 'r').read())
     rendered = template.render(index=s_items)
-    print(rendered)
+    open('html/index.html', 'w', encoding='utf-8').write(rendered)
 
 
 if __name__ == '__main__':
-    # main()
+    main()
     generate_index()
