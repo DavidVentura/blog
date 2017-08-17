@@ -8,11 +8,17 @@ fi
 
 source credentials
 COMMIT=$(git rev-parse HEAD)
+COMMIT_MSG=$(git log --format=%B -n 1)
 TARGET="$1"
 
 if [ ! -d "$PWD/blog/raw/$TARGET" ]; then
     echo "Target path does not exist"
     exit 1
+fi
+
+if [[ "$COMMIT_MSG" != *"deploy"* ]]; then
+    echo 'No need to deploy'
+#    exit 0
 fi
 
 docker run -v "$PWD/scripts":/root/scripts/ \
