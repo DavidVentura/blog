@@ -1,4 +1,10 @@
 html, body { max-width: 100%; }
+body { width: 70%; margin: 0px 15%}
+@media only screen and (max-width: 1000px) {
+  body {
+    width: 95% !important;
+    margin: 10px 15px !important;
+  }
 
 #indexheader { margin: 0px auto; text-align: center; } 
 #indexheader h1 {block-size:  color: #333}
