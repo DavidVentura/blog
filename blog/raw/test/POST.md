@@ -1,6 +1,12 @@
 Inline-style: 
 ![alt text](images/testimg.jpg "Logo Title Text 1")
 
+```python
+    if True:
+        print("test code")
+```
+
+
 Reference-style: 
 ![alt text][logo]
 
