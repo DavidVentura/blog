@@ -52,7 +52,8 @@ def setup_keys():
 
 
 def parse_metadata(target):
-    j = json.loads(open(target).read())
+    data = open(target, 'r', encoding='utf-8').read()
+    j = json.loads(data)
     j['date'] = datetime.strptime(j['date'], "%Y-%m-%dT%H:%M:%SZ")
     return j
 
@@ -68,18 +69,24 @@ def generate_post(header, body):
     return rendered
 
 
+def sanitize_title(title):
+    valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
+    tmp_title = title.replace(' ', '-').lower().strip('-')
+    return valid_title_chars.sub('', tmp_title)
+
+
 def main():
     S3_ACCESS_KEY, S3_SECRET_KEY = setup_keys()
     conn = tinys3.Connection(S3_ACCESS_KEY, S3_SECRET_KEY,
                              endpoint=ENDPOINT)
     r = parse_metadata('target/metadata.json')
-    safe_title = r['title'].replace(' ', '-').lower()
     header = generate_header(r)
+    safe_title = sanitize_title(r['title'])
     parsed = parse_images('target/POST.md', conn, safe_title)
     body = markdown2.markdown(parsed, extras=["fenced-code-blocks"])
     blog_post = generate_post(header, body)
     html_fname = 'html/%s.html' % safe_title
-    open(html_fname, 'w').write(blog_post)
+    open(html_fname, 'w', encoding='utf-8').write(blog_post)
 
 
 if __name__ == '__main__':
