@@ -72,7 +72,7 @@ def generate_post(header, body):
 def sanitize_title(title):
     valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
     tmp_title = title.replace(' ', '-').lower().strip('-')
-    return valid_title_chars.sub('', tmp_title)
+    return valid_title_chars.sub('', tmp_title).strip('-')
 
 
 def main():
