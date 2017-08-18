@@ -21,3 +21,7 @@ on matching commits, Jenkins launches a Docker container that:
 ![XKCD 917](images/xkcd917.png)
 
 XKCD 917
+
+---------
+
+Everything is on [GitHub](https://github.com/DavidVentura/blogging_like_its_2017)
