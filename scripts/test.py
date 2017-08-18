@@ -91,22 +91,30 @@ def sanitize_title(title):
 
 
 def main():
-    debug('parsing metadata')
-    r = parse_metadata('target/metadata.json')
-    debug('generating header')
-    header = generate_header(r)
-    debug('sanitizing title')
-    safe_title = sanitize_title(r['title'])
-    debug('parsing images')
-    parsed = parse_images('target/POST.md', safe_title)
-    debug('generating body')
-    body = markdown2.markdown(parsed, extras=["fenced-code-blocks"])
-    debug('generating post')
-    blog_post = generate_post(header, body)
-    html_fname = 'html/%s.html' % safe_title
-    debug('writing to file')
-    open(html_fname, 'w', encoding='utf-8').write(blog_post)
-    debug('finished')
+    targets = os.environ['TARGET'].strip()
+    for target in targets.split(';'):
+        target = os.path.join('raw/', target)
+        if not os.path.exists(target):
+            print("Target path (%s) does not exist" % target)
+            continue
+
+        debug(target)
+        debug('parsing metadata')
+        r = parse_metadata('%s/metadata.json' % target)
+        debug('generating header')
+        header = generate_header(r)
+        debug('sanitizing title')
+        safe_title = sanitize_title(r['title'])
+        debug('parsing images')
+        parsed = parse_images('%s/POST.md' % target, safe_title)
+        debug('generating body')
+        body = markdown2.markdown(parsed, extras=["fenced-code-blocks"])
+        debug('generating post')
+        blog_post = generate_post(header, body)
+        html_fname = 'html/%s.html' % safe_title
+        debug('writing to file')
+        open(html_fname, 'w', encoding='utf-8').write(blog_post)
+        debug('finished')
 
 
 def generate_index():
