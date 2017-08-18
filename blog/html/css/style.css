@@ -16,6 +16,7 @@ h1, h2, h4 { margin: 7px 0px; }
     border-bottom: 1px solid rgba(0,0,0,0.2);
 }
 pre, code, .codehilite { max-width:  100%; overflow-x: scroll }
+img, .center { display: block; margin: 0px auto; }
 
 @media only screen and (max-width: 1000px) {
   #blogpost {

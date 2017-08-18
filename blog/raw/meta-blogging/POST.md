@@ -20,7 +20,7 @@ on matching commits, Jenkins launches a Docker container that:
 
 ![XKCD 917](images/xkcd917.png)
 
-XKCD 917
+<p class="center">XKCD 917</p>
 
 ---------
 
