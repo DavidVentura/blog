@@ -12,7 +12,13 @@ from jinja2 import Template
 
 BUCKET = 'blog-davidventura'
 ENDPOINT = 's3-sa-east-1.amazonaws.com'
+DEBUG = True
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
+
+
+def debug(*msg):
+    if DEBUG:
+        print(*msg)
 
 
 def connect_to_s3():
@@ -85,14 +91,22 @@ def sanitize_title(title):
 
 
 def main():
+    debug('parsing metadata')
     r = parse_metadata('target/metadata.json')
+    debug('generating header')
     header = generate_header(r)
+    debug('sanitizing title')
     safe_title = sanitize_title(r['title'])
+    debug('parsing images')
     parsed = parse_images('target/POST.md', safe_title)
+    debug('generating body')
     body = markdown2.markdown(parsed, extras=["fenced-code-blocks"])
+    debug('generating post')
     blog_post = generate_post(header, body)
     html_fname = 'html/%s.html' % safe_title
+    debug('writing to file')
     open(html_fname, 'w', encoding='utf-8').write(blog_post)
+    debug('finished')
 
 
 def generate_index():
