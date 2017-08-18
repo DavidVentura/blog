@@ -1,7 +1,9 @@
-html, body { max-width: 100%; }
+html, body { max-width: 100%; font-family: sans-serif}
 body { width: 70%; margin: 0px 15%}
 
 h1, h2, h4 { margin: 7px 0px; }
+h2 { font-size: 22px; }
+h4 { font-size: 14px; color: #666; }
 #indexheader { padding: 5px; margin: 0px auto; text-align: center; } 
 #indexheader h1 {block-size:  color: #333}
 #indexlist{
