@@ -8,8 +8,8 @@ The idea behind the blog-post flow is to:
 * Get GitHub to trigger a build on my Jenkins server
 * Sync the resulting built to the web server hosting my blog
 
-The build is triggered when matching `^deploy [a-zA-Z_.-]`, then it 
-launches a Docker container that:
+The build is triggered when the commit message matches `^deploy [a-zA-Z_.-]`;
+on matching commits, Jenkins launches a Docker container that:
 
 * Scans the Markdown for images (both inline and ref)
 * Uploads the local images to S3 and replaces the path in the Markdown
@@ -19,5 +19,5 @@ launches a Docker container that:
 
 
 ![XKCD 917](images/xkcd917.png)
----
+
 XKCD 917
