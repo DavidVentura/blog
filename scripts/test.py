@@ -15,10 +15,16 @@ ENDPOINT = 's3-sa-east-1.amazonaws.com'
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
 
 
-def parse_images(fname, conn, safe_title):
+def connect_to_s3():
+    S3_ACCESS_KEY, S3_SECRET_KEY = setup_keys()
+    return tinys3.Connection(S3_ACCESS_KEY, S3_SECRET_KEY, endpoint=ENDPOINT)
+
+
+def parse_images(fname, safe_title):
     lines = open(fname).readlines()
     inline = re.compile(r'!\[.*?\]\((?P<cap>.*?)(?: |\))')
     ref = re.compile(r'^\[.*?\]: (?P<cap>.*?)(?: |$)')
+    conn = None
     for idx in range(len(lines)):
         line = lines[idx]
         group = inline.search(line)
@@ -36,6 +42,8 @@ def parse_images(fname, conn, safe_title):
         f = open(image_fname, 'rb')
         nname = os.path.basename(image_fname)
         dest = "%s/%s" % (safe_title, nname)
+        if conn is None:
+            conn = connect_to_s3()
         conn.upload(dest, f, BUCKET, expires='max')
         target = 'https://%s/%s/%s' % (ENDPOINT, BUCKET, dest)
         lines[idx] = lines[idx].replace(image_fname, target)
@@ -77,13 +85,10 @@ def sanitize_title(title):
 
 
 def main():
-    S3_ACCESS_KEY, S3_SECRET_KEY = setup_keys()
-    conn = tinys3.Connection(S3_ACCESS_KEY, S3_SECRET_KEY,
-                             endpoint=ENDPOINT)
     r = parse_metadata('target/metadata.json')
     header = generate_header(r)
     safe_title = sanitize_title(r['title'])
-    parsed = parse_images('target/POST.md', conn, safe_title)
+    parsed = parse_images('target/POST.md', safe_title)
     body = markdown2.markdown(parsed, extras=["fenced-code-blocks"])
     blog_post = generate_post(header, body)
     html_fname = 'html/%s.html' % safe_title
