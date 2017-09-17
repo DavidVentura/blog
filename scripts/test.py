@@ -12,7 +12,7 @@ from jinja2 import Template
 
 BUCKET = 'blog-davidventura'
 ENDPOINT = 's3-sa-east-1.amazonaws.com'
-DEBUG = True
+DEBUG = False
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
 
 
