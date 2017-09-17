@@ -1,11 +1,11 @@
 html, body { max-width: 100%; font-family: sans-serif}
 body { width: 70%; margin: 0px 15%}
-
+img { max-width: 100%; margin: 0px auto; }
 h1, h2, h4 { margin: 7px 0px; }
 h1 { font-size: 28px; }
 h2 { font-size: 22px; }
 h3 { font-size: 16px; }
-h4 { font-size: 12px; color: #666; }
+h4 { font-size: 12px; color: #666; font-weight: normal;}
 
 #indexheader { padding: 5px; margin: 0px auto; text-align: center; } 
 #indexheader h1 {block-size:  color: #333}
@@ -15,7 +15,7 @@ h4 { font-size: 12px; color: #666; }
   text-align: left;
 }
 
-#indexlist a { text-decoration: none; color: black;}
+#indexlist a { text-decoration: none; color: #4a4a4a;}
 .post {
     margin: 15px 0px;
     border-bottom: 1px solid rgba(0,0,0,0.2);
