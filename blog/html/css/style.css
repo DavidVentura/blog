@@ -1,24 +1,54 @@
-html, body { max-width: 100%; font-family: sans-serif}
-body { width: 70%; margin: 0px 15%}
+html, body { 
+  max-width: 100%;
+  font-family: 'Roboto', sans-serif;
+  color: #1D1D1D;
+}
+body { 
+  width: 60%;
+  margin: 0px auto;
+}
+
 img { max-width: 100%; margin: 0px auto; }
-h1, h2, h4 { margin: 7px 0px; }
+h1, h2, h3, h4, h5 {
+  font-family: 'Roboto Slab', serif;
+}
+h1, h2, { margin: 7px 0px; }
 h1 { font-size: 28px; }
 h2 { font-size: 22px; }
 h3 { font-size: 16px; }
-h4 { font-size: 12px; color: #666; font-weight: normal;}
+h4 { font-size: 12px; color: #353535; font-weight: 300;}
+h5 {
+  font-size: 10px;
+  color: #353535;
+  font-weight: normal;
+  letter-spacing: 1px;
+  border-bottom: 1px dotted #DEDBD6;
+  display: inline-block;
+}
 
-#indexheader { padding: 5px; margin: 0px auto; text-align: center; } 
-#indexheader h1 {block-size:  color: #333}
+#indexheader {
+  text-align: left;
+  margin: 5% auto;
+} 
+#indexheader h1 {
+  color: #1D1D1D;
+  font-size: 40px;
+}
 #indexlist{
-  max-width: 80%;
-  margin: 0px 10%;
   text-align: left;
 }
 
-#indexlist a { text-decoration: none; color: #4a4a4a;}
+#indexlist a {
+  text-decoration: none;
+  color: #77797F;
+  transition: color 500ms ease;
+}
+#indexlist a:hover {
+  color: #5BA4AF;
+}
 .post {
-    margin: 15px 0px;
-    border-bottom: 1px solid rgba(0,0,0,0.2);
+    margin: 25px 0px;
+    border-bottom: 1px solid #DEDBD6;
 }
 pre, code, .codehilite { max-width:  100%; overflow-x: auto }
 img, .center { display: block; margin: 0px auto; text-align: center; }
