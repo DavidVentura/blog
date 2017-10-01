@@ -75,7 +75,7 @@ def parse_metadata(target):
 
 
 def generate_header(metadata):
-    template = Template('<h1>{{ title }}</h1><h4>{{ date }}</h4>')
+    template = Template('<h5>{{ date }}</h5><h1>{{ title }}</h1>')
     return template.render(metadata)
 
 
