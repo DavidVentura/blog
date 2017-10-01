@@ -2,10 +2,26 @@ html, body {
   max-width: 100%;
   font-family: 'Roboto', sans-serif;
   color: #1D1D1D;
+  font-size: 12px;
 }
 body { 
   width: 70%;
   margin: 0px auto;
+}
+::selection {
+  background-color: #E1EEF0;
+}
+a {
+  color: #5BA4AF;
+  text-decoration: none;
+  transition: 300ms ease;
+  font-size: 0.9em;
+  text-transform: uppercase;
+}
+
+a:hover {
+  border-bottom: 1px dotted #DEDBD6;
+  opacity: .7;
 }
 
 img { max-width: 100%; margin: 0px auto; }
@@ -86,7 +102,15 @@ h5 {
 h2.post-title {
   margin-top: 0px;
 }
-pre, code, .codehilite { max-width:  100%; overflow-x: auto }
+pre, code, .codehilite {
+  max-width: 100%;
+  overflow-x: auto;
+  color: #77797F;
+  background-color: #FBFBFB;
+  padding: 5px;
+  border-radius: 4px;
+  line-height: 18px;
+}
 img, .center { display: block; margin: 0px auto; text-align: center; }
 
 blockquote {
@@ -95,6 +119,12 @@ blockquote {
     padding-left: 40px
 }
 
+#blogheader h1 {
+  margin-top: 0px;
+  border-bottom: 1px solid #DEDBD6;
+  padding-bottom: 15px;
+  margin-bottom: 30px;
+}
 @media only screen and (max-width: 1000px) {
   #blogpost {
     padding: 10px 15px !important;
