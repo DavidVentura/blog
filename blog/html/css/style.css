@@ -58,6 +58,10 @@ h5 {
   animation-name: glow;
   animation-duration: 1s;
   animation-iteration-count: infinite;
+  animation-duration: alternate;
+}
+#indexheader .idea-icon:hover {
+  animation-duration: 300ms;
 }
 #indexlist{
   text-align: left;
@@ -74,6 +78,10 @@ h5 {
 .post {
     margin: 25px 0px;
     border-bottom: 1px solid #DEDBD6;
+}
+.post:last-child {
+  border: 0;
+  margin-bottom: 40px;
 }
 h2.post-title {
   margin-top: 0px;
