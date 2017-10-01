@@ -58,7 +58,7 @@ h5 {
   animation-name: glow;
   animation-duration: 1s;
   animation-iteration-count: infinite;
-  animation-duration: alternate;
+  animation-direction: alternate;
 }
 #indexheader .idea-icon:hover {
   animation-duration: 300ms;
