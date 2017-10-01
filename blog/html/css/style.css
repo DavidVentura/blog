@@ -11,6 +11,9 @@ body {
 ::selection {
   background-color: #E1EEF0;
 }
+::-moz-selection{
+  background-color: #E1EEF0;
+}
 a {
   color: #5BA4AF;
   text-decoration: none;
