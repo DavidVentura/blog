@@ -119,9 +119,25 @@ pre, code, .codehilite {
 img, .center { display: block; margin: 0px auto; text-align: center; }
 
 blockquote {
-    border-left: 4px solid #666;
-    margin-left: 0px;
-    padding-left: 40px
+  margin: 0px 20px;
+  display: inline-block;
+}
+
+blockquote:before {
+  display: block;
+  background-color: #313131;
+  height: 3px;
+  content: '';
+  width: 30px;
+}
+blockquote p {
+  margin-top: 0px;
+  padding: 7px;
+  background-color: #EDEBE8;
+  border-top-right-radius: 5px;
+  border-bottom-right-radius: 5px;
+  color: #656462;
+  font-family: 'Roboto Slab', serif;
 }
 
 #blogheader h1 {
