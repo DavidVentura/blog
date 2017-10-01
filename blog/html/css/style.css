@@ -2,7 +2,7 @@ html, body {
   max-width: 100%;
   font-family: 'Roboto', sans-serif;
   color: #1D1D1D;
-  font-size: 12px;
+  font-size: 13px;
 }
 body { 
   width: 70%;
@@ -101,6 +101,11 @@ h5 {
 }
 h2.post-title {
   margin-top: 0px;
+}
+h2.post-title a {
+  text-transform: none;
+  font-size: 1em;
+  color: #313131;
 }
 pre, code, .codehilite {
   max-width: 100%;
