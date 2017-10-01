@@ -6,14 +6,17 @@
     </head>
     <body>
         <div id="indexheader">
-            <h1>Grouch mumbling about computers</h1>
-            <h4>Thoughts, ideas.</h4>
+            <h1>Grouch mumbling about computers.</h1>
+            <h4>
+                Thoughts, ideas.
+                <object type="image/svg+xml" data="../images/idea.svg" class="idea"></object>                    
+            </h4>
         </div>
         <div id="indexlist">
             {% for post in index %}
             <div class="post">
                 <h5>{{post['date']}}</h5>
-                <h2>
+                <h2 class="post-title">
                     <a href="{{post['path']}}">
                         {{ post['title'] }}
                     </a>
