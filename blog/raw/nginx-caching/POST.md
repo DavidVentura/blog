@@ -10,7 +10,7 @@ The `X-Accel-Redirect` header was made for this.
 
 > NGINX will match this URI against its locations as if it was a normal request. It will then serve the location that matches the defined root + URI passed in the header.
 
-[Source](!https://www.nginx.com/resources/wiki/start/topics/examples/x-accel/)
+[Source](https://www.nginx.com/resources/wiki/start/topics/examples/x-accel/)
 
 This, of course, works perfectly.
 
@@ -20,7 +20,7 @@ There are some ugly hacks that are supposed to 'fix' this.
 
 The idea behind these hacks is to have 2 'levels', one ignores the `X-Accel-Redirect` header and caches the data while proxying to the next level, the other one actually processes the request (In the example, `/v/uri-example-1` => `/nfs/file-1` )
 
-Hack #1 (advised [here](!http://mailman.nginx.org/pipermail/nginx/2017-January/052732.html))
+Hack #1 (advised [here](http://mailman.nginx.org/pipermail/nginx/2017-January/052732.html))
 
 ```nginx
 proxy_cache_path /cache/nginx levels=1:2 keys_zone=cache:10m inactive=24h;
