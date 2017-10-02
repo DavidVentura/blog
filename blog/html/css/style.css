@@ -120,7 +120,8 @@ pre, code, .codehilite {
   background-color: #FBFBFB;
   padding: 5px;
   border-radius: 4px;
-  line-height: 18px;
+  line-height: 20px;
+  padding-left: 0px;
 }
 img, .center { display: block; margin: 0px auto; text-align: center; }
 
