@@ -6,10 +6,13 @@ import os
 import re
 import sys
 import tinys3
+import pytz
 
 from datetime import datetime
 from jinja2 import Template
+from feedgen.feed import FeedGenerator
 
+BLOG_URL = 'https://blog-devops.davidventura.com.ar/'
 BUCKET = 'blog-davidventura'
 ENDPOINT = 's3-sa-east-1.amazonaws.com'
 DEBUG = False
@@ -117,17 +120,46 @@ def main():
         debug('finished')
 
 
+def generate_feed():
+    fg = FeedGenerator()
+    fg.id(BLOG_URL)
+    fg.title('Grouch mumbling about computers')
+    fg.author({'name': 'David Ventura',
+               'email': 'davidventura27+blog@gmail.com'})
+    fg.link(href=BLOG_URL, rel='alternate')
+    fg.link(href='%s/rss.xml' % BLOG_URL, rel='self')
+    fg.description('123')
+    fg.logo('')
+    fg.language('en')
+    return fg
+
+
 def generate_index():
     items = []
+    feed = generate_feed()
+    last_update = None
     for f in glob.glob("raw/*/metadata.json"):
         item = parse_metadata(f)
         item['path'] = "/%s.html" % sanitize_title(item['title'])
         items.append(item)
 
+        fe = feed.add_entry()
+        fe.id('%s%s' % (BLOG_URL, item['path']))
+        tstamp = datetime.combine(item['date'], datetime.min.time())
+        tstamp = pytz.timezone("America/Buenos_Aires").localize(tstamp)
+        fe.pubdate(tstamp)
+        fe.title(item['title'])
+
+        if last_update is None:
+            last_update = tstamp
+        last_update = max(last_update, tstamp)
+
     s_items = sorted(items, key=lambda k: k['date'], reverse=True)
     template = Template(open('template/index.html', 'r').read())
     rendered = template.render(index=s_items)
     open('html/index.html', 'w', encoding='utf-8').write(rendered)
+    feed.updated(last_update)
+    feed.rss_file('html/rss.xml', pretty=True)
 
 
 if __name__ == '__main__':
