@@ -146,9 +146,13 @@ def generate_index():
     s_items = sorted(items, key=lambda k: k['date'], reverse=True)
     for item in s_items[::-1]:
         fe = feed.add_entry()
-        fe.id('%s%s' % (BLOG_URL, item['path']))
+        url = '%s%s' % (BLOG_URL, item['path'])
+        fe.id(url)
         tstamp = datetime.combine(item['date'], datetime.min.time())
         tstamp = pytz.timezone("America/Buenos_Aires").localize(tstamp)
+        fe.content(src=url)
+        fe.author({'name': 'David Ventura',
+                   'email': 'davidventura27+blog@gmail.com'})
         fe.pubdate(tstamp)
         fe.title(item['title'])
 
