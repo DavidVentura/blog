@@ -143,6 +143,8 @@ def generate_index():
         item['path'] = "/%s.html" % sanitize_title(item['title'])
         items.append(item)
 
+    s_items = sorted(items, key=lambda k: k['date'], reverse=True)
+    for item in s_items[::-1]:
         fe = feed.add_entry()
         fe.id('%s%s' % (BLOG_URL, item['path']))
         tstamp = datetime.combine(item['date'], datetime.min.time())
@@ -154,7 +156,6 @@ def generate_index():
             last_update = tstamp
         last_update = max(last_update, tstamp)
 
-    s_items = sorted(items, key=lambda k: k['date'], reverse=True)
     template = Template(open('template/index.html', 'r').read())
     rendered = template.render(index=s_items)
     open('html/index.html', 'w', encoding='utf-8').write(rendered)
