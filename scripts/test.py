@@ -127,8 +127,8 @@ def generate_feed():
     fg.author({'name': 'David Ventura',
                'email': 'davidventura27+blog@gmail.com'})
     fg.link(href=BLOG_URL, rel='alternate')
-    fg.link(href="%srss.xml" % BLOG_URL, rel='self')
-    fg.description('123')
+    fg.link(href=("%srss.xml" % BLOG_URL), rel='self')
+    fg.description('Blog')
     # fg.logo('')
     fg.language('en')
     return fg
