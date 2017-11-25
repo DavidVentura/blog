@@ -5,7 +5,6 @@ source credentials
 COMMIT=$(git rev-parse HEAD)
 COMMIT_MSG=$(git log --format=%B -n 1)
 
-COMMIT_MSG="deploy backblaze"
 TARGET=$(echo "$COMMIT_MSG" | grep -oP "^deploy \K([a-zA-Z0-9_-]+)" || true)
 
 if [[ "$COMMIT_MSG" != "deploy"* ]]; then
