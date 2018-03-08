@@ -1,5 +1,15 @@
 This is a recompilation of various sources to get gpu passthrough on Debian.
 
+# General notes
+
+* Update your kernel. Seriously, 90% of my issues were solved by being on 4.14.7 AND I got better performance with the NPT patch.
+* Passthrough a usb controller. I had slightly jittery pointer movements when doing small mouse movements (that were supposed to be **precise**)
+* Get a USB audio card. I spent 3 days fighting pulseaudio as I had ~100ms delay on audio that went directly through my motherboard's audio output. It was solved instantly by a $3 usb audio card.
+* Move processes away from your VM cores.
+  * I had jittery performance when I had a lot of processes running, as they were taking time from the VM. I got 60FPS in games either way, but now it's a lot smoother.
+  * I couldn't get KVM to run in cores that were isolated by the kernel. I don't know why, but it just didn't use the isolated cores.
+* If you build qemu-patched to test pulse audio routing, make sure you build with `--enable-libusb`
+
 # Update your kernel
 For amd you need at least 4.14.\*, or the npt patch. After that update your initramfs again. (Is that necessary?)
 
@@ -9,7 +19,7 @@ Enable IOMMU and Virtualization
 # Modules
 ## disable modules
 
-`/etc/modprobe.d/passthrough-blacklist.conf
+File: `/etc/modprobe.d/passthrough-blacklist.conf`
 
 ```
 blacklist radeon
@@ -19,7 +29,7 @@ blacklist snd_hda_intel
 
 ## Load modules
 
-`/etc/modules`
+File: `/etc/modules`
 
 ```
 vfio
@@ -29,14 +39,14 @@ vfio_virqfd
 ```
 ## set vfio-pci options
 
-`/etc/modprobe.d/vfio.conf`
+File: `/etc/modprobe.d/vfio.conf`
 
 ```
 options vfio-pci ids=1002:67ef,1002:aae0,13f6:8788 disable_idle_d3=1
 ```
 
 # set grub parameters
-`/etc/default/grub`
+File: `/etc/default/grub`
 
 ```
 GRUB_CMDLINE_LINUX_DEFAULT="quiet amd_iommu=on iommu=pt cgroup_enable=memory rootdelay=2 swapaccount=1 text"
@@ -46,7 +56,7 @@ run `update-grub2`
 
 # edit initramfs
 
-`/etc/initramfs-tools/modules`
+File: `/etc/initramfs-tools/modules`
 
 ```
 vfio
@@ -64,7 +74,7 @@ run `update-initramfs -u`
 
 My script looks like this
 
-```
+```bash
 taskset -c 12-15 ./qemu-patched \
         -enable-kvm -m 8192 \
         -cpu host -smp 4,sockets=1,cores=4,threads=1 \
