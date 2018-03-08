@@ -48,7 +48,7 @@ d-i network-console/password-again password install
 
 recreate `md5sum.txt`
 
-```
+```bash
 chmod 666 md5sum.txt
 find -follow -type f -exec md5sum {} \; > md5sum.txt
 chmod 444 md5sum.txt
