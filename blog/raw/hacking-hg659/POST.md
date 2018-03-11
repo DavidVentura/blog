@@ -1,6 +1,6 @@
-I want data from my router as it cannot be put in bridge mode. I currently use the services of T-Mobile (NL).
+I want to have internet usage data from my router as it cannot be put in bridge mode. I currently use the services of T-Mobile (NL).
 
-# Investigating the data
+## Investigating the data
 
 These 'smart' people decided to do a POST that **never returns**. I guess that's to avoid people like me trying to get the data out of the browser easily with the dev tools.
 
@@ -57,6 +57,9 @@ function utilGetCsrf() {
 }
 ```
 
+This router has some "security" measurements, all of the json outputs that this gives are surrounded by `while(1);/*` and `*/`.
+
+## Rewriting
 
 I rewrote this code in python
 
@@ -80,7 +83,11 @@ def find_csrf(html):
 ```
 
 
+## Testing
+
 I needed a way to test if my `_hash` function was correct, fortunately the router serves the web interface via plain http, so `mitmproxy` was enough to steal a few `csrf_token` and `csrf_param`, together with the final result.
+
+## Flow
 
 The actual flow of info to get the data out of the router is:
 
@@ -88,6 +95,3 @@ The actual flow of info to get the data out of the router is:
 - POST /api/system/user\_login (with the csrf values, user and password (hashed), together with the cookie)
 - GET /api/ntwk/wan\_st (with the csrf values, together with the cookie)
 - Parse the "json" that's given by the router.
-
-
-This router has some "security" measurements, all of the json outputs that this gives are surrounded by `while(1);/*` and `*/`.
