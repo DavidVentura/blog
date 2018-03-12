@@ -95,3 +95,7 @@ The actual flow of info to get the data out of the router is:
 - POST /api/system/user\_login (with the csrf values, user and password (hashed), together with the cookie)
 - GET /api/ntwk/wan\_st (with the csrf values, together with the cookie)
 - Parse the "json" that's given by the router.
+
+## Results
+
+![](images/router-results.png)
