@@ -59,14 +59,23 @@ Startup finished in 1.729s (kernel) + 23.360s (userspace) = 25.089s
 
 Of which 9s (!!) is just for DHCP.
 
-## Fancy stuff
+# Printer tuning
 
-### PSU
+In order of importance:
+
+1. Calibrate your extruder ([link](https://mattshub.com/2017/04/19/extruder-calibration/))
+2. Do PID Tuning ([link](http://reprap.org/wiki/PID_Tuning))
+3. Calibrate your X/Y axes ([link]())
+4. Print a heat tower to see what's the best temperature for your filament ([link]())
+
+# Fancy stuff
+
+## PSU
 I connected my pi with a buck converter (LM2596s) directly to my 12v psu and soldered it to the test pads as seen in the following image:
 
 ![](images/pizero.jpg)
 
 
-### Lighting
+## Lighting
 
 I connected a transistor to a gpio pin so I can toggle my printer lights remotely. I guess this will become useful in the future when I have a camera.
