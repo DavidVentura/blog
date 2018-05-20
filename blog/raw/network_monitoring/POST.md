@@ -1,4 +1,4 @@
-After adding a fancy router (see [here](https://blog.davidventura.com.ar/custom-router-with-espressobin.html)) to my setup I decided to monitor my network (now that it is possible). Having already a Grafana+InfluxDB setup for my standard monitoring I decided to (somehow) feed the network data into this setup.
+After adding a fancy router (see [here](https://blog.davidventura.com.ar/network-update-part-1-custom-router-with-espressobin.html)) to my setup I decided to monitor my network (now that it is possible). Having already a Grafana+InfluxDB setup for my standard monitoring I decided to (somehow) feed the network data into this setup.
 
 # Compile ipt\_NETFLOW kernel module
 
