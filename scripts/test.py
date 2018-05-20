@@ -149,7 +149,7 @@ def generate_index():
         url = '%s%s' % (BLOG_URL, item['path'][1:])
         fe.id(url)
         tstamp = datetime.combine(item['date'], datetime.min.time())
-        tstamp = pytz.timezone("America/Buenos_Aires").localize(tstamp)
+        tstamp = pytz.timezone("Europe/Amsterdam").localize(tstamp)
         fe.link(href=url)
         fe.author({'name': 'David Ventura',
                    'email': 'davidventura27+blog@gmail.com'})
