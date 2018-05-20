@@ -177,8 +177,16 @@ blockquote p {
   #blogpost {
     padding: 10px 5px !important;
   }
+  #indexheader {
+    width: 90%;
+  }
   body {
     width: 98%;
     margin: 0px auto;
   }
+  #indexheader h1,
+  #indexheader h1 a {
+    font-size: 30px;
+  }
+
 }
