@@ -38,5 +38,31 @@ You end up with something like this:
 
 ![](images/lan_wan_usage.png)
 
+# Discovery
+
+This allowed me to find many hosts doing:
+
+* A LOT of DNS requests (1k+/min). As I didn't want to add a local DNS caching server (yet) for each of these (2) servers, I simply hard-coded the value in /etc/hosts.
+* NTP and DNS requests going to the outside world. Now these are dropped and my router is advertised as the DNS/NTP server.
+
+# Fixes
+
+`/etc/dnsmasq.conf`
+
+```
+dhcp-option=lan0,option:dns-server,192.168.2.116
+dhcp-option=lan0,option:ntp-server,192.168.2.1
+```
+
+`/etc/shorewall/rules`
+
+```
+DNS(ACCEPT) $FW     net
+DNS(REJECT) loc     net
+
+NTP(ACCEPT) $FW     net
+NTP(REJECT) loc     net
+```
+
 # Future
-I want to investigate using elasticsearch+kibana as it at least supports IPs as native datatypes, which would allow me to NOT have to decide on the `cidr` myself. Also you can do fancy global graphs with data usage.
+I want to investigate using elasticsearch+kibana as it at least supports IPs as native datatypes, which would allow me to NOT have to decide on the `cidr` myself (and maybe find a way to do automatic name resolution to help out with debugging).
