@@ -6,8 +6,10 @@ html, body {
 }
 body { 
   width: 70%;
+  max-width: 1400px;
   margin: 0px auto;
 }
+
 ::selection {
   background-color: #E1EEF0;
 }
