@@ -34,6 +34,7 @@ def parse_images(fname, safe_title):
     inline = re.compile(r'!\[.*?\]\((?P<cap>.*?)(?: |\))')
     ref = re.compile(r'^\[.*?\]: (?P<cap>.*?)(?: |$)')
     conn = None
+    uploaded = []
     for idx in range(len(lines)):
         line = lines[idx]
         group = inline.search(line)
@@ -48,6 +49,10 @@ def parse_images(fname, safe_title):
             print("%s does not exist!" % image_fname)
             return
 
+        if image_fname in uploaded:
+            debug('image %s already uploaded!' % image_fname)
+            continue
+        uploaded.append(image_fname)
         f = open(image_fname, 'rb')
         nname = os.path.basename(image_fname)
         dest = "%s/%s" % (safe_title, nname)
