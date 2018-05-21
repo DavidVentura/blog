@@ -4,7 +4,7 @@ New setup:
 
 ![](images/network_post.png)
 
-You can find the fancy DOT file [here](https://raw.githubusercontent.com/DavidVentura/blogging_like_its_2017/master/blog/raw/network_monitoring/network_post.dot).
+You can find the fancy DOT file [here](https://raw.githubusercontent.com/DavidVentura/blogging_like_its_2017/master/blog/raw/network_segregation/network_post.dot).
 
 The main idea was to segregate devices that do not need to talk to each other to avoid potential security risks. Most stuff is in the 'server' VLAN now, and it doesn't really make sense to access it directly, as we have access via an nginx reverse proxy that does SSL termination.
 
