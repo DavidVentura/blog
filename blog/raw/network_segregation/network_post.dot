@@ -1,0 +1,53 @@
+digraph {
+    rankdir=LR;
+    compound=true;
+    node [shape = box, style = filled, color = grey, fontname=Helvetica, fixedsize=true, width=2]
+    subgraph cluster_SERVERS {
+        fontname="Helvetica";
+        label="SERVERS VLAN20";
+        backups; certificate_manager; gogs; db; web; music; books; rproxy1; jenkins; grafana; guacamole01; nextcloud; pihole;
+    }
+    node [color=lightblue]
+    subgraph cluster_LAN {
+        label="LAN";
+        fontname="Helvetica";
+        workstations;
+    }
+    node [color=crimson]
+    subgraph cluster_DMZ {
+        label="DMZ VLAN50";
+        fontname="Helvetica";
+        sonarr; lbalancer; mumble; twitch; apt_cacher_ng; 
+    }
+    node [color=yellow]
+    subgraph cluster_WIFI {
+        label="WIFI VLAN10";
+        fontname="Helvetica";
+        phones; notebooks; tablet;
+    }
+    node [color=orange]
+    subgraph cluster_IOT {
+        label="IOT VLAN40";
+        fontname="Helvetica";
+        blinds;
+    }
+    node [color=pink]
+    subgraph cluster_GUEST {
+        label="GUESTS VLAN30";
+        fontname="Helvetica";
+        guests;
+    }
+
+    INTERNET;
+
+    edge [color=snow4]
+    INTERNET -> sonarr[lhead=cluster_DMZ];
+    guests -> {INTERNET} [ltail=cluster_GUEST];
+    notebooks -> {INTERNET, lbalancer} [ltail=cluster_WIFI];
+    workstations -> {INTERNET, lbalancer} [ltail=cluster_LAN];
+    lbalancer -> {rproxy1, certificate_manager};
+    rproxy1 -> {gogs, web, sonarr, books, jenkins, grafana, guacamole01, nextcloud, music};
+    {jenkins, nextcloud, guacamole01} -> db
+    //everything -> {backups, apt_cacher_ng, pihole};
+
+}
