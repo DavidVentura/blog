@@ -21,7 +21,6 @@ a {
   text-decoration: none;
   transition: 300ms ease;
   font-size: 0.9em;
-  text-transform: uppercase;
 }
 
 a:hover {
