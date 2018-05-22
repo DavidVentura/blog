@@ -149,8 +149,11 @@ I left quite a lot of things with access to the internet, I'll write a follow up
 * Twitch http out (this is a custom twitch broadcaster I wrote so I can watch the same stream all over the house)
 * Router has full internet access (testing + repositories)
 * Grafana is trying to reach `grafana.com` (http) looking for updates for plugins or somesuch.
+* Pip is broken on all hosts!
+* `Books` cannot connect to IRC anymore.
 
 ### Possible solutions
 
-* For HTTP I'll use a simple proxy which will be in the DMZ.
-* For SSH I'll simply add a `tcpproxy` instance which will map 1:1
+* For HTTP I'll use a simple proxy which will be in the DMZ (Also useful for pip).
+* For SSH I'll simply add a `tcpproxy` instance which will map 1:1.
+* I'll have to investigate the IRC protocol to proxy it (and DCC) which is core for my `books` setup.
