@@ -10,7 +10,7 @@ The main idea was to segregate devices that do not need to talk to each other to
 
 My first step was to first move everything into their respective VLANs:
 
-# Creating interfaces
+## Creating interfaces
 
 On the router I simply added these lines to my `/etc/network/interfaces` file
 
@@ -41,7 +41,7 @@ and ran `ifup` for every interface.
 On the server I added something similar (but with bridges):
 
 ```
-# wifi
+## wifi
 iface enp8s0.10 inet manual
 
 auto vmbr10
@@ -58,7 +58,7 @@ iface vmbr10 inet static
 ```
 (repeated 5 times with matchin VLANs)
 
-# Router configuration
+## Router configuration
 
 In the shorewall `interfaces` file I added:
 
@@ -92,12 +92,12 @@ guest   ipv4
 dmz     ipv4
 ```
 
-# Blocking everything
+## Blocking everything
 
 The idea of this setup was to remove un-needed access to everything, so I started by removing external access to everything I could think of:
 
 ```
-# Deny NTP and DNS to the internet, we serve our own and advertise it via DHCP
+## Deny NTP and DNS to the internet, we serve our own and advertise it via DHCP
 NTP(REJECT)    loc        net
 DNS(REJECT)    loc        net
 ```
@@ -106,7 +106,7 @@ This implicitly left:
 
 * srv, bnet and dmz without any connectivity at all
 
-# Allowing what's needed
+## Allowing what's needed
 
 As stated in the image, I needed some connection between the VLANs:
 
@@ -114,7 +114,7 @@ As stated in the image, I needed some connection between the VLANs:
 * sonarr, twitch -> Internet(http, 80 and 443)
 * rproxy -> sonarr (as we access sonarr via the lbalancer even internally)
 
-# Issues
+## Issues
 
 I (unsuprisingly!) ran into some issues, even though in theory everything should be OK:
 
@@ -124,9 +124,9 @@ I (unsuprisingly!) ran into some issues, even though in theory everything should
   * If I connect from `rproxy`(20) to server(20) then it works fine (via the linux virtual bridge, never reaches the router)
   * Otherwise packets are being dropped, even though the router sees them.
 
-# "Fixes"
+## "Fixes"
 
-## NTP for chromecast:
+### NTP for chromecast:
 
 ```
 DNAT        wifi    loc:192.168.2.1             udp    123
@@ -134,6 +134,22 @@ DNAT        wifi    loc:192.168.2.1             udp    123
 
 I just map any NTP request coming from `wifi` to my NTP server
 
-## Unable to route
+### Unable to route
 
 I added IP for the physical server (VLAN 20) in `/etc/hosts` for the `rproxy` container, which makes it "work".
+
+## Pending issues
+
+I left quite a lot of things with access to the internet, I'll write a follow up post detailing how I closed each one of them. For now the list is:
+
+* Jenkins: ssh out, used to update git repos. http out: used by a Docker image to put images in S3.
+* Madsonic (detailed above)
+* Sonarr http out
+* Twitch http out (this is a custom twitch broadcaster I wrote so I can watch the same stream all over the house)
+* Router has full internet access (testing + repositories)
+* Grafana is trying to reach `grafana.com` (http) looking for updates for plugins or somesuch.
+
+### Possible solutions
+
+* For HTTP I'll use a simple proxy which will be in the DMZ.
+* For SSH I'll simply add a `tcpproxy` instance which will map 1:1
