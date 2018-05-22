@@ -1,7 +1,7 @@
 I reached a point where I could recreate all (or most) of my labs with ansible. What I had not yet configured is an extensive backup system. I'll explain here what I did.
 
 
-##### Backing everything up to a central location
+## Backing everything up to a central location
 For this I use a combination of rsnapshot on the server where everything ends up and bash scripts.
 
 Some of the entries as an example:
@@ -38,13 +38,13 @@ ssh root@gogs "cd /home/git; tar c gogs-repositories | gzip --rsyncable" > gogs-
 
 This ends up filling and rotating 7 `daily` backups, which become 3 `weekly` backups and 3 `monthly` backups, and with the magic of storing only diffs this only takes about ~2x the space of the original backup.
 
-##### Cloning the central backup to an external device
+## Cloning the central backup to an external device
 
 While the above backups are on a RAID1, nothing saves me from deleting everything or the Disks/server exploding.
 
 So I need to have an offline backup. I did this by automating completely the process:
 
-######Automounting the device:
+### Automounting the device:
 
 You need to get the UUID of your device with something like `blkid`.
 
@@ -53,7 +53,7 @@ You need to get the UUID of your device with something like `blkid`.
 ACTION=="add", KERNEL=="sd?1", ENV{ID_FS_UUID}=="14421387-1d03-4712-9f70-80a917f64b32", RUN+="/bin/mount /mnt/usbbackup", SYMLINK+="externalhdd"
 ```
 
-######Triggering backup on mount
+### Triggering backup on mount
 
 I wrote a systemd service ( `/etc/systemd/system/rsync-to-external.service`) that starts backing up to the external device upon 'creation' of `/dev/externalhdd`
 
@@ -69,7 +69,7 @@ ExecStart=/storage/scripts/rsync-to-external.sh
 WantedBy=dev-externalhdd.device
 ```
 
-######Backing files up
+### Backing files up
 
 I wrote this script to rsync the backups to an external disk and email me everything that's going on. I'm considering using rsnapshot to keep the external backup versioned.
 
@@ -125,7 +125,7 @@ echo "unmounting"
 echo "Finished backup to external device" | mailx -s '[OK] rsync usb backup' $EMAIL
 ```
 
-######Actually backing files up
+### Actually backing files up
 
 This would never really happening if there wasn't something pestering me about it. So I wrote a script and stuck it in a cronjob
 
@@ -151,7 +151,7 @@ if [ $days -ge 6 ]; then
 fi
 ```
 
-######Removing the disk so it's *offline* backup
+## Removing the disk so it's *offline* backup
 Same thing as the previous point, the first time I ran the backups I left the drive plugged in for 2 days. This means it's not an offline backup anymore, so I wrote another script to check and pester me every **10 minutes** to go and disconnect it.
 
 ```
@@ -195,7 +195,7 @@ fi
 
 ```
 
-##### Cloning the central backup to an offsite server
+## Cloning the central backup to an offsite server
 
 Having a standard and an offline backup is not enough. I need an offsite backup in case something *really* bad happens.
 

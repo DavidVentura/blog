@@ -1,6 +1,6 @@
 This is a recompilation of various sources to get gpu passthrough on Debian.
 
-# General notes
+## General notes
 
 * Update your kernel. Seriously, 90% of my issues were solved by being on 4.14.7 AND I got better performance with the NPT patch.
 * Passthrough a usb controller. I had slightly jittery pointer movements when doing small mouse movements (that were supposed to be **precise**)
@@ -10,14 +10,14 @@ This is a recompilation of various sources to get gpu passthrough on Debian.
   * I couldn't get KVM to run in cores that were isolated by the kernel. I don't know why, but it just didn't use the isolated cores.
 * If you build qemu-patched to test pulse audio routing, make sure you build with `--enable-libusb`
 
-# Update your kernel
+## Update your kernel
 For amd you need at least 4.14.\*, or the npt patch. After that update your initramfs again. (Is that necessary?)
 
-# BIOS/UEFI
+## BIOS/UEFI
 Enable IOMMU and Virtualization
 
-# Modules
-## disable modules
+## Modules
+### disable modules
 
 File: `/etc/modprobe.d/passthrough-blacklist.conf`
 
@@ -27,7 +27,7 @@ blacklist amdgpu
 blacklist snd_hda_intel
 ```
 
-## Load modules
+### Load modules
 
 File: `/etc/modules`
 
@@ -37,7 +37,7 @@ vfio_iommu_type1
 vfio_pci
 vfio_virqfd
 ```
-## set vfio-pci options
+### set vfio-pci options
 
 File: `/etc/modprobe.d/vfio.conf`
 
@@ -45,7 +45,7 @@ File: `/etc/modprobe.d/vfio.conf`
 options vfio-pci ids=1002:67ef,1002:aae0,13f6:8788 disable_idle_d3=1
 ```
 
-# set grub parameters
+## set grub parameters
 File: `/etc/default/grub`
 
 ```
@@ -54,7 +54,7 @@ GRUB_CMDLINE_LINUX_DEFAULT="quiet amd_iommu=on iommu=pt cgroup_enable=memory roo
 
 run `update-grub2`
 
-# edit initramfs
+## edit initramfs
 
 File: `/etc/initramfs-tools/modules`
 
@@ -70,7 +70,7 @@ run `update-initramfs -u`
 
 
 
-# KVM
+## KVM
 
 My script looks like this
 
@@ -89,13 +89,13 @@ taskset -c 12-15 ./qemu-patched \
         -rtc clock=host,base=utc;
 ```
 
-# GPU Bios
+## GPU Bios
 
 If you get a black screen when you boot your VM and get a core stuck to 100% you might have a 'bad' gpu bios. You need to extract your BIOS from your own card, if you use linux you need to have 2 GPUs or otherwise you get a corrupt image. On windows this works fine.
 
-# Bugs
+## Bugs
 
-## Device or resource busy
+### Device or resource busy
 
 I got spammed to death with `qemu-system-x86_64: vfio_region_write(0000:0a:00.0:region0+0x11d9e4, 0x3a4c4c,4) failed: Device or resource busy` which was fixed by running
 
@@ -105,14 +105,14 @@ echo 0 > /sys/class/vtconsole/vtcon1/bind
 echo efi-framebuffer.0 > /sys/bus/platform/drivers/efi-framebuffer/unbind
 ```
 
-# Useful testing scripts
+## Useful testing scripts
 
 This was all taken from the arch wiki and formatted / made a bit nicer
 
-##  Test your IOMMU groups
+###  Test your IOMMU groups
  
 ```bash
-#!/bin/bash
+##!/bin/bash
 shopt -s nullglob
 for d in /sys/kernel/iommu_groups/*/devices/*; do 
     n=${d#*/iommu_groups/*}; n=${n%%/*}
@@ -124,7 +124,7 @@ done | sort -n -k3
 You'll most likely have success passing devices that are on their own on a given IOMMU group.  
 I couldn't get any device which wasn't on his own passed to KVM, maybe you could try the `acs override patch`.
 
-## Test your USB hubs
+### Test your USB hubs
 
 ```bash
 for usb_ctrl in $(find /sys/bus/usb/devices/usb* -maxdepth 0 -type l); do

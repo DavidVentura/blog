@@ -41,7 +41,8 @@ and ran `ifup` for every interface.
 On the server I added something similar (but with bridges):
 
 ```
-## wifi
+
+# wifi
 iface enp8s0.10 inet manual
 
 auto vmbr10

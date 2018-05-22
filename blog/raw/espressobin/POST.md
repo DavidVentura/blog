@@ -1,9 +1,9 @@
 I wanted to replace my pfSense VM with a dedicated router so I could take my homelab offline without losing internet connectivity, so I bought an Espressobin
 
 
-# Basic setup
+## Basic setup
 
-## Get your ram configuration
+### Get your ram configuration
 Connect the espressobin with the supplied micro usb cable and connect to the serial device that pops up. In my case I used `screen` to connect to `/dev/ttyUSB0` and got greeted by the following prompt:
 
 ```
@@ -19,7 +19,7 @@ DRAM:  1 GiB
 ...
 ```
 
-## Download correct U-Boot image
+### Download correct U-Boot image
 
 For my initial testing I wanted to use Debian, but as there is no current image available I'll just use armbian.
 
@@ -37,7 +37,7 @@ saveenv
 
 (This all came from [here](https://www.armbian.com/espressobin/).)
 
-# Fancy stuff
+## Fancy stuff
 
 Being able to run `tcpdump` on my router allowed me to investigate and map my network. I wrote a script to dectect connections going to the internet and to my 'old' (192.168.1.0/24) network.
 
