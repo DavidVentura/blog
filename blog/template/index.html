@@ -15,7 +15,7 @@
         <div id="indexlist">
             {% for post in index %}
             <div class="post">
-                <h5>{{post['date']}}</h5>
+                <small>{{post['date']}}</small>
                 <h2 class="post-title">
                     <a href="{{post['path']}}">
                         {{ post['title'] }}
