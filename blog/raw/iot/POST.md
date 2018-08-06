@@ -10,8 +10,6 @@ I bought a few sonoff basics and wanted to set up some sensors and triggers arou
 I wanted a cheap board that included a mains transformer as both using phone chargers (NodeMCU) or building your own [1](images/esp8266psu.jpg) ends up being more expensive, cumbersome and prone to failures.
 Winner: Sonoff basic.
 
-GPIO:
-
 <table>
     <tr> <th>GPIO</th> <th>NAME</th> <th>IN/OUT</th> <th>NOTES</th> </tr>
     <tr> <td>0</td>  <td>button</td> <td>IN   </td> <td></td> </tr>

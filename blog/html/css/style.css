@@ -6,7 +6,7 @@ html, body {
 }
 table {
     border-collapse: collapse;
-    margin: 0px auto;
+    margin: 20px auto;
 }
 td, th {
     border: 1px solid #999;
