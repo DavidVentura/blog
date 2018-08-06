@@ -13,7 +13,7 @@ Winner: Sonoff basic.
 GPIO:
 
 | GPIO # | NAME | IN/OUT | NOTES |
----------------------------------
+|--------|------|--------|-------|
 | 0      | button | IN     | |
 | 1      | TX     | INOUT  | outputs garbage on boot |
 | 3      | RX     | INOUT  | |
