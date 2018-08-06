@@ -4,6 +4,15 @@ html, body {
   color: #1D1D1D;
   font-size: 13px;
 }
+table {
+    border-collapse: collapse;
+    margin: 0px auto;
+}
+td, th {
+    border: 1px solid #999;
+    padding: 8px;
+    margin: 0px;
+}
 body { 
   width: 70%;
   max-width: 1300px;
