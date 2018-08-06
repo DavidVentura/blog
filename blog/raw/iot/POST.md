@@ -13,7 +13,7 @@ Winner: Sonoff basic.
 GPIO:
 
 <table>
-    <th> <td>GPIO</td> <td>NAME</td> <td>IN/OUT</td> <td>NOTES</td> </th>
+    <tr> <th>GPIO</th> <th>NAME</th> <th>IN/OUT</th> <th>NOTES</th> </tr>
     <tr> <td>0</td>  <td>button</td> <td>IN   </td> <td></td> </tr>
     <tr> <td>1</td>  <td>TX</td>     <td>INOUT</td> <td>outputs garbage on boot</td> </tr>
     <tr> <td>3</td>  <td>RX</td>     <td>INOUT</td> <td></td> </tr>
