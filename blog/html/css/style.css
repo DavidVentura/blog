@@ -6,10 +6,12 @@ html, body {
 }
 body { 
   width: 70%;
-  max-width: 1400px;
+  max-width: 1300px;
   margin: 0px auto;
 }
-
+article {
+  padding-bottom: 50px;
+}
 ::selection {
   background-color: #E1EEF0;
 }
