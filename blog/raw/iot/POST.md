@@ -12,14 +12,15 @@ Winner: Sonoff basic.
 
 GPIO:
 
-| GPIO # | NAME | IN/OUT | NOTES |
-|--------|------|--------|-------|
-| 0      | button | IN     | |
-| 1      | TX     | INOUT  | outputs garbage on boot |
-| 3      | RX     | INOUT  | |
-| 12     | relay  | OUT    | powered from mains |
-| 13     | led    | OUT    | inverted high/low |
-| 14     | GPIO   | INOUT  | |
+<table>
+    <th> <td>GPIO</td> <td>NAME</td> <td>IN/OUT</td> <td>NOTES</td> </th>
+    <tr> <td>0</td>  <td>button</td> <td>IN   </td> <td></td> </tr>
+    <tr> <td>1</td>  <td>TX</td>     <td>INOUT</td> <td>outputs garbage on boot</td> </tr>
+    <tr> <td>3</td>  <td>RX</td>     <td>INOUT</td> <td></td> </tr>
+    <tr> <td>12</td> <td>relay</td>  <td>  OUT</td> <td>powered from mains</td> </tr>
+    <tr> <td>13</td> <td>led</td>    <td>  OUT</td> <td>inverted high/low</td> </tr>
+    <tr> <td>14</td> <td>GPIO</td>   <td>INOUT</td> <td></td> </tr>
+</table>
 
 Also note that if you fuck up the TX/RX pins you won't be able to flash the Sonoff again.
 
