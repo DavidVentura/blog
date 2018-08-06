@@ -64,15 +64,34 @@ and pressing `Ctrl-D` immediately which soft-reboots the esp8266. I'll see my co
 
 # Writing some code
 
-All you need to get of code per module will be about 40 lines to set up pub/sub to mqtt and status publishing.
+With the way I set up the common functions, you can have something working in ~20 lines of code (omitting imports) 
 
+DHT22 -> MQTT
 ```python
-import time
-from machine import Pin
-from common import setup_wifi, debounce, mqtt_client
+CLIENT_ID = 'TEMPSENSOR'
+TEMPTOPIC = b"TEMP/%s" % CLIENT_ID
+HUMTOPIC = b"HUM/%s" % CLIENT_ID
 
-MQTT_HOST = 'iot'
-CLIENT_ID = 'NIGHTLAMP2'
+led = Pin(13, Pin.OUT)
+dht = dht.DHT22(Pin(14))
+
+@common.debounce(60000)
+def read_dht():
+    dht.measure()
+    common.mqtt.publish(TEMPTOPIC, "%.2f" % dht.temperature())
+    common.mqtt.publish(HUMTOPIC, "%.2f" % dht.humidity())
+
+def main():
+    setup_fns = [ lambda: led(1) # Turn off LED, it is inverted
+                ]
+    common.loop(CLIENT_ID, setup_fn=setup_fns, loop_fn=[read_dht], callback=sub_cb, subtopic=SUBTOPIC)
+
+main()
+```
+
+Pub/sub + button for relay
+```python
+CLIENT_ID = 'NIGHTLAMP'
 SUBTOPIC = b"%s/set" % CLIENT_ID
 PUBTOPIC = b"%s/state" % CLIENT_ID
 
@@ -80,14 +99,11 @@ button = Pin(0, Pin.IN)
 led = Pin(13, Pin.OUT)
 relay = Pin(12, Pin.OUT)
 
-mqtt = None
-
 def set_pin(pin, state):
     pin(state)
-    mqtt.publish(PUBTOPIC, str(pin()))
+    common.mqtt.publish(PUBTOPIC, str(pin()))
 
 def sub_cb(topic, msg):
-    print((topic, msg))
     if msg == b'1':
         set_pin(relay, True)
     elif msg == b'0':
@@ -95,26 +111,18 @@ def sub_cb(topic, msg):
     else:
         set_pin(relay, not relay())
 
-@debounce(250)
+@common.debounce(250)
 def handle_button(pin):
     set_pin(relay, not relay())
 
 def main():
-    global mqtt
-    STA = setup_wifi()
-    mqtt = mqtt_client(CLIENT_ID, MQTT_HOST, callback=sub_cb, subtopic=SUBTOPIC)
-    button.irq(handler=handle_button, trigger=Pin.IRQ_RISING)
-    led(1) # Turn off LED, it is inverted
-
-    while True:
-        if not STA.isconnected():
-            connect_wifi()
-        time.sleep_ms(200)
-        mqtt.check_msg()
-    mqtt.disconnect()
+    setup_fns = [ lambda: button.irq(handler=handle_button, trigger=Pin.IRQ_RISING),
+                  lambda: led(1) # Turn off LED, it is inverted
+                ]
+    common.loop(CLIENT_ID, setup_fn=setup_fns, loop_fn=[], callback=sub_cb, subtopic=SUBTOPIC)
 
 main()
 ```
 
 The mqtt lib is [umqtt.simple](https://github.com/micropython/micropython-lib/tree/master/umqtt.simple) which is an official lib.
-I'll put up the common lib (which is just boilerplate..) up on github.
+You can find the common lib on [github](https://github.com/DavidVentura/iot_home).
