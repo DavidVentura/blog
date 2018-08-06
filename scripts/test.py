@@ -44,10 +44,12 @@ def parse_images(fname, safe_title):
                 continue
 
         image_fname = group.group('cap')
+        if not image_fname[:-3].lower() in ['png', 'gif', 'jpg']:
+            continue
 
         if not os.path.exists(image_fname):
             print("%s does not exist!" % image_fname)
-            return
+            continue
 
         if image_fname in uploaded:
             debug('image %s already uploaded!' % image_fname)
