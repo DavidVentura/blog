@@ -44,7 +44,7 @@ def parse_images(fname, safe_title):
                 continue
 
         image_fname = group.group('cap')
-        if not image_fname[:-3].lower() in ['png', 'gif', 'jpg']:
+        if not image_fname[-3:].lower() in ['png', 'gif', 'jpg']:
             continue
 
         if not os.path.exists(image_fname):
