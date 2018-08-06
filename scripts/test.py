@@ -31,7 +31,7 @@ def connect_to_s3():
 
 def parse_images(fname, safe_title):
     lines = open(fname, encoding='utf-8').readlines()
-    inline = re.compile(r'!\[.*?\]\((?P<cap>.*?)(?: |\))')
+    inline = re.compile(r'!?\[.*?\]\((?P<cap>.*?)(?: |\))')
     ref = re.compile(r'^\[.*?\]: (?P<cap>.*?)(?: |$)')
     conn = None
     uploaded = []
