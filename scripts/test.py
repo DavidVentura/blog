@@ -87,9 +87,9 @@ def generate_header(metadata):
     return template.render(metadata)
 
 
-def generate_post(header, body):
+def generate_post(header, body, title):
     template = Template(open('template/body.html', 'r').read())
-    rendered = template.render(header=header, post=body)
+    rendered = template.render(header=header, post=body, title=title)
     return rendered
 
 
@@ -118,7 +118,7 @@ def main():
         debug('generating body')
         body = markdown2.markdown(parsed, extras=["fenced-code-blocks"])
         debug('generating post')
-        blog_post = generate_post(header, body)
+        blog_post = generate_post(header, body, r['title'])
         html_fname = 'html/%s.html' % safe_title
         debug('writing to file')
         open(html_fname, 'w', encoding='utf-8').write(blog_post)
