@@ -28,10 +28,12 @@ The second issue I faced with this approach was that when doing manipulation on 
 I realized I needed to stream the file contents straight to disk, so I decided to implement something similar to IRC's DCC:
 
 On the server:
+
 * Send via mqtt a pipe-delimited string containing: Hostname, port, filename and hash
 * start a socket and serve the file as binary data to the first client that connects.
 
 On the ESP:
+
 * When I receive this message I connect to the specified `HOST:PORT`
 * Download straight to disk in a tmp file, while updating the local hash object
 * Compare hashes, if they match, rename the temp file to the value obtained previously
@@ -49,3 +51,8 @@ You can see the details and implementation [here](https://github.com/DavidVentur
 # Security note
 
 There's no authentication or encryption involved. Given the range and scope of this deployment(isolated VLAN, only I have access), it is fine.
+
+# Extra
+These little modules seem to output quite a lot of heat, I initially had taped the DHT22 to it but the result was this
+
+![](images/dht-temp.png)
