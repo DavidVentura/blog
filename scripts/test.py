@@ -44,43 +44,47 @@ def upload_file_to_s3(filename, safe_title, conn=None):
     target = 'https://%s/%s/%s' % (ENDPOINT, BUCKET, dest)
     return target
 
-def parse_images(fname, safe_title):
-    lines = open(fname, encoding='utf-8').readlines()
-    inline = re.compile(r'!?\[.*?\]\((?P<cap>.*?)(?: |\))')
-    ref = re.compile(r'^\[.*?\]: (?P<cap>.*?)(?: |$)')
-    conn = None
+def is_valid_image_fname(image_fname):
+    if not image_fname.startswith('images/'):
+        return False
+    if not image_fname[-3:].lower() in ['png', 'gif', 'jpg']:
+        return False
+    return True
+
+def parse_images(html, safe_title):
     uploaded = []
-    for idx in range(len(lines)):
-        line = lines[idx]
-        group = inline.search(line)
-        if group is None:
-            group = ref.search(line)
-            if group is None:
-                continue
-
-        image_fname = group.group('cap')
-        if not image_fname[-3:].lower() in ['png', 'gif', 'jpg']:
+    tags = []
+    for anchor in html.find_all('a'):
+        image_fname = anchor.attrs['href']
+        if not is_valid_image_fname(image_fname) or image_fname in uploaded:
             continue
+        uploaded.append(image_fname)
+        tags.append(anchor)
 
-        if image_fname in uploaded:
-            debug('image %s already uploaded!' % image_fname)
+    for image in html.find_all('img'):
+        image_fname = image.attrs['src']
+        if not is_valid_image_fname(image_fname) or image_fname in uploaded:
             continue
+        uploaded.append(image_fname)
+        tags.append(image)
 
-        if conn is None:
-            conn = connect_to_s3()
-        image_link = upload_file_to_s3(image_fname, conn)
+    for tag in tags:
+        attr = 'src'
+        if 'href' in tag.attrs:
+            attr = 'href'
+
+        image_fname = tag.attrs[attr]
+        image_link = upload_file_to_s3(image_fname, safe_title)
 
         if image_link is None:
             print("Issue uploading %s to S3" % image_fname)
             continue
-        uploaded.append(image_fname)
-        lines[idx] = lines[idx].replace(image_fname, image_link)
+        tag.attrs[attr] = image_link
 
-    return "".join(lines)
+    return html
 
 
-def parse_videos(body, title):
-    html = BeautifulSoup(body, features='lxml')
+def parse_videos(html, title):
     conn = None
     for video in html.find_all('video'):
         for source in video.find_all('source'):
@@ -91,10 +95,9 @@ def parse_videos(body, title):
             if video_file is None:
                 print("Issue uploading %s to S3" % video_file)
                 continue
-            print(video_link)
             source.attrs['src'] = video_link
 
-    return html.prettify()
+    return html
 
 def setup_keys():
     try:
@@ -144,14 +147,17 @@ def main():
         header = generate_header(r)
         debug('sanitizing title')
         safe_title = sanitize_title(r['title'])
-        debug('parsing images')
-        parsed = parse_images('%s/POST.md' % target, safe_title)
         debug('generating body')
-        body = markdown2.markdown(parsed, extras=["fenced-code-blocks"])
+        md_str = open("%s/POST.md" % target, encoding='utf-8').read()
+        body_str = markdown2.markdown(md_str, extras=["fenced-code-blocks"])
+        debug('generating text post')
+        html_str = generate_post(header, body_str, r['title'])
+        html = BeautifulSoup(html_str, features='html5lib')
+        debug('parsing images')
+        html = parse_images(html, safe_title)
         debug('parsing videos')
-        body = parse_videos(body, safe_title)
-        debug('generating post')
-        blog_post = generate_post(header, body, r['title'])
+        html = parse_videos(html, safe_title)
+        blog_post = html.prettify()
         html_fname = 'html/%s.html' % safe_title
         debug('writing to file')
         open(html_fname, 'w', encoding='utf-8').write(blog_post)
