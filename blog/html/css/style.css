@@ -40,6 +40,7 @@ a:hover {
 }
 
 img { max-width: 100%; margin: 0px auto; }
+video { max-width: 100%; margin: 0px auto; display: block; }
 h1, h2, h3, h4, h5 {
   font-family: 'Roboto Slab', sans-serif;
 }
