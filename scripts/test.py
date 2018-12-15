@@ -11,6 +11,7 @@ import pytz
 from datetime import datetime
 from jinja2 import Template
 from feedgen.feed import FeedGenerator
+from bs4 import BeautifulSoup
 
 BLOG_URL = 'https://blog-devops.davidventura.com.ar/'
 BUCKET = 'blog-davidventura'
@@ -28,6 +29,20 @@ def connect_to_s3():
     S3_ACCESS_KEY, S3_SECRET_KEY = setup_keys()
     return tinys3.Connection(S3_ACCESS_KEY, S3_SECRET_KEY, endpoint=ENDPOINT)
 
+
+def upload_file_to_s3(filename, safe_title, conn=None):
+    if not os.path.exists(filename):
+        print("%s does not exist!" % filename)
+        return None
+
+    f = open(filename, 'rb')
+    bname = os.path.basename(filename)
+    dest = "%s/%s" % (safe_title, bname)
+    if conn is None:
+        conn = connect_to_s3()
+    conn.upload(dest, f, BUCKET, expires='max')
+    target = 'https://%s/%s/%s' % (ENDPOINT, BUCKET, dest)
+    return target
 
 def parse_images(fname, safe_title):
     lines = open(fname, encoding='utf-8').readlines()
@@ -47,25 +62,39 @@ def parse_images(fname, safe_title):
         if not image_fname[-3:].lower() in ['png', 'gif', 'jpg']:
             continue
 
-        if not os.path.exists(image_fname):
-            print("%s does not exist!" % image_fname)
-            continue
-
         if image_fname in uploaded:
             debug('image %s already uploaded!' % image_fname)
             continue
-        uploaded.append(image_fname)
-        f = open(image_fname, 'rb')
-        nname = os.path.basename(image_fname)
-        dest = "%s/%s" % (safe_title, nname)
+
         if conn is None:
             conn = connect_to_s3()
-        conn.upload(dest, f, BUCKET, expires='max')
-        target = 'https://%s/%s/%s' % (ENDPOINT, BUCKET, dest)
-        lines[idx] = lines[idx].replace(image_fname, target)
+        image_link = upload_file_to_s3(image_fname, conn)
+
+        if image_link is None:
+            print("Issue uploading %s to S3" % image_fname)
+            continue
+        uploaded.append(image_fname)
+        lines[idx] = lines[idx].replace(image_fname, image_link)
 
     return "".join(lines)
 
+
+def parse_videos(body, title):
+    html = BeautifulSoup(body, features='lxml')
+    conn = None
+    for video in html.find_all('video'):
+        for source in video.find_all('source'):
+            if conn is None:
+                conn = connect_to_s3()
+            video_file = source.attrs['src']
+            video_link = upload_file_to_s3(video_file, title, conn)
+            if video_file is None:
+                print("Issue uploading %s to S3" % video_file)
+                continue
+            print(video_link)
+            source.attrs['src'] = video_link
+
+    return html.prettify()
 
 def setup_keys():
     try:
@@ -119,6 +148,8 @@ def main():
         parsed = parse_images('%s/POST.md' % target, safe_title)
         debug('generating body')
         body = markdown2.markdown(parsed, extras=["fenced-code-blocks"])
+        debug('parsing videos')
+        body = parse_videos(body, safe_title)
         debug('generating post')
         blog_post = generate_post(header, body, r['title'])
         html_fname = 'html/%s.html' % safe_title

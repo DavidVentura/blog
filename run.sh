@@ -23,6 +23,7 @@ function run {
     docker run -v "$PWD/scripts":/root/scripts/ \
                -v "$PWD/blog/raw/":/root/raw \
                -v "$PWD/blog/images":/root/images \
+               -v "$PWD/blog/videos":/root/videos \
                -v "$PWD/blog/template":/root/template \
                -v "$PWD/blog/html":/root/html \
                -e S3_ACCESS_KEY="$S3_ACCESS_KEY" \
