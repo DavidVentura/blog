@@ -45,20 +45,23 @@ Now that I had a handy python binary in my kindle I could more comfortably manag
 
 I decided to dig a bit deeper to avoid the fragile parsing of `/var/log/messages` and I found `lipc-wait-event` (you can find a detailed list of events [here](https://wiki.mobileread.com/wiki/Lipc)).
 
-``` bash
+Investigating the events, I left `lipc-wait-event` running for a bit while I played with the kindle
+```bash
 [root@kindle root]# lipc-wait-event -mt "com.lab126.powerd" "*"
-[11:28:12.711741] goingToScreenSaver 2
+[11:28:12.711741] goingToScreenSaver 2 # on button click to power off
 [11:28:17.554321] t1TimerReset
-[11:28:17.580866] outOfScreenSaver 1
+[11:28:17.580866] outOfScreenSaver 1 # on button click to power on
 [11:28:24.081409] goingToScreenSaver 2
 [11:28:27.298605] outOfScreenSaver 1
-[11:29:27.421299] charging
-[11:30:20.656191] battLevelChanged 21
+[11:29:27.421299] charging # when a charger was plugged in
+[11:30:20.656191] battLevelChanged 21 # after waiting for a bit
 ```
+
+and 
 
 ```bash
 [root@kindle root]# lipc-wait-event -m com.lab126.wifid "*"
-scanning
+scanning # enabled airplane mode
 scanComplete
 cmDisconnected
 cmStateChange "NA"
@@ -66,7 +69,7 @@ signalStrength "0/5"
 cmStateChange "READY"
 cmIntfNotAvailable
 cmStateChange "NA"
-cmStateChange "PENDING"
+cmStateChange "PENDING" # disabled airplane mode
 scanning
 scanComplete
 cmConnected
@@ -83,48 +86,48 @@ I could now subscribe to these two event sources individually and get reliably n
 My final script:
 
 ```python
-#!/usr/bin/env python2                                                                                                                                                                                                                                                                                                       
-import subprocess                                                                                                                                                                                                                                                                                                            
-import socket                                                                                                                                                                                                                                                                                                                
-import time                                                                                                                                                                                                                                                                                                                  
-from threading import Thread                                                                                                                                                                                                                                                                                                 
-                                                                                                                                                                                                                                                                                                                             
-client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)                                                                                                                                                                                                                                                             
-client_socket.settimeout(1.0)                                                                                                                                                                                                                                                                                                
-                                                                                                                                                                                                                                                                                                                             
-def udp_send(key, value):                                                                                                                                                                                                                                                                                                    
-    try:                                                                                                                                                                                                                                                                                                                     
-        print("Sending", key, value)                                                                                                                                                                                                                                                                                         
-        message = b'%s|%s' % (key, value)                                                                                                                                                                                                                                                                                    
-        addr = ("192.168.2.1", 12000)                                                                                                                                                                                                                                                                                        
+#!/usr/bin/env python2
+import subprocess
+import socket
+import time
+from threading import Thread
+
+client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+client_socket.settimeout(1.0)
+
+def udp_send(key, value):
+    try:
+        print("Sending", key, value)
+        message = b'%s|%s' % (key, value)
+        addr = ("192.168.2.1", 12000)
         client_socket.sendto(message, addr)
     except Exception as e:
-        print(e)                                                                                                                                                                                                                                                                                                             
-                                                                                                                                                                                                                                                                                                                             
-def pub_event(source, events):                                                                                                                                                                                                                                                                                               
-    comm = ['lipc-wait-event', '-m', source]                                                                                                                                                                                                                                                                                 
-    comm.extend(events)                                                                                                                                                                                                                                                                                                      
-    s = subprocess.Popen(comm, stdout=subprocess.PIPE)                                                                                                                                                                                                                                                                       
-    for line in iter(s.stdout.readline, ""):                                                                                                                                                                                                                                                                                 
-        line = line.strip()                                                                                                                                                                                                                                                                                                  
-        print(source, line)                                                                                                                                                                                                                                                                                                  
-        if 'goingToScreenSaver' in line:                                                                                                                                                                                                                                                                                     
-            udp_send('screen', 'off')                                                                                                                                                                                                                                                                                        
-        if 'outOfScreenSaver' in line:                                                                                                                                                                                                                                                                                       
-            udp_send('screen', 'on')                                                                                                                                                                                                                                                                                         
-        if 'battLevelChanged' in line:                                                                                                                                                                                                                                                                                       
-            udp_send('bat', line.split(" ")[1])                                                                                                                                                                                                                                                                              
-        if 'cmConnected' in line:                                                                                                                                                                                                                                                                                            
-            udp_send('wifi', 'on')                                                                                                                                                                                                                                                                                           
-                                                                                                                                                                                                                                                                                                                             
-udp_send('init', 'init')                                                                                                                                                                                                                                                                                                     
-power = Thread(target=pub_event, args=("com.lab126.powerd", ["*"]))                                                                                                                                                                                                                                                          
-wifi = Thread(target=pub_event, args=("com.lab126.wifid", ["cmConnected"]))                                                                                                                                                                                                                                                  
-power.start()                                                                                                                                                                                                                                                                                                                
-wifi.start()                                                                                                                                                                                                                                                                                                                 
-                                                                                                                                                                                                                                                                                                                             
-power.join()                                                                                                                                                                                                                                                                                                                 
-wifi.join()     
+        print(e)
+
+def pub_event(source, events):
+    comm = ['lipc-wait-event', '-m', source]
+    comm.extend(events)
+    s = subprocess.Popen(comm, stdout=subprocess.PIPE)
+    for line in iter(s.stdout.readline, ""):
+        line = line.strip()
+        print(source, line)
+        if 'goingToScreenSaver' in line:
+            udp_send('screen', 'off')
+        if 'outOfScreenSaver' in line:
+            udp_send('screen', 'on')
+        if 'battLevelChanged' in line:
+            udp_send('bat', line.split(" ")[1])
+        if 'cmConnected' in line:
+            udp_send('wifi', 'on')
+
+udp_send('init', 'init')
+power = Thread(target=pub_event, args=("com.lab126.powerd", ["*"]))
+wifi = Thread(target=pub_event, args=("com.lab126.wifid", ["cmConnected"]))
+power.start()
+wifi.start()
+
+power.join()
+wifi.join()
 ```
 
 # Auto startup
@@ -149,7 +152,7 @@ end script
 Doing remote work on the kindle is quite annyoing as it will try to limit its bandwidth and shut down the wifi at any opportunity; setting the wlan power setting to `maxperf` solves the issue
 
 ```bash
-# cat /mnt/us/fast_wifi.sh
+$ cat /mnt/us/fast_wifi.sh
 wmiconfig -i wlan0 --power maxperf
 ```
 
