@@ -3,12 +3,40 @@ Most nights I read from my Kindle until fall asleep, leaving my night light on..
 
 So, I thought why not have the light turn itself off when I fall asleep? Given that I can already turn it on/off via my home automation scripts, it should not be too difficult to detect somehow that my kindle went off.
 
+# The problems
+
+The userland on a default jailbroken kindle is quite lmited: You basically get bash, coreutils and some custom amazon binaries.  
+
+With these limitations I thought of some ways to detect the screen changes in order of least to most involved:
+
+1. On the network (somehow)
+2. With the provided userland
+3. With some extra binaries (which? how do I get them there?)
+
 # First attempt: Network detection
-I started by trying to detect the activity from the kindle on my own wifi, but mucking with openwrt to detect a device's activity was neither straightforward nor (once it was working) accurate / fast enough.
+
+Initially I thought about detecting the device based on activity:
+
+1. Get the IP address when the kindle requests a DHCP lease
+2. Detect "activity" on the network coming from this device.
+
+The problem with this is that the kindle itself does not do much when you are reading; so I was bound to having a `ping` running constantly on device.  
+Even after having this working, it was not very useful as the kindle will:
+
+- Keep wifi on for a little bit after the screen is turned off
+- Randomly turn on wifi
+
+I started by detecting the connect/disconnect events from the kindle on my own OpenWRT AP but the random (and delayed) events from the kindle's wifi were not useful.
+
+```
+root@OpenWrt:~# hostapd_cli -i wlan0 -a /root/script.sh
+f4:60:e2:b4:68:c4 disconnected on wlan0
+f4:60:e2:b4:68:c4 connected on wlan0
+```
+
 
 # Second attempt: Tailing logs in Bash
-As I had already jailbroken my kindle I thought about doing something on the device, but the userland is quite limited..  
-I started exploring the device and I found that I could somewhat reliably detect the screen changing state by `grep`ping  `/var/log/messages`
+I started exploring the device's userland and I found that I could somewhat reliably detect the screen changing state by `grep`ping  `/var/log/messages`
 
 ```
 [root@kindle root]# grep SCREEN /var/log/messages
@@ -26,22 +54,22 @@ done
 
 and I simply ran it in the background from an ssh session.
 
-This attempt was a bit crude; as it did not reliably manage to send "SCREEN ON" messages, the wifi shuts off while the system is sleeping and this script will try to deliver the message before the wifi connection is up.
+This attempt was a bit crude; as it did not reliably manage to send "SCREEN ON" messages, the wifi shuts off while the system is sleeping, and this will try to deliver the message before the wifi connection is up.
 
-I did try to periodically check whether the wifi was down and wait but it got quite cumbersome to deal with in bash, which led to..
+I did try to periodically check whether the wifi was down and queue the message but it got quite cumbersome to deal with in bash, which led to..
 
 # Third attempt: Python
 
-I thought, if this is just an ARM linux distro, could I not just `scp` over some python binaries and be done with it?
+I thought, if this is just an ARM linux distro, could I not just `scp` over some python binaries and be done with it? Well, yes!  
 
 ```
 [root@kindle root]# file /mnt/us/python/bin/python2.7
 python2.7: ELF 32-bit LSB executable, ARM, EABI5 version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux.so.3, for GNU/Linux 2.6.31, stripped
 ```
 
-Well, yes! I originally got them from (somewhere?) in the Debian repos, but you can also find them [here](https://www.mobileread.com/forums/showthread.php?t=195474).
+I originally got the binaries from (somewhere?) in the Debian repos, but you can also find them [here](https://www.mobileread.com/forums/showthread.php?t=195474).
 
-Now that I had a handy python binary in my kindle I could more comfortably manage the state required to send messages when appropiate, so I essentially ported my bash script to python, but I did not like the (working) result.
+Now that I had a handy python binary in my kindle I could more comfortably manage the state required to send messages only when appropiate, so I essentially ported my bash script to python, but I did not like the (working) result.
 
 I decided to dig a bit deeper to avoid the fragile parsing of `/var/log/messages` and I found `lipc-wait-event` (you can find a detailed list of events [here](https://wiki.mobileread.com/wiki/Lipc)).
 
@@ -81,7 +109,7 @@ cmConnected
 scanComplete
 ```
 
-I could now subscribe to these two event sources individually and get reliably notified when something _interesting_ happened.
+I could now subscribe to these two event sources individually and get _reliably_ notified when something interesting happened.
 
 My final script:
 
@@ -130,6 +158,8 @@ power.join()
 wifi.join()
 ```
 
+On the other end there's a very simple udp server that bridges the data to mqtt.
+
 # Auto startup
 
 There are quite some ways to add "services" to the kindle, but I opted for an upstart entry: `/etc/upstart/automation.conf`
@@ -157,7 +187,6 @@ wmiconfig -i wlan0 --power maxperf
 ```
 
 Don't forget to set it back to `rec` later, or your battery will drain quite quickly.
-
 
 
 # Result
