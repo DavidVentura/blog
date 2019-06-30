@@ -2,7 +2,7 @@ html, body {
   max-width: 100%;
   font-family: 'Roboto', sans-serif;
   color: #1D1D1D;
-  font-size: 13px;
+  font-size: 1em;
 }
 table {
     border-collapse: collapse;
@@ -133,9 +133,9 @@ pre, code, .codehilite {
   background-color: #FBFBFB;
   padding: 5px;
   border-radius: 4px;
-  line-height: 21px;
   padding-left: 0px;
   max-height: 600px;
+  font-size: 1em;
 }
 img, .center { display: block; margin: 0px auto; text-align: center; }
 
