@@ -144,7 +144,7 @@ existing in the meantime.
 
 It would be easier for me to not have to remember anything, and simply have
 the config values baked into the image. Here are condensed instructions from
-[https://wiki.debian.org/DebianInstaller/Preseed/EditIso](the official docs):
+[the official docs](https://wiki.debian.org/DebianInstaller/Preseed/EditIso):
 
 ```
 # Populate preseed.cfg with your defaults prior to this
@@ -189,5 +189,5 @@ genisoimage -r -J -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -b
 
 # Demo
 
-You can take a look at a recording of an install with these values [![asciicast](https://asciinema.org/a/uvVLPtQxERbWoKpXUO00ALp2R)](here).
+You can take a look at a recording of an install with these values [![asciicast](https://asciinema.org/a/uvVLPtQxERbWoKpXUO00ALp2R)](https://asciinema.org/a/uvVLPtQxERbWoKpXUO00ALp2R).
 
