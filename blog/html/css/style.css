@@ -136,7 +136,9 @@ pre, code, .codehilite {
   padding-left: 0px;
   max-height: 600px;
   font-size: 1em;
+  line-height: 20px;
 }
+
 img, .center { display: block; margin: 0px auto; text-align: center; }
 
 blockquote {
