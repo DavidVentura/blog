@@ -19,6 +19,8 @@ ENDPOINT = 's3-sa-east-1.amazonaws.com'
 DEBUG = False
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
 
+os.environ['HTTP_PROXY'] = 'http://proxies.labs:3128'
+os.environ['HTTPS_PROXY'] = 'http://proxies.labs:3128'
 
 def debug(*msg):
     if DEBUG:
