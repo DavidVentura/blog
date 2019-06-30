@@ -190,4 +190,4 @@ genisoimage -r -J -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -b
 ## Demo
 
 You can take a look at a recording of an install with these values:  
-[![demo](https://asciinema.org/a/uvVLPtQxERbWoKpXUO00ALp2R)](images/debian-installer.png)
+[![demo](images/debian-installer.png)](https://asciinema.org/a/uvVLPtQxERbWoKpXUO00ALp2R)
