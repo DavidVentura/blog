@@ -3,14 +3,14 @@ but when I wanted to deploy a VM I realized that I had to click through the
 debian netinstall and likely forget about the settings in the future.  
 After some investigation I remembered the classic *preseeding* method.
 
-# Preseeding
+## Preseeding
 
 This method consists in pre-selecting all the answers required for the debian
 installer. It is a bit shitty that I am not simply using a base image and 
 re-generating the ssh-keys and hostname on first boot, but this is widely
-supported, as far as I know.
+supported as far as I know.
 
-## Choosing the presets
+### Choosing the presets
 Presets are quite straight-forward, the customized values are:
 
 * Locale (keyboard, language)
@@ -131,7 +131,7 @@ d-i grub-installer/bootdev  string /dev/vda
 d-i finish-install/reboot_in_progress note
 ```
 
-## Booting the autoinstall
+### Booting the autoinstall
 
 The easiest way to boot this automated setup is to simply go to *Advanced ->
 Automated setup* in the wizard, then typing in the path to a webserver that
@@ -140,14 +140,14 @@ I will forget about the procedure in some time, and the webserver might stop
 existing in the meantime.
 
 
-## Baking the config into the image
+### Baking the config into the image
 
 It would be easier for me to not have to remember anything, and simply have
 the config values baked into the image. Here are condensed instructions from
 [the official docs](https://wiki.debian.org/DebianInstaller/Preseed/EditIso):
 
-```
-# Populate preseed.cfg with your defaults prior to this
+```bash
+## Populate preseed.cfg with your defaults prior to this
 mkdir -p isofiles
 bsdtar -C isofiles -xf debian-9.9.0-amd64-netinst.iso 
 gunzip isofiles/install.amd/initrd.gz
@@ -165,11 +165,11 @@ creating *preseed-debian-9.9.0-amd64-netinst.iso*, but you **still** have to
 go to *Advanced -> Automated setup* in the wizard (although you don't need to
 type the webserver's address anymore).
 
-# Automatically picking an entry from the menu
+## Automatically picking an entry from the menu
 
-isolinux.cfg: set **timeout** to 1
-menu.cfg: remove all includes except **stdmenu.cfg** and **txt.cfg**
-txt.cfg: replace contents with
+isolinux.cfg: set **timeout** to 1  
+menu.cfg: remove all includes except **stdmenu.cfg** and **txt.cfg**  
+txt.cfg: replace contents with  
 
 ```
 label install
@@ -181,13 +181,13 @@ default install
 ```
 
 Now, re-package the iso:
-```
+```bash
 md5sum $(find -follow -type f) > md5sum.txt
 cd ..
 genisoimage -r -J -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o preseed-debian-9.9.0-amd64-netinst.iso isofiles/
 ```
 
-# Demo
+## Demo
 
 You can take a look at a recording of an install with these values [here](https://asciinema.org/a/uvVLPtQxERbWoKpXUO00ALp2R).
 
