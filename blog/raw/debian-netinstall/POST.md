@@ -171,7 +171,7 @@ isolinux.cfg: set **timeout** to 1
 menu.cfg: remove all includes except **stdmenu.cfg** and **txt.cfg**
 txt.cfg: replace contents with
 
-``
+```
 label install
         menu label ^Install
         menu default
@@ -189,5 +189,5 @@ genisoimage -r -J -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -b
 
 # Demo
 
-You can take a look at a recording of an install with these values [![asciicast](https://asciinema.org/a/uvVLPtQxERbWoKpXUO00ALp2R)](https://asciinema.org/a/uvVLPtQxERbWoKpXUO00ALp2R).
+You can take a look at a recording of an install with these values [here](https://asciinema.org/a/uvVLPtQxERbWoKpXUO00ALp2R).
 
