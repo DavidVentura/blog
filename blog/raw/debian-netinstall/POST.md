@@ -1,7 +1,7 @@
 So far, anything that I've deployed in my lab has been running in a container,
 but when I wanted to deploy a VM I realized that I had to click through the
 debian netinstall and likely forget about the settings in the future.  
-After some investigation I remembered the classic `preseeding` method.
+After some investigation I remembered the classic *preseeding* method.
 
 # Preseeding
 
@@ -17,8 +17,8 @@ Presets are quite straight-forward, the customized values are:
 * Apt mirror & proxy
 * Disk partitioning
 
-An interesting gotcha was that this uses `/dev/vda` and the defaults and docs
-always talk about `/dev/sda`; I did not know that this would be `/dev/vda` when
+An interesting gotcha was that this uses */dev/vda* and the defaults and docs
+always talk about */dev/sda*; I did not know that this would be */dev/vda* when
 using qemu, so it took me a while to figure out why the installer was complaining
 about an invalid rootfs.
 
@@ -133,8 +133,8 @@ d-i finish-install/reboot_in_progress note
 
 ## Booting the autoinstall
 
-The easiest way to boot this automated setup is to simply go to `Advanced ->
-Automated setup` in the wizard, then typing in the path to a webserver that
+The easiest way to boot this automated setup is to simply go to *Advanced ->
+Automated setup* in the wizard, then typing in the path to a webserver that
 can provide this file.. but this defeats the point of automating the setup,
 I will forget about the procedure in some time, and the webserver might stop
 existing in the meantime.
@@ -160,15 +160,15 @@ genisoimage -r -J -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -b
 ```
 
 
-At this point, you've added your `preseed.cfg` into `debian-9.9.0-amd64-netinst.iso`,
-creating `preseed-debian-9.9.0-amd64-netinst.iso`, but you **still** have to
-go to `Advanced -> Automated setup` in the wizard (although you don't need to
+At this point, you've added your *preseed.cfg* into *debian-9.9.0-amd64-netinst.iso*,
+creating *preseed-debian-9.9.0-amd64-netinst.iso*, but you **still** have to
+go to *Advanced -> Automated setup* in the wizard (although you don't need to
 type the webserver's address anymore).
 
 # Automatically picking an entry from the menu
 
-isolinux.cfg: set `timeout` to 1
-menu.cfg: remove all includes except `stdmenu.cfg` and `txt.cfg`
+isolinux.cfg: set **timeout** to 1
+menu.cfg: remove all includes except **stdmenu.cfg** and **txt.cfg**
 txt.cfg: replace contents with
 
 ``
