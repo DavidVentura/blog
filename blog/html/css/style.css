@@ -3,6 +3,7 @@ html, body {
   font-family: 'Roboto', sans-serif;
   color: #1D1D1D;
   font-size: 1em;
+  background-color: #eee;
 }
 table {
     border-collapse: collapse;
