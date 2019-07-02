@@ -24,9 +24,10 @@
                 </h2>
 
                 <div id="tags">
-                    {% for tag in post['tags'] %}
-                        <a href="/tags/{{tag}}">{{tag}}</a>
-                    {% endfor %}
+                    <span>TAGS: [
+                    {% for tag in post['tags'] %}<a href="/tags/{{tag}}">{{tag}}</a> {% endfor %}
+                    ]
+                    </span>
                 </div>
             </div>
             {% endfor %}
