@@ -62,12 +62,13 @@ h5 {
 
 #indexheader {
   text-align: left;
-  margin: 5% auto;
-} 
+  margin: 25px auto;
+}
+
 #indexheader h1,
 #indexheader h1 a {
   color: #1D1D1D;
-  font-size: 40px;
+  font-size: 32px;
   margin-bottom: 0px;
   text-transform: none;
   text-decoration: none;
