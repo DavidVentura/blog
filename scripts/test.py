@@ -7,6 +7,7 @@ import re
 import sys
 import pytz
 
+from pathlib import Path
 from datetime import datetime
 from jinja2 import Template
 from feedgen.feed import FeedGenerator
@@ -48,11 +49,15 @@ def sanitize_title(title):
 
 
 def main():
-    targets = os.environ['TARGET'].strip()
-    for target in targets.split(';'):
-        target = os.path.join('raw/', target)
+    for target in glob.glob("raw/*"):
         if not os.path.exists(target):
             print("Target path (%s) does not exist" % target)
+            continue
+        if not os.path.exists(os.path.join(target, 'POST.md')):
+            print("Target path (%s/POST.md) does not exist" % target)
+            continue
+        if not os.path.exists(os.path.join(target, 'metadata.json')):
+            print("Target path (%s/metadata.json) does not exist" % target)
             continue
 
         debug(target)
@@ -89,6 +94,34 @@ def generate_feed():
     return fg
 
 
+def make_rss_entry(feed, item):
+    fe = feed.add_entry()
+    url = '%s%s' % (BLOG_URL, item['path'][1:])
+    fe.id(url)
+    tstamp = datetime.combine(item['date'], datetime.min.time())
+    tstamp = pytz.timezone("Europe/Amsterdam").localize(tstamp)
+    fe.link(href=url)
+    fe.author({'name': 'David Ventura',
+               'email': 'davidventura27+blog@gmail.com'})
+    fe.pubDate(tstamp)
+    fe.title(item['title'])
+    # everything was mutated inside feed
+    return tstamp
+
+
+def make_link(*, src, tag):
+    src = src.lstrip('/')
+    tag_dir = Path('tags') / Path(tag)
+    tag_dir.mkdir(parents=True, exist_ok=True)
+
+    srcdir = Path(tag_dir) / Path(src)
+    dstpath = Path('../../html') / Path(src)
+    #srcdir tags/backups/backups-backups-backups.html
+    #dstpath ../../html/backups-backups-backups.html
+
+    if not srcdir.exists() and dstpath.exists():
+        srcdir.symlink_to(dstpath)
+
 def generate_index():
     items = []
     feed = generate_feed()
@@ -100,20 +133,12 @@ def generate_index():
 
     s_items = sorted(items, key=lambda k: k['date'], reverse=True)
     for item in s_items[::-1]:
-        fe = feed.add_entry()
-        url = '%s%s' % (BLOG_URL, item['path'][1:])
-        fe.id(url)
-        tstamp = datetime.combine(item['date'], datetime.min.time())
-        tstamp = pytz.timezone("Europe/Amsterdam").localize(tstamp)
-        fe.link(href=url)
-        fe.author({'name': 'David Ventura',
-                   'email': 'davidventura27+blog@gmail.com'})
-        fe.pubdate(tstamp)
-        fe.title(item['title'])
-
+        tstamp = make_rss_entry(feed, item)
         if last_update is None:
             last_update = tstamp
         last_update = max(last_update, tstamp)
+        for tag in item['tags']:
+            make_link(src=item['path'], tag=tag)
 
     template = Template(open('template/index.html', 'r').read())
     rendered = template.render(index=s_items)

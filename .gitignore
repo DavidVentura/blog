@@ -1,3 +1,6 @@
 *.swp
 credentials
 blog/html/*html
+blog/tags/*
+blog/html/rss.xml
+.venv
