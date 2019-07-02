@@ -31,13 +31,12 @@ article {
 a {
   color: #5BA4AF;
   text-decoration: none;
-  transition: 300ms ease;
   font-size: 0.9em;
 }
 
 a:hover {
   border-bottom: 1px dotted #DEDBD6;
-  opacity: .7;
+  opacity: .8;
 }
 
 img { max-width: 100%; margin: 0px auto; }
@@ -91,15 +90,6 @@ h5 {
   width: 30%;
   margin-top: 4px;
 }
-#indexheader .idea-icon {
-  animation-name: glow;
-  animation-duration: 1s;
-  animation-iteration-count: infinite;
-  animation-direction: alternate;
-}
-#indexheader .idea-icon:hover {
-  animation-duration: 300ms;
-}
 #indexlist{
   text-align: left;
 }
@@ -136,7 +126,7 @@ pre, code, .codehilite {
   padding: 5px;
   border-radius: 4px;
   padding-left: 0px;
-  max-height: 600px;
+  max-height: 500px;
   font-size: 1em;
   line-height: 20px;
 }
