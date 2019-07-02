@@ -126,10 +126,10 @@ pre, code, .codehilite {
   padding: 5px;
   border-radius: 4px;
   padding-left: 0px;
-  max-height: 500px;
   font-size: 1em;
   line-height: 20px;
 }
+.codehilite { max-height: 500px; }
 
 img, .center { display: block; margin: 0px auto; text-align: center; }
 
