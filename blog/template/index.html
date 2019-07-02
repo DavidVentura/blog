@@ -8,7 +8,7 @@
     </head>
     <body>
         <div id="indexheader">
-            <h1>Grouch mumbling about computers.</h1>
+            <h1><a href='/'>Grouch mumbling about computers.</a></h1>
             <h4>
                 <a href="/rss.xml">RSS</a>
             </h4>
@@ -23,12 +23,14 @@
                     </a>
                 </h2>
 
+                {% if post['tags'] %}
                 <div id="tags">
                     <span>TAGS: [
                     {% for tag in post['tags'] %}<a href="/tags/{{tag}}">{{tag}}</a> {% endfor %}
                     ]
                     </span>
                 </div>
+                {% endif %}
             </div>
             {% endfor %}
         </div>

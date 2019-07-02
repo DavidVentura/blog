@@ -19,13 +19,16 @@
                 <div id="blogpost">
                     <div id="blogheader">
                         {{ header }}
+                        {% if tags %}
+                        <div id="tags">
+                            <span>TAGS: [
+                            {% for tag in tags %}<a href="/tags/{{tag}}">{{tag}}</a> {% endfor %}
+                            ]
+                            </span>
+                        </div>
+                        {%endif%}
                     </div>
                     {{ post }}
-                </div>
-                <div id="tags">
-                    {% for tag in tags %}
-                        <a href="/tags/{{tag}}">{{tag}}</a>
-                    {% endfor %}
                 </div>
             </article>
         </div>
