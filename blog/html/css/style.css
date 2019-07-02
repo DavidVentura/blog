@@ -130,7 +130,7 @@ pre, code, .codehilite {
   line-height: 20px;
 }
 .codehilite { max-height: 500px; }
-
+pre { padding-left: 1.2em; }
 img, .center { display: block; margin: 0px auto; text-align: center; }
 
 blockquote {
