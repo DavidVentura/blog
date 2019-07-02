@@ -14,7 +14,7 @@ from feedgen.feed import FeedGenerator
 from bs4 import BeautifulSoup
 
 BLOG_URL = 'https://blog.davidventura.com.ar/'
-DEBUG = False
+DEBUG = True
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
 
 os.environ['HTTP_PROXY'] = 'http://proxies.labs:3128'
@@ -37,9 +37,9 @@ def generate_header(metadata):
     return template.render(metadata)
 
 
-def generate_post(header, body, title):
+def generate_post(header, body, title, tags):
     template = Template(open('template/body.html', 'r').read())
-    rendered = template.render(header=header, post=body, title=title)
+    rendered = template.render(header=header, post=body, title=title, tags=tags)
     return rendered
 
 
@@ -71,7 +71,7 @@ def main():
         md_str = open("%s/POST.md" % target, encoding='utf-8').read()
         body_str = markdown2.markdown(md_str, extras=["fenced-code-blocks"])
         debug('generating text post')
-        html_str = generate_post(header, body_str, r['title'])
+        html_str = generate_post(header, body_str, r['title'], r['tags'])
         html = BeautifulSoup(html_str, features='html5lib')
         blog_post = html.prettify()
         html_fname = 'html/%s.html' % safe_title
@@ -89,7 +89,6 @@ def generate_feed():
     fg.link(href=BLOG_URL, rel='alternate')
     fg.link(href=("%srss.xml" % BLOG_URL), rel='self')
     fg.description('Blog')
-    # fg.logo('')
     fg.language('en')
     return fg
 
@@ -109,19 +108,6 @@ def make_rss_entry(feed, item):
     return tstamp
 
 
-def make_link(*, src, tag):
-    src = src.lstrip('/')
-    tag_dir = Path('tags') / Path(tag)
-    tag_dir.mkdir(parents=True, exist_ok=True)
-
-    srcdir = Path(tag_dir) / Path(src)
-    dstpath = Path('../../html') / Path(src)
-    #srcdir tags/backups/backups-backups-backups.html
-    #dstpath ../../html/backups-backups-backups.html
-
-    if not srcdir.exists() and dstpath.exists():
-        srcdir.symlink_to(dstpath)
-
 def generate_index():
     items = []
     feed = generate_feed()
@@ -137,8 +123,6 @@ def generate_index():
         if last_update is None:
             last_update = tstamp
         last_update = max(last_update, tstamp)
-        for tag in item['tags']:
-            make_link(src=item['path'], tag=tag)
 
     template = Template(open('template/index.html', 'r').read())
     rendered = template.render(index=s_items)
@@ -146,7 +130,32 @@ def generate_index():
     feed.updated(last_update)
     feed.rss_file('html/rss.xml', pretty=True)
 
+def get_all_tags():
+    tags = set()
+    for f in glob.glob("raw/*/metadata.json"):
+        item = parse_metadata(f)
+        tags = tags.union(set(item['tags']))
+    return tags
+
+def generate_tag_index(tag):
+    items = []
+    for f in glob.glob("raw/*/metadata.json"):
+        item = parse_metadata(f)
+        if tag not in item['tags']:
+            continue
+        item['path'] = "/%s.html" % sanitize_title(item['title'])
+        items.append(item)
+    print(items)
+
+    s_items = sorted(items, key=lambda k: k['date'], reverse=True)
+    template = Template(open('template/index.html', 'r').read())
+    rendered = template.render(index=s_items)
+    fpath = Path('html/tags/%s/index.html' % tag)
+    fpath.parent.mkdir(parents=True, exist_ok=True)
+    open(str(fpath), 'w', encoding='utf-8').write(rendered)
 
 if __name__ == '__main__':
+    for tag in get_all_tags():
+        generate_tag_index(tag)
     main()
     generate_index()
