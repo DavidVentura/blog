@@ -5,7 +5,6 @@ import markdown2
 import os
 import re
 import sys
-import tinys3
 import pytz
 
 from datetime import datetime
@@ -13,9 +12,7 @@ from jinja2 import Template
 from feedgen.feed import FeedGenerator
 from bs4 import BeautifulSoup
 
-BLOG_URL = 'https://blog-devops.davidventura.com.ar/'
-BUCKET = 'blog-davidventura'
-ENDPOINT = 's3-sa-east-1.amazonaws.com'
+BLOG_URL = 'https://blog.davidventura.com.ar/'
 DEBUG = False
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
 
@@ -25,90 +22,6 @@ os.environ['HTTPS_PROXY'] = 'http://proxies.labs:3128'
 def debug(*msg):
     if DEBUG:
         print(*msg)
-
-
-def connect_to_s3():
-    S3_ACCESS_KEY, S3_SECRET_KEY = setup_keys()
-    return tinys3.Connection(S3_ACCESS_KEY, S3_SECRET_KEY, endpoint=ENDPOINT)
-
-
-def upload_file_to_s3(filename, safe_title, conn=None):
-    if not os.path.exists(filename):
-        print("%s does not exist!" % filename)
-        return None
-
-    f = open(filename, 'rb')
-    bname = os.path.basename(filename)
-    dest = "%s/%s" % (safe_title, bname)
-    if conn is None:
-        conn = connect_to_s3()
-    conn.upload(dest, f, BUCKET, expires='max')
-    target = 'https://%s/%s/%s' % (ENDPOINT, BUCKET, dest)
-    return target
-
-def is_valid_image_fname(image_fname):
-    if not image_fname.startswith('images/'):
-        return False
-    if not image_fname[-3:].lower() in ['png', 'gif', 'jpg']:
-        return False
-    return True
-
-def parse_images(html, safe_title):
-    uploaded = []
-    tags = []
-    for anchor in html.find_all('a'):
-        image_fname = anchor.attrs['href']
-        if not is_valid_image_fname(image_fname) or image_fname in uploaded:
-            continue
-        uploaded.append(image_fname)
-        tags.append(anchor)
-
-    for image in html.find_all('img'):
-        image_fname = image.attrs['src']
-        if not is_valid_image_fname(image_fname) or image_fname in uploaded:
-            continue
-        uploaded.append(image_fname)
-        tags.append(image)
-
-    for tag in tags:
-        attr = 'src'
-        if 'href' in tag.attrs:
-            attr = 'href'
-
-        image_fname = tag.attrs[attr]
-        image_link = upload_file_to_s3(image_fname, safe_title)
-
-        if image_link is None:
-            print("Issue uploading %s to S3" % image_fname)
-            continue
-        tag.attrs[attr] = image_link
-
-    return html
-
-
-def parse_videos(html, title):
-    conn = None
-    for video in html.find_all('video'):
-        for source in video.find_all('source'):
-            if conn is None:
-                conn = connect_to_s3()
-            video_file = source.attrs['src']
-            video_link = upload_file_to_s3(video_file, title, conn)
-            if video_file is None:
-                print("Issue uploading %s to S3" % video_file)
-                continue
-            source.attrs['src'] = video_link
-
-    return html
-
-def setup_keys():
-    try:
-        S3_ACCESS_KEY = os.environ['S3_ACCESS_KEY'].strip()
-        S3_SECRET_KEY = os.environ['S3_SECRET_KEY'].strip()
-    except KeyError as e:
-        print('KeyError', e)
-        sys.exit(1)
-    return S3_ACCESS_KEY, S3_SECRET_KEY
 
 
 def parse_metadata(target):
@@ -155,10 +68,6 @@ def main():
         debug('generating text post')
         html_str = generate_post(header, body_str, r['title'])
         html = BeautifulSoup(html_str, features='html5lib')
-        debug('parsing images')
-        html = parse_images(html, safe_title)
-        debug('parsing videos')
-        html = parse_videos(html, safe_title)
         blog_post = html.prettify()
         html_fname = 'html/%s.html' % safe_title
         debug('writing to file')
