@@ -22,6 +22,11 @@
                     </div>
                     {{ post }}
                 </div>
+                <div id="tags">
+                    {% for tag in tags %}
+                        <a href="/tags/{{tag}}">{{tag}}</a>
+                    {% endfor %}
+                </div>
             </article>
         </div>
     </body>

@@ -22,6 +22,12 @@
                         {{ post['title'] }}
                     </a>
                 </h2>
+
+                <div id="tags">
+                    {% for tag in post['tags'] %}
+                        <a href="/tags/{{tag}}">{{tag}}</a>
+                    {% endfor %}
+                </div>
             </div>
             {% endfor %}
         </div>
