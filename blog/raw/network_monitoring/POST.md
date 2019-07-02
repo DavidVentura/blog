@@ -36,7 +36,7 @@ SELECT sum("value") FROM "net_if" WHERE "scidr" = '192.168.2.0/24' AND "dcidr" =
 
 You end up with something like this:
 
-![](images/lan_wan_usage.png)
+![](/images/lan_wan_usage.png)
 
 ## Discovery
 

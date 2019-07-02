@@ -170,7 +170,7 @@ Properties:
 * minimum key always at root
 * Insert and deleteMin must maintain 
 
-![heap ordering in array](images/heap-order.png)
+![heap ordering in array](/images/heap-order.png)
 <p class="center">heap ordering in array</p>
 
 

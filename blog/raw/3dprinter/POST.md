@@ -73,7 +73,7 @@ In order of importance:
 ### PSU
 I connected my pi with a buck converter (LM2596s) directly to my 12v psu and soldered it to the test pads as seen in the following image:
 
-![](images/pizero.jpg)
+![](/images/pizero.jpg)
 
 
 ### Lighting

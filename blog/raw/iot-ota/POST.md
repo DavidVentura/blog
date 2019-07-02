@@ -64,6 +64,6 @@ There's no authentication or encryption involved. Given the range and scope of t
 # Extra
 These little modules seem to output quite a lot of heat, I initially had taped the DHT22 to it but the result was this
 
-![](images/dht-temp.png)
+![](/images/dht-temp.png)
 
 The taped period is ~2230-2345

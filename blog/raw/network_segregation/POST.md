@@ -2,7 +2,7 @@ After adding a [fancy router](https://blog.davidventura.com.ar/network-update-pa
 
 New setup:
 
-[![](images/network_post.png)](https://s3-sa-east-1.amazonaws.com/blog-davidventura/network-update-part-3-network-segregation/network_post.png)
+[![](/images/network_post.png)](https://s3-sa-east-1.amazonaws.com/blog-davidventura/network-update-part-3-network-segregation/network_post.png)
 
 You can find the fancy DOT file [here](https://raw.githubusercontent.com/DavidVentura/blogging_like_its_2017/master/blog/raw/network_segregation/network_post.dot).
 

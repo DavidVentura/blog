@@ -18,7 +18,7 @@ on matching commits, Jenkins launches a Docker container that:
 * Updates the index file with all posts, sorted by date
 
 
-![XKCD 917](images/xkcd917.png)
+![XKCD 917](/images/xkcd917.png)
 
 <p class="center">XKCD 917</p>
 

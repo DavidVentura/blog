@@ -4,7 +4,7 @@ I want to have internet usage data from my router as it cannot be put in bridge 
 
 These 'smart' people decided to do a POST that **never returns**. I guess that's to avoid people like me trying to get the data out of the browser easily with the dev tools.
 
-![](images/router-home.png)
+![](/images/router-home.png)
 
 I inspected the button and saw it is calling `postData()`. The relevant part of the function is below:
 
@@ -98,4 +98,4 @@ The actual flow of info to get the data out of the router is:
 
 ## Results
 
-![](images/router-results.png)
+![](/images/router-results.png)
