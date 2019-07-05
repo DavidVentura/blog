@@ -3,7 +3,7 @@ html, body {
   font-family: 'Roboto', sans-serif;
   color: #1D1D1D;
   font-size: 1em;
-  background-color: #eee;
+  background-color: #fff;
 }
 table {
     border-collapse: collapse;
@@ -118,18 +118,21 @@ h2.post-title a {
   font-size: 1em;
   color: #313131;
 }
-pre, code, .codehilite {
-  max-width: 100%;
-  overflow-x: auto;
-  color: #44464B;
-  background-color: #FBFBFB;
-  padding: 5px;
-  border-radius: 4px;
-  padding-left: 0px;
-  font-size: 1em;
-  line-height: 20px;
+pre {
+   display: block;
+   padding: 9.5px;
+   margin: 0 0 10px;
+   font-size: 14px;
+   line-height: 20px;
+   background-color: #f5f5f5;
+   border: 1px solid #ccc;
+   border: 1px solid rgba(0,0,0,0.15);
+   border-radius: 4px;
+   max-width: 100%;
+   overflow-x: auto;
+   max-height: 500px;
 }
-.codehilite { max-height: 500px; }
+code { background-color: #f5f5f5; } 
 pre { padding-left: 1.2em; }
 img, .center { display: block; margin: 0px auto; text-align: center; }
 
