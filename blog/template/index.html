@@ -16,21 +16,16 @@
         <div id="indexlist">
             {% for post in index %}
             <div class="post">
-                <small>{{post['date']}}</small>
                 <h2 class="post-title">
+                    <small>{{post['date']}}</small>
                     <a href="{{post['path']}}">
                         {{ post['title'] }}
                     </a>
+                    {% if post['tags'] %}
+                    <small>[{% for tag in post['tags'] %}<a href="/tags/{{tag}}">{{tag}}</a>{% endfor %}]</small>
+                    {% endif %}
                 </h2>
 
-                {% if post['tags'] %}
-                <div id="tags">
-                    <span>TAGS: [
-                    {% for tag in post['tags'] %}<a href="/tags/{{tag}}">{{tag}}</a> {% endfor %}
-                    ]
-                    </span>
-                </div>
-                {% endif %}
             </div>
             {% endfor %}
         </div>
