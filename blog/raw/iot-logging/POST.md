@@ -114,3 +114,5 @@ $ ./logserver.py
 2019-07-06 12:00:07,844 - [RFPOWER]: Subscribing to b'RFPOWER/set/#'
 2019-07-06 12:00:07,970 - [RFPOWER]: Subscribing to b'HDMI/set/#'
 ```
+
+Now we are ready to start developing more and more robust devices!
