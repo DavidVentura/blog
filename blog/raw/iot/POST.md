@@ -28,6 +28,19 @@ To get MicroPython on the board you should solder the 4 UART pins on the board a
 
 # Flashing
 
+## Hardware setup
+
+From easiest to hardest:
+
+* USB UART/TTL breakout pin
+* Arduino as a serial 'proxy'
+* Raspberry Pi GPIO
+
+![sonoff](/images/sonoff_pinout.jpeg)
+![pi pinout](/images/pi_zero_w_pinout.jpg)
+![All wired up](/images/pizerow_flashing_sonoff_setup.jpg)
+
+## Flashing MicroPython
 
 I was running (as recommended [here](https://docs.micropython.org/en/latest/esp8266/esp8266/tutorial/intro.html))
 
@@ -124,3 +137,62 @@ main()
 
 The mqtt lib is [umqtt.simple](https://github.com/micropython/micropython-lib/tree/master/umqtt.simple) which is an official lib.
 You can find the common lib on [github](https://github.com/DavidVentura/iot_home).
+
+
+# Getting code on the device
+
+After writing the code, to put it into the device simply run
+
+```bash
+
+$ mpfshell ttyUSB0
+
+** Micropython File Shell v0.9.1, sw@kaltpost.de **
+-- Running on Python 3.7 using PySerial 3.4 --
+
+mpfs [/]> put HOSTNAME
+mpfs [/]> put common.py
+mpfs [/]> put main.py
+mpfs [/]> put mqtt.py
+mpfs [/]> ls
+
+Remote files in '/':
+
+       HOSTNAME
+       common.py
+       main.py
+       mqtt.py
+
+```
+
+Testing the changes:
+
+```bash
+mpfs [/]> repl
+>
+MicroPython v1.9.4-8-ga9a3caad0 on 2018-05-11; ESP module with ESP8266
+Type "help()"
+*** Exit REPL with Ctrl+] ***
+for more information.
+>>>
+PYB: soft reboot
+#6 ets_task(40100130, 3, 3fff83ec, 4)
+Connected to SSID!
+Subscribing to b'PRINTER_POWER/set'
+Subscribing to b'PRINTER_POWER/OTA'
+#> Manually pressed button
+Button was pressed
+Setting pin to True
+Publish 1 to b'PRINTER_POWER/state'
+#> Manually pressed button
+Button was pressed
+Setting pin to False
+Publish 0 to b'PRINTER_POWER/state'
+#> Send '1' via MQTT
+b'PRINTER_POWER/set'
+b'1'
+Setting pin to True
+Publish 1 to b'PRINTER_POWER/state'
+```
+
+Done.
