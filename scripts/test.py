@@ -38,7 +38,7 @@ def generate_header(metadata):
 
 
 def generate_post(header, body, title, tags):
-    template = Template(open('template/body.html', 'r').read())
+    template = Template(open('blog/template/body.html', 'r').read())
     rendered = template.render(header=header, post=body, title=title, tags=tags)
     return rendered
 
@@ -49,7 +49,7 @@ def sanitize_title(title):
 
 
 def main():
-    for target in glob.glob("raw/*"):
+    for target in glob.glob("blog/raw/*"):
         if not os.path.exists(target):
             print("Target path (%s) does not exist" % target)
             continue
@@ -63,6 +63,8 @@ def main():
         debug(target)
         debug('parsing metadata')
         r = parse_metadata('%s/metadata.json' % target)
+        if 'incomplete' in r:
+            continue
         debug('generating header')
         header = generate_header(r)
         debug('sanitizing title')
@@ -74,7 +76,7 @@ def main():
         html_str = generate_post(header, body_str, r['title'], r['tags'])
         html = BeautifulSoup(html_str, features='html5lib')
         blog_post = html.prettify()
-        html_fname = 'html/%s.html' % safe_title
+        html_fname = 'blog/html/%s.html' % safe_title
         debug('writing to file')
         open(html_fname, 'w', encoding='utf-8').write(blog_post)
         debug('finished')
@@ -112,7 +114,7 @@ def generate_index():
     items = []
     feed = generate_feed()
     last_update = None
-    for f in glob.glob("raw/*/metadata.json"):
+    for f in glob.glob("blog/raw/*/metadata.json"):
         item = parse_metadata(f)
         item['path'] = "/%s.html" % sanitize_title(item['title'])
         items.append(item)
@@ -124,22 +126,22 @@ def generate_index():
             last_update = tstamp
         last_update = max(last_update, tstamp)
 
-    template = Template(open('template/index.html', 'r').read())
+    template = Template(open('blog/template/index.html', 'r').read())
     rendered = template.render(index=s_items)
-    open('html/index.html', 'w', encoding='utf-8').write(rendered)
+    open('blog/html/index.html', 'w', encoding='utf-8').write(rendered)
     feed.updated(last_update)
-    feed.rss_file('html/rss.xml', pretty=True)
+    feed.rss_file('blog/html/rss.xml', pretty=True)
 
 def get_all_tags():
     tags = set()
-    for f in glob.glob("raw/*/metadata.json"):
+    for f in glob.glob("blog/raw/*/metadata.json"):
         item = parse_metadata(f)
         tags = tags.union(set(item['tags']))
     return tags
 
 def generate_tag_index(tag):
     items = []
-    for f in glob.glob("raw/*/metadata.json"):
+    for f in glob.glob("blog/raw/*/metadata.json"):
         item = parse_metadata(f)
         if tag not in item['tags']:
             continue
@@ -148,9 +150,9 @@ def generate_tag_index(tag):
     print(items)
 
     s_items = sorted(items, key=lambda k: k['date'], reverse=True)
-    template = Template(open('template/index.html', 'r').read())
+    template = Template(open('blog/template/index.html', 'r').read())
     rendered = template.render(index=s_items)
-    fpath = Path('html/tags/%s/index.html' % tag)
+    fpath = Path('blog/html/tags/%s/index.html' % tag)
     fpath.parent.mkdir(parents=True, exist_ok=True)
     open(str(fpath), 'w', encoding='utf-8').write(rendered)
 
