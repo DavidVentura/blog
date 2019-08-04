@@ -64,6 +64,7 @@ def main():
         debug('parsing metadata')
         r = parse_metadata('%s/metadata.json' % target)
         if 'incomplete' in r:
+            debug('Incomplete - skipping')
             continue
         debug('generating header')
         header = generate_header(r)
