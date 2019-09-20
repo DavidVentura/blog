@@ -117,6 +117,8 @@ def generate_index():
     last_update = None
     for f in glob.glob("blog/raw/*/metadata.json"):
         item = parse_metadata(f)
+        if 'incomplete' in item and item['incomplete']:
+            continue
         item['path'] = "/%s.html" % sanitize_title(item['title'])
         items.append(item)
 
