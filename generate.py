@@ -3,9 +3,10 @@ import glob
 import json
 import markdown2
 import os
-import re
-import sys
 import pytz
+import re
+import shutil
+import sys
 
 from pathlib import Path
 from datetime import datetime
@@ -165,8 +166,12 @@ def generate_tag_index(tag):
     fpath.parent.mkdir(parents=True, exist_ok=True)
     open(str(fpath), 'w', encoding='utf-8').write(rendered)
 
+def copy_followed():
+    shutil.copyfile('blog/template/blogs-i-follow.html', 'blog/html/blogs-i-follow.html')
+
 if __name__ == '__main__':
     for tag in get_all_tags():
         generate_tag_index(tag)
     main()
     generate_index()
+    copy_followed()

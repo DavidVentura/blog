@@ -9,9 +9,6 @@
     <body>
         <div id="indexheader">
             <h1><a href='/'>Grouch mumbling about computers.</a></h1>
-            <h4>
-                <a href="/rss.xml">RSS</a>
-            </h4>
         </div>
         <div id="indexlist">
             {% for post in index %}
@@ -28,6 +25,10 @@
 
             </div>
             {% endfor %}
+        </div>
+        <div id=footer>
+            <a href="/rss.xml">RSS</a>
+            <a style='float:right' href="/blogs-i-follow.html">Blogs I follow</a>
         </div>
     </body>
 </html>

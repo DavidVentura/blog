@@ -19,8 +19,8 @@ body {
   max-width: 1100px;
   margin: 0px auto;
 }
-article {
-  padding-bottom: 90px;
+article, #footer {
+  padding-bottom: 20px;
 }
 ::selection {
   background-color: #E1EEF0;
