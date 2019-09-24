@@ -14,11 +14,8 @@ from feedgen.feed import FeedGenerator
 from bs4 import BeautifulSoup
 
 BLOG_URL = 'https://blog.davidventura.com.ar/'
-DEBUG = True
+DEBUG = False
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
-
-os.environ['HTTP_PROXY'] = 'http://proxies.labs:3128'
-os.environ['HTTPS_PROXY'] = 'http://proxies.labs:3128'
 
 def debug(*msg):
     if DEBUG:
@@ -48,21 +45,24 @@ def sanitize_title(title):
     return valid_title_chars.sub('', tmp_title).strip('-')
 
 
+def newer(f1, f2):
+    return os.path.getmtime(f1) > os.path.getmtime(f2)
+
+
 def main():
     for target in glob.glob("blog/raw/*"):
-        if not os.path.exists(target):
-            print("Target path (%s) does not exist" % target)
+        post_file = os.path.join(target, 'POST.md')
+        metadata_file = os.path.join(target, 'metadata.json')
+        if not os.path.exists(post_file):
+            print("Target post file (%s) does not exist" % post_file)
             continue
-        if not os.path.exists(os.path.join(target, 'POST.md')):
-            print("Target path (%s/POST.md) does not exist" % target)
-            continue
-        if not os.path.exists(os.path.join(target, 'metadata.json')):
+        if not os.path.exists(metadata_file):
             print("Target path (%s/metadata.json) does not exist" % target)
             continue
 
         debug(target)
         debug('parsing metadata')
-        r = parse_metadata('%s/metadata.json' % target)
+        r = parse_metadata(metadata_file)
         if 'incomplete' in r:
             debug('Incomplete - skipping')
             continue
@@ -70,14 +70,20 @@ def main():
         header = generate_header(r)
         debug('sanitizing title')
         safe_title = sanitize_title(r['title'])
+        html_fname = 'blog/html/%s.html' % safe_title
+
+        if os.path.isfile(html_fname):
+            if newer(html_fname, post_file) and newer(html_fname, metadata_file):
+                debug('Stale file')
+                continue
+
         debug('generating body')
-        md_str = open("%s/POST.md" % target, encoding='utf-8').read()
+        md_str = open(post_file, encoding='utf-8').read()
         body_str = markdown2.markdown(md_str, extras=["fenced-code-blocks"])
         debug('generating text post')
         html_str = generate_post(header, body_str, r['title'], r['tags'])
         html = BeautifulSoup(html_str, features='html5lib')
         blog_post = html.prettify()
-        html_fname = 'blog/html/%s.html' % safe_title
         debug('writing to file')
         open(html_fname, 'w', encoding='utf-8').write(blog_post)
         debug('finished')
@@ -150,7 +156,7 @@ def generate_tag_index(tag):
             continue
         item['path'] = "/%s.html" % sanitize_title(item['title'])
         items.append(item)
-    print(items)
+    #print(items)
 
     s_items = sorted(items, key=lambda k: k['date'], reverse=True)
     template = Template(open('blog/template/index.html', 'r').read())
