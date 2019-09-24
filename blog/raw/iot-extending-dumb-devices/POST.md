@@ -26,3 +26,14 @@ As this device (Odroid) has a very limited linux runtime, I setteld on sending U
 ## Why not CEC?
 
 Couldn't get it to work with our devices.
+
+# Curtains/Blinds automation
+
+In a similar vein, I've also wired 2 relays to my electric curtains controls
+with wifi integration. The software is the same as before and you can see it
+[here](https://github.com/DavidVentura/iot_home/blob/master/firmware/curtains/main.py)
+-- it simply holds the correct relay closed for the specified amount of time.
+
+
+## Results
+<video controls="true"><source src="videos/curtains.mp4"></video>
