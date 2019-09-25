@@ -187,6 +187,10 @@ cd ..
 genisoimage -r -J -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o preseed-debian-9.9.0-amd64-netinst.iso isofiles/
 ```
 
+## Source
+
+You can find the script to apply these changes to an existing ISO in my [github](https://github.com/DavidVentura/preseed-debian-iso).
+
 ## Demo
 
 You can take a look at a recording of an install with these values:  
