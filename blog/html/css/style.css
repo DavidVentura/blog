@@ -103,17 +103,14 @@ h5 {
   color: #5BA4AF;
 }
 .post {
-    margin: 25px 0px;
-    border-bottom: 1px solid #DEDBD6;
+    margin: 5px 0px;
+    font-size: 1.1em;
 }
 .post:last-child {
   border: 0;
-  margin-bottom: 40px;
+  margin-bottom: 20px;
 }
-h2.post-title {
-  margin-top: 0px;
-}
-h2.post-title a {
+.post-title a {
   text-transform: none;
   font-size: 1em;
   color: #313131;
