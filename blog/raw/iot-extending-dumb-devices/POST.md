@@ -1,4 +1,4 @@
-As with my (https://blog.davidventura.com.ar/integrating-a-kindle-into-house-automation.html)[kindle hack], I wanted to extend a 'dumb' device, my HDMI input selector.
+As with my [kindle hack](https://blog.davidventura.com.ar/integrating-a-kindle-into-house-automation.html), I wanted to extend a 'dumb' device, my HDMI input selector.
 
 The input selector originally looked like this:
 

@@ -1,1 +1,1 @@
-{"title": "Automated Debian install", "date": "2019-06-30", "tags": ["debian"]}
+{ "title": "Automated Debian install", "date": "2019-06-30", "tags": [ "debian" ], "description": "Fully automated debian vm creation" }
