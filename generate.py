@@ -14,6 +14,7 @@ from jinja2 import Template
 from feedgen.feed import FeedGenerator
 from bs4 import BeautifulSoup
 
+BODY_TEMPLATE = 'blog/template/body.html'
 BLOG_URL = 'https://blog.davidventura.com.ar/'
 DEBUG = False
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
@@ -31,12 +32,12 @@ def parse_metadata(target):
 
 
 def generate_header(metadata):
-    template = Template('<small>{{ date }}</small><h1>{{ title }}</h1>')
+    template = Template('<h1>{{ title }}</h1><small>{{ date }}</small>')
     return template.render(metadata)
 
 
 def generate_post(header, body, title, tags):
-    template = Template(open('blog/template/body.html', 'r').read())
+    template = Template(open(BODY_TEMPLATE, 'r').read())
     rendered = template.render(header=header, post=body, title=title, tags=tags)
     return rendered
 
@@ -51,6 +52,8 @@ def newer(f1, f2):
 
 
 def main():
+    this_script = __file__
+    body_template = BODY_TEMPLATE
     for target in glob.glob("blog/raw/*"):
         post_file = os.path.join(target, 'POST.md')
         metadata_file = os.path.join(target, 'metadata.json')
@@ -74,7 +77,8 @@ def main():
         html_fname = 'blog/html/%s.html' % safe_title
 
         if os.path.isfile(html_fname):
-            if newer(html_fname, post_file) and newer(html_fname, metadata_file):
+            if newer(html_fname, post_file) and newer(html_fname, metadata_file) and \
+               newer(html_fname, this_script) and newer(html_fname, body_template):
                 debug('Stale file')
                 continue
 
