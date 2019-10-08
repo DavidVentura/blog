@@ -1,9 +1,9 @@
 html, body { 
   max-width: 100%;
   font-family: 'Roboto', sans-serif;
-  color: #1D1D1D;
+  color: #1A1A1A;
   font-size: 1em;
-  background-color: #fff;
+  background-color: #f9f9f9;
 }
 table {
     border-collapse: collapse;
@@ -16,7 +16,7 @@ td, th {
 }
 body { 
   width: 70%;
-  max-width: 1100px;
+  max-width: 50rem;
   margin: 0px auto;
 }
 article, #footer {
@@ -29,7 +29,7 @@ article, #footer {
   background-color: #E1EEF0;
 }
 a {
-  color: #5BA4AF;
+  color: #d55d2b;
   text-decoration: none;
   font-size: 0.9em;
 }
@@ -66,11 +66,11 @@ h5 {
 
 #indexheader h1,
 #indexheader h1 a {
-  color: #1D1D1D;
-  font-size: 32px;
+  font-size: 22px;
   margin-bottom: 0px;
   text-transform: none;
   text-decoration: none;
+  font-weight: 400;
 }
 #indexheader h4 {
   display: inline-block;
@@ -100,7 +100,7 @@ h5 {
   transition: color 500ms ease;
 }
 #indexlist a:hover {
-  color: #5BA4AF;
+  color: #d55d2b;
 }
 .post {
     margin: 5px 0px;
@@ -152,15 +152,12 @@ blockquote p {
   font-family: 'Roboto Slab', serif;
 }
 
-#blogheader h1 {
-  margin-top: 0px;
-  border-bottom: 1px solid #DEDBD6;
-  padding-bottom: 15px;
-  margin-bottom: 30px;
+#blogheader small {
+    color: #1a1a1a88;
 }
 @media only screen and (max-width: 1000px) {
   #blogpost {
-    padding: 10px 15px !important;
+    padding: 0px 15px !important;
   }
   body {
     width: 90%;
@@ -191,7 +188,7 @@ blockquote p {
   }
   #indexheader h1,
   #indexheader h1 a {
-    font-size: 30px;
+    font-size: 20px;
   }
 
 }

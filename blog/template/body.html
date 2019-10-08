@@ -11,7 +11,7 @@
     <body>
         <div id="indexheader">
             <h1>
-                <a href="/">Grouch mumbling about computers.</a>
+                <a href="/">Grouch mumbling about computers</a>
             </h1>
         </div>
         <div id="entry">
@@ -20,12 +20,10 @@
                     <div id="blogheader">
                         {{ header }}
                         {% if tags %}
-                        <div id="tags">
-                            <span>TAGS: [
-                            {% for tag in tags %}<a href="/tags/{{tag}}">{{tag}}</a> {% endfor %}
-                            ]
-                            </span>
-                        </div>
+                        <span>[
+                        {% for tag in tags %}<a href="/tags/{{tag}}">{{tag}}</a> {% endfor %}
+                        ]
+                        </span>
                         {%endif%}
                     </div>
                     {{ post }}
