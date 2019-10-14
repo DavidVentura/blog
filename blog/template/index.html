@@ -19,11 +19,11 @@
                         {{ post['title'] }}
                     </a>
                     {% if post['tags'] %}
-                    <small>[{% for tag in post['tags'] %}<a href="/tags/{{tag}}">{{tag}}</a> {%-endfor %}]</small>
+                    <small>[{% for tag in post['tags'] %}<a href="/tags/{{tag}}">{{tag}}</a> {%endfor%}]</small>
                     {% endif %}
                 </span><br/>
             </div>
-            {% endfor %}
+            {% endfor%}
         </div>
         <div id=footer>
             <a href="/rss.xml">RSS</a>
