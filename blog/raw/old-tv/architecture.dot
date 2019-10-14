@@ -1,0 +1,29 @@
+digraph G {
+    rankdir=LR;
+    label="Pink: Workers\lBlue: Command queues\lWhite: Services\l"
+    bgcolor="transparent"
+    node [shape="rectangle" width="2" style=filled]
+
+    node [fillcolor="lightblue"]
+    { rank=same qIRCCommands qFetchFile qUnpackFile[label="qUnpackFile\nqBatchUnpackFile"] }
+    node [fillcolor="pink"]
+    { rank=same IRCRequest DTCCFetch Unpacker[label="Unpacker\nBatchUnpacker"] }
+    node [fillcolor="white"]
+    Api
+    S3
+    JobStatus 
+
+    Api -> qIRCCommands;
+    qIRCCommands -> IRCRequest;
+    qFetchFile -> DTCCFetch;
+    qUnpackFile -> Unpacker;
+
+    IRCRequest -> qFetchFile;
+    DTCCFetch -> qUnpackFile;
+
+    JobStatus -> Api;
+
+    {DTCCFetch, Unpacker} -> S3;
+    Api -> S3 [constraint=false];
+    {Api, IRCRequest, DTCCFetch, Unpacker} -> JobStatus;
+}
