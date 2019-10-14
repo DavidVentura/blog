@@ -31,7 +31,7 @@ modulator' that'd convert the signal to a format that this TV can display.
 These modulators output different channels at different frequencies.
 ![](/images/old-tv/rca-rf.jpg)
 
-These frequencies are what you 'tune' to by rotating the tuner's knob.
+These frequencies are what you 'tune' to by rotating the tuner's knob ([learn more about tuners here](https://hackaday.com/2016/07/11/not-quite-101-uses-for-an-analog-uhf-tv-tuner/)).
 I left the tv tuner in a fixed channel, the same as what the modulator outputs.
 
 *Let there be video!*
