@@ -14,9 +14,11 @@ from jinja2 import Template
 from feedgen.feed import FeedGenerator
 from bs4 import BeautifulSoup
 
-BODY_TEMPLATE = 'blog/template/body.html'
 BLOG_URL = 'https://blog.davidventura.com.ar/'
-DEBUG = False
+BODY_TEMPLATE_FILE = 'blog/template/body.html'
+BODY_TEMPLATE = Template(open(BODY_TEMPLATE_FILE, 'r').read())
+INDEX_TEMPLATE = Template(open('blog/template/index.html', 'r').read())
+DEBUG = True
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
 
 def debug(*msg):
@@ -37,8 +39,7 @@ def generate_header(metadata):
 
 
 def generate_post(header, body, title, tags):
-    template = Template(open(BODY_TEMPLATE, 'r').read())
-    rendered = template.render(header=header, post=body, title=title, tags=tags)
+    rendered = BODY_TEMPLATE.render(header=header, post=body, title=title, tags=tags)
     return rendered
 
 
@@ -47,13 +48,13 @@ def sanitize_title(title):
     return valid_title_chars.sub('', tmp_title).strip('-')
 
 
-def newer(f1, f2):
-    return os.path.getmtime(f1) > os.path.getmtime(f2)
+def newer(f1, files):
+    mtime = os.path.getmtime
+    return all([mtime(f1) > mtime(x) for x in files])
 
 
 def main():
     this_script = __file__
-    body_template = BODY_TEMPLATE
     for target in glob.glob("blog/raw/*"):
         post_file = os.path.join(target, 'POST.md')
         metadata_file = os.path.join(target, 'metadata.json')
@@ -65,20 +66,17 @@ def main():
             continue
 
         debug(target)
-        debug('parsing metadata')
+
         r = parse_metadata(metadata_file)
         if 'incomplete' in r:
             debug('Incomplete - skipping')
             continue
-        debug('generating header')
         header = generate_header(r)
-        debug('sanitizing title')
         safe_title = sanitize_title(r['title'])
         html_fname = 'blog/html/%s.html' % safe_title
 
         if os.path.isfile(html_fname):
-            if newer(html_fname, post_file) and newer(html_fname, metadata_file) and \
-               newer(html_fname, this_script) and newer(html_fname, body_template):
+            if newer(html_fname, [post_file, metadata_file, this_script, BODY_TEMPLATE_FILE]):
                 debug('Stale file')
                 continue
 
@@ -118,7 +116,7 @@ def make_rss_entry(feed, item):
                'email': 'davidventura27+blog@gmail.com'})
     fe.pubDate(tstamp)
     fe.title(item['title'])
-    fe.description(item['description'])
+#    fe.description(item['description'])
     # everything was mutated inside feed
     return tstamp
 
@@ -134,15 +132,14 @@ def generate_index():
         item['path'] = "/%s.html" % sanitize_title(item['title'])
         items.append(item)
 
-    s_items = sorted(items, key=lambda k: k['date'], reverse=True)
-    for item in s_items[::-1]:
+    s_items = sorted(items, key=lambda k: k['date'])
+    for item in s_items:
         tstamp = make_rss_entry(feed, item)
         if last_update is None:
             last_update = tstamp
         last_update = max(last_update, tstamp)
 
-    template = Template(open('blog/template/index.html', 'r').read())
-    rendered = template.render(index=s_items)
+    rendered = INDEX_TEMPLATE.render(index=reversed(s_items))
     open('blog/html/index.html', 'w', encoding='utf-8').write(rendered)
     feed.updated(last_update)
     feed.rss_file('blog/html/rss.xml', pretty=True)
@@ -162,11 +159,9 @@ def generate_tag_index(tag):
             continue
         item['path'] = "/%s.html" % sanitize_title(item['title'])
         items.append(item)
-    #print(items)
 
     s_items = sorted(items, key=lambda k: k['date'], reverse=True)
-    template = Template(open('blog/template/index.html', 'r').read())
-    rendered = template.render(index=s_items)
+    rendered = INDEX_TEMPLATE.render(index=s_items)
     fpath = Path('blog/html/tags/%s/index.html' % tag)
     fpath.parent.mkdir(parents=True, exist_ok=True)
     open(str(fpath), 'w', encoding='utf-8').write(rendered)
