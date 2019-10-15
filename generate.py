@@ -95,7 +95,7 @@ def main():
 def generate_feed():
     fg = FeedGenerator()
     fg.id(BLOG_URL)
-    fg.title('Grouch mumbling about computers')
+    fg.title('Mumbling about computers')
     fg.author({'name': 'David Ventura',
                'email': 'davidventura27+blog@gmail.com'})
     fg.link(href=BLOG_URL, rel='alternate')
