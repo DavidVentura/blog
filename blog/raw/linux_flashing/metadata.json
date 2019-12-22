@@ -1,1 +1,1 @@
-{ "title": "Flashing linux images over PXE", "date": "2019-12-22", "tags": [], "description": "What is involved in flashing a disk image over PXE, includes grub, kernel, initrd and disk expansion" }
+{ "title": "Flashing Linux disk images from an initramfs", "date": "2019-12-22", "tags": [], "description": "What is involved in flashing a disk image over PXE, includes grub, kernel, initrd and disk expansion" }
