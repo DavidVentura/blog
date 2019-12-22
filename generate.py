@@ -86,7 +86,7 @@ def main():
         debug('generating text post')
         html_str = generate_post(header, body_str, r['title'], r['tags'])
         html = BeautifulSoup(html_str, features='html5lib')
-        for header in html.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
+        for header in html.find('article').find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
             header.attrs["id"] = header.text.lower().replace(' ', '-')
         blog_post = html.prettify()
         debug('writing to file')
