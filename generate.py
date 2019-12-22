@@ -39,7 +39,7 @@ def generate_header(metadata):
 
 
 def generate_post(header, body, title, tags):
-    rendered = BODY_TEMPLATE.render(header=header, post=body, title=title, tags=tags)
+    rendered = BODY_TEMPLATE.render(header=header, post=body, title=title, tags=tags, devmode=DEVMODE)
     return rendered
 
 
@@ -86,6 +86,8 @@ def main():
         debug('generating text post')
         html_str = generate_post(header, body_str, r['title'], r['tags'])
         html = BeautifulSoup(html_str, features='html5lib')
+        for header in html.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
+            header.attrs["id"] = header.text.lower().replace(' ', '-')
         blog_post = html.prettify()
         debug('writing to file')
         open(html_fname, 'w', encoding='utf-8').write(blog_post)
@@ -170,6 +172,7 @@ def copy_followed():
     shutil.copyfile('blog/template/blogs-i-follow.html', 'blog/html/blogs-i-follow.html')
 
 if __name__ == '__main__':
+    DEVMODE = False
     for tag in get_all_tags():
         generate_tag_index(tag)
     main()
