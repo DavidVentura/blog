@@ -6,6 +6,9 @@
         <link href="/css/syntax.css" rel="stylesheet" type="text/css">
         <meta charset="UTF-8">
         <meta name="referrer" content="no-referrer">
+        {% if devmode %}
+        <script type="text/javascript" src="/live.js"></script>
+        {% endif %}
         <title>{{ title }}</title>
     </head>
     <body>
