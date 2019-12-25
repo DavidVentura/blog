@@ -173,6 +173,8 @@ def copy_followed():
 
 if __name__ == '__main__':
     DEVMODE = False
+    if len(sys.argv) > 1 and sys.argv[1].lower() == 'dev':
+        DEVMODE = True
     for tag in get_all_tags():
         generate_tag_index(tag)
     main()
