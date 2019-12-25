@@ -194,4 +194,6 @@ You can find the script to apply these changes to an existing ISO in my [github]
 ## Demo
 
 You can take a look at a recording of an install with these values:  
-[![demo](/images/debian-installer.png)](https://asciinema.org/a/uvVLPtQxERbWoKpXUO00ALp2R)
+
+<asciinema-player poster="/images/debian-installer.png" src="/casts/debian_netinstall.cast" cols="81" rows="31" preload=""></asciinema-player>
+<script src="/js/asciinema-player.js"></script>
