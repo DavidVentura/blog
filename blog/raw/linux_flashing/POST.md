@@ -398,4 +398,5 @@ You can find the example [here](https://gitlab.com/davidventura/flash-hdd-over-n
 
 You can see the results here (click the image to watch the asciicast):
 
-[![demo](/images/linux_flashing/5_2_disk_booted.png)](https://asciinema.org/a/VyOiBU2d1sqtmzCT6d22FMWHp)
+<asciinema-player src="/casts/linux_flashing.cast" cols="80" rows="31"></asciinema-player>
+<script src="/js/asciinema-player.js"></script>

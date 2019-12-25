@@ -7,6 +7,11 @@
 
 // CustomEvent polyfill from MDN (https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/CustomEvent)
 
+
+// Load css directly here so we don't need to load it on all pages
+document.getElementsByTagName('head')[0].insertAdjacentHTML('beforeend',
+    '<link rel="stylesheet" href="/css/asciinema-player.css" />');
+
 (function () {
   if (typeof window.CustomEvent === "function") return false;
 
