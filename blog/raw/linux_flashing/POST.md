@@ -399,4 +399,3 @@ You can find the example [here](https://gitlab.com/davidventura/flash-hdd-over-n
 You can see the results here (click the image to watch the asciicast):
 
 <asciinema-player src="/casts/linux_flashing.cast" cols="80" rows="31" preload=""></asciinema-player>
-<script src="/js/asciinema-player.js"></script>

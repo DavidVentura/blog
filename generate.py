@@ -88,6 +88,10 @@ def main():
         html = BeautifulSoup(html_str, features='html5lib')
         for header in html.find('article').find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
             header.attrs["id"] = header.text.lower().replace(' ', '-')
+
+        if html.find('asciinema-player'):
+            html.find('body').insert_after(html.new_tag('script', src="/js/asciinema-player.js"))
+
         blog_post = html.prettify()
         debug('writing to file')
         open(html_fname, 'w', encoding='utf-8').write(blog_post)
