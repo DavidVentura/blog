@@ -92,7 +92,7 @@ def main():
         if html.find('asciinema-player'):
             html.find('body').insert_after(html.new_tag('script', src="/js/asciinema-player.js"))
 
-        blog_post = html.prettify()
+        blog_post = str(html)
         debug('writing to file')
         open(html_fname, 'w', encoding='utf-8').write(blog_post)
         debug('finished')
