@@ -18,12 +18,12 @@
                     <a href="{{post['path']}}">
                         {{ post['title'] }}
                     </a>
-                    {% if post['tags'] %}
+                    {%-if post['tags']-%}
                     <small>[{%- for tag in post['tags'] -%}<a href="/tags/{{tag}}">{{tag}}</a>{{", " if not loop.last}}{%-endfor-%}]</small>
-                    {% endif %}
+                    {%-endif-%}
                 </span><br/>
             </div>
-            {% endfor%}
+            {%-endfor-%}
         </div>
         <div id=footer>
             <a href="/rss.xml">RSS</a>
@@ -31,4 +31,3 @@
         </div>
     </body>
 </html>
-
