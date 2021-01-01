@@ -129,7 +129,9 @@ panic = "abort"
 
 This drops the binary size from 3.2MB to 1.3MB. That's substantial. If you are interested in reducing this further, there's a very handy guide [on github](https://github.com/johnthagen/min-sized-rust).
 
-# Compiling the application for the garget
+Stripping the binary after that (`mips-linux-gnu-strip binary`) drops it to a respectable 285KB.
+
+# Compiling the application for the target
 
 In my case, what I want to build uses the MQTT protocol, for which the crate I picked uses the `libmosquitto` C-bindings.
 
