@@ -176,3 +176,20 @@ This accomplishes the last item in the checklist.
 
 With working DNS, I could try going back to rumqttc for MQTT, but it pulls like 50 dependencies and
 I'm not sure it's worth it. `mqtt-simple` has been working fine.
+
+A simplified snippet of the result looks like this:
+
+```rust
+use libopenlipc_sys::rLIPC;
+use mqtt_simple::publish_once;
+fn main() {
+    let r = rLIPC::new().unwrap();
+    r.subscribe("com.lab126.powerd", Some("goingToScreenSaver"), |source, ev, intarg, strarg| {
+        let res = publish_once("KINDLE", "iot.labs", "KINDLE/SCREEN_STATE", "0");
+        if let res = Err(e) {
+             println!("Failed to publish! {:?}", e),
+        }
+    })
+    .unwrap();
+}
+```
