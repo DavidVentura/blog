@@ -1,7 +1,7 @@
 html, body { 
   max-width: 100%;
   font-family: 'Roboto', sans-serif;
-  color: #1A1A1A;
+  color: black;
   font-size: 1em;
   background-color: #f9f9f9;
 }
@@ -96,7 +96,7 @@ h5 {
 
 #indexlist a {
   text-decoration: none;
-  color: #77797F;
+  color: #666;
   transition: color 500ms ease;
 }
 #indexlist a:hover {
