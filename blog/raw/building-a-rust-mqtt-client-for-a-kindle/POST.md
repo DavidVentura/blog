@@ -42,20 +42,24 @@ cross compiler (or linker in this case?).
 I found a [toolchain](https://github.com/samsheff/Amazon-Kindle-Cross-Toolchain/tree/master/arm-kindle-linux-gnueabi)
 online and configure it in my `.cargo/config`:
 
-```
+```ini
 [target.armv7-unknown-linux-gnueabi]
 linker = "Amazon-Kindle-Cross-Toolchain/arm-kindle-linux-gnueabi/bin/arm-kindle-linux-gnueabi-cc"
 ```
 
 Export the path to sysroot/lib before compiling:
-```
+```bash
 export SYSROOT_LIB_DIR=~/git/Amazon-Kindle-Cross-Toolchain/arm-kindle-linux-gnueabi/arm-kindle-linux-gnueabi/sysroot/lib/
 ```
 
-Running `cargo build` at this point fails, as `liblipc` itself needs to link to more shared
-libraries.  
-I copied the 3 needed libs from my kindle: `glib-2.0`, `dbus-1` and `gthread-2.0` into
-the linker's search path (configured with `cargo:rustc-link-search=so`).
+Running `cargo build` at this point fails, as `liblipc` itself can't be found
+
+```bash
+rm-kindle-linux-gnueabi/bin/ld: cannot find -llipc
+          collect2: ld returned 1 exit status
+```
+
+Adding the file to `SYSROOT_LIB_DIR` will be enough to fix this.
 
 A blank program links and runs fine on the kindle. This accomplishes the first item on the
 checklist, so let's look into using the exposed functionality.
@@ -76,11 +80,109 @@ functions.
 
 Disconnect: Pass the connection pointer to destroy it and free resources.
 
-GetIntProperty: Pass a service, a filter property and a `int*` to get the current value
-written to that address.
+GetIntProperty: Pass a service string, a property string and an `int*` to get the current value
+written to that address. 
+An example for service+property strings would be "com.lab126.powerd" "battLevel".
+
+This is pretty straight forward to call, the only special thing here is that the variable `val`
+will be modified in-place by liblipc.
+
+```rust
+pub fn get_int_prop(&self, service: &str, prop: &str) -> Result<i32, String> {
+    let mut val: c_int = 0; // value will be written here by LipcGetIntProperty
+    let service = CString::new(service).unwrap();
+    let prop = CString::new(prop).unwrap();
+    let ret_code;
+    unsafe {
+        ret_code = LipcGetIntProperty(
+            self.conn,
+            service.as_ptr(),
+            prop.as_ptr(),
+            &mut val
+        );
+    };
+    if ret_code == LIPCcode_LIPC_OK {
+        Ok(val)
+    } else {
+        Err(format!("Error getting property! {:?}", ret_code))
+    }
+}
+
+```
+
+This runs great and returns decent values for successes and errors:
+```
+r.get_int_prop("com.lab126.powerd", "battLevel");
+60
+r.get_int_prop("com.lab126.powerd", "battTemperature");
+Error getting property! 8
+```
 
 GetStringProperty: Pass a service, a filter property and a `char**` to get the current value
-written to that address.
+written to that address. This is exactly the same as `get_int_prop` but we pass a string handle (handle_ptr):
+```rust
+let mut handle: *mut c_char = std::ptr::null_mut();
+let handle_ptr: *mut *mut c_char = &mut handle;
+```
+
+For both GetStringProperty and GetIntProperty, it'd be nice to not have to deal with all the
+shenanigans related to return-code handling and return a readable error, instead of its integer value.
+
+For the readable error, luckily liblipc provides a function we can call for this: `LipcGetErrorString`.
+The code to return a `String` from rust is pretty trivial:
+
+```rust
+fn code_to_string(code: u32) -> String {
+    unsafe {
+        let cstr = CStr::from_ptr(LipcGetErrorString(code));
+        return String::from(cstr.to_str().unwrap());
+    }
+}
+```
+
+With this, we can change our `format!`ted string above to contain the error message:
+```rust
+Err(format!("Error getting property! {:?}", code_to_string(ret_code)))
+```
+
+Which works nicely with a tiny example program:
+```rust
+let r = rLIPC::new().unwrap();
+let batt_t = r.get_int_prop("com.lab126.powerd", "battTemperature")?;
+```
+
+```bash
+$ ./libopenlipc-sys
+Failed to subscribe: lipcErrNoSuchProperty
+```
+
+Great!
+
+Now, it'd also be great if I could also stop copy-pasting the whole "compare result to OK and
+return a nice string if it's different", so I looked up how to write macros for rust which, for the
+simple macro I wanted, is quite easy.
+
+A macro is essentially a way to copy-paste code automatically (or, better said, the macro expands
+to the same code, replacing place-holder tokens with concrete values).
+
+My trivial macro looks like this:
+
+```rust
+macro_rules! code_to_result {
+    ($value:expr) => {
+        if $value == LIPCcode_LIPC_OK {
+            Ok(())
+        } else {
+            Err(format!(
+                "Failed to subscribe: {}",
+                rLIPC::code_to_string($value)
+            ))
+        }
+    };
+}
+```
+
+(Which now that I look at it, has no advantage over a regular function, but oh well).
 
 ### Subscribe function
 
@@ -94,10 +196,94 @@ For `SubscribeExt` you also pass a service and a filter property, but along with
 This was quite tricky to get working without fully understanding, luckily `@pie_flavor` in the rust
 discord helped me a lot.
 
-The callback can't be passed directly - we have double box it; once to safely transport the type
-data and once again to have a fixed-size object to reference.
+#### Hitting an invisible wall
 
-# Avoiding parsing plain strings into results
+The first issue that took me a *long* while to understand, was that the compiler will not alert you
+about scoping when dealing with pointers.  
+Looking at this code you can see it's sliiiiiightly different than before -- we are calling 
+`.as_ptr()` and storing that, instead of storing the CString.
+
+Guess what, the CString is out of scope because we don't use it anymore!
+
+```
+let _service = CString::new(service).unwrap().as_ptr();
+                                             ^
+                  CString goes out of scope here
+		  _service now is a dangling pointer :)
+```
+
+In regular rust, `_service` would hold a reference to the CString, which would make it not go out
+of scope immediately -- with pointers this is not the case. There is a [big fat
+warning](https://doc.rust-lang.org/std/ffi/struct.CString.html#method.as_ptr) on the docs, which I
+managed to glance over.
+
+#### Hitting a regular wall
+
+I am sending a regular function pointer to liblipc that will be called back when an event triggers,
+but what I really want is to call arbitrary rust functions, not this very-specific, very-ugly function
+that implements the required signature.
+
+In regular code, I'd use a closure and call a function from the outer scope from within the
+closure, something like
+
+```rust
+LipcSubscribeExt(..., |...| { callback_from_outer_scope(..) });
+```
+
+However, [a closure is not a function](https://doc.rust-lang.org/book/ch19-05-advanced-functions-and-closures.html),
+ which means we can't just call a closure!
+
+The way people deal with this in C is by providing an opaque pointer (void* data) to the function that will call
+you back, the function will then pass the opaque pointer (void* data) to you when executing the callback, in pseudocode:
+
+```c
+fn_that_calls_back(to_call_back, *data);
+..
+void to_call_back(.., *data) {
+// Do whatever with data, probably something like (*data)(args);
+}
+```
+
+I was stuck with this and asked for help on the rust discord, where @pie_flavor said
+
+> The callback can't be passed directly - we have double box it; once to safely transport the type
+> data and once again to have a fixed-size object to reference.
+
+I'm not sure I fully understand this -- I haven't really had enough experience to grok it.
+The [docs](https://rust-lang.github.io/unsafe-code-guidelines/layout/function-pointers.html#use)
+ don't really mention this either.
+
+The end result looks like this:
+
+Register the callback
+```rust
+let boxed_fn: Box<dyn FnMut(&str, &str, Option<i32>, Option<String>) + Send> =
+    Box::new(callback) as _;
+let double_box = Box::new(boxed_fn);
+let ptr = Box::into_raw(double_box);
+LipcSubscribeExt(
+                ...,
+                ...,
+                ...,
+                Some(ugly_callback),
+                ptr as *mut c_void,
+            );
+```
+
+And the function that will be called back
+
+```rust
+unsafe extern "C" fn ugly_callback(
+    _: *mut LIPC,
+    name: *const c_char,
+    event: *mut LIPCevent,
+    data: *mut c_void,
+) -> LIPCcode {
+    ...
+    let f = data as *mut Box<dyn FnMut(&str, &str, Option<i32>, Option<String>) + Send>;
+    (*f)(_source, _name, _int_param, _str_param);
+}
+```
 
 With this, we get callbacks to rust with proper typed data, there's no need to parse strings to get
 back the values.
