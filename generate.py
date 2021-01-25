@@ -140,7 +140,8 @@ def make_rss_entry(feed, item: PostMetadata):
                'email': 'davidventura27+blog@gmail.com'})
     fe.pubDate(tstamp)
     fe.title(item.title)
-#    fe.description(item['description'])
+    if item.description:
+        fe.description(item.description)
     # everything was mutated inside feed
     return tstamp
 
