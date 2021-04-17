@@ -2,13 +2,15 @@ Exploring how to achieve some of the properties of containerized deployments on 
 metal servers.
 
 The properties I'm interested in for this post are:
+
 * Fast deployment (+ fast rollbacks)
 * Testing different OS versions with production workloads
 
-I investigated [before]() how to generate and flash custom OS images, and we can keep building
+I investigated [before](https://blog.davidventura.com.ar/creating-a-golden-centos-image.html) how to generate and flash custom OS images, and we can keep building
 based on those findings.
 
 The changes will be:
+
 * Building the images with Docker instead of bash scripts
 * Multiple images in one disk
 
@@ -42,7 +44,7 @@ $ docker export $CONTAINER_ID | sudo tar -C 79
 $ docker stop $CONTAINER_ID
 ```
 
-With the container data we want to put on disk, we have to do the same as in [this post]() so I will just list the
+With the container data we want to put on disk, we have to do the same as in [this post](https://blog.davidventura.com.ar/creating-a-golden-centos-image.html) so I will just list the
 repeated steps and go into more detail for the new ones.
 
 ## Create the disk
@@ -123,7 +125,7 @@ RUN dracut --kmoddir /lib/modules/3.10.0-1160.11.1.el7.x86_64/ --kver 3.10.0-116
 
 ## Initrd does not support XFS
 
-Similar to previous step, xfs is unsupported so we tweak the dracut call with an extra driver (`xfs`) and `--filesystems
+Similar to previous step, xfs is unsupported so we have to tweak the dracut call with an extra driver (`xfs`) and `--filesystems
 xfs`
 
 ## Older CentOS can't mount newer XFS versions (as built on the host machine)
@@ -201,4 +203,3 @@ Small demo:
 <asciinema-player poster="/images/kexec-demo.svg" src="/casts/kexec-demo.cast" cols="118" rows="31" preload=""></asciinema-player>
 
 <span id='1'>[1] flattened; you can get every layer individually with `docker save`</span>
-
