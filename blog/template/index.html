@@ -14,15 +14,17 @@
         <div id="indexlist">
             {% for post in index %}
             <div class="post">
-                <span class="post-title">
+                <div class="post-title">
+                    <div>
+                        <a href="{{post['path']}}">
+                            {{ post['title'] }}
+                        </a>
+		    </div>
                     <small>{{post['date']}}</small>
-                    <a href="{{post['path']}}">
-                        {{ post['title'] }}
-                    </a>
                     {%-if post['tags']-%}
                     <small>[{%- for tag in post['tags'] -%}<a href="/tags/{{tag}}">{{tag}}</a>{{", " if not loop.last}}{%-endfor-%}]</small>
                     {%-endif-%}
-                </span><br/>
+                </div>
             </div>
             {%-endfor-%}
         </div>

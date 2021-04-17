@@ -106,6 +106,12 @@ h5 {
   border: 0;
   margin-bottom: 20px;
 }
+.post-title {
+  margin-bottom: 10px;
+}
+.post-title small{
+  margin-right: 5px;
+}
 .post-title a {
   text-transform: none;
   font-size: 1em;
