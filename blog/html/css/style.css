@@ -29,7 +29,7 @@ article, #footer {
   background-color: #E1EEF0;
 }
 a {
-  color: #d55d2b;
+  color: #b04c22;
   text-decoration: none;
   font-size: 0.9em;
 }
@@ -157,6 +157,9 @@ blockquote p {
 #blogheader small {
     color: #1a1a1a88;
 }
+
+.footnotes { font-size: smaller; }
+.footnotes p { margin: 5px; }
 @media only screen and (max-width: 1000px) {
   #blogpost {
     padding: 0px 15px !important;
