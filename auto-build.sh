@@ -16,4 +16,4 @@ function _exit {
 
 DIR_TO_WATCH="$1"
 trap _exit INT
-inotifywait -m -e CLOSE_WRITE $DIR_TO_WATCH | grep --line-buffered POST.md | while read -r line; do .venv/bin/python generate.py dev >/dev/null; echo build | ts ; done
+inotifywait -m -e CLOSE_WRITE $DIR_TO_WATCH generate.py | while read -r line; do echo $line; venv/bin/python generate.py dev >/dev/null; echo build | ts ; done
