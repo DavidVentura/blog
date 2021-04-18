@@ -40,7 +40,7 @@ class PostMetadata:
     @staticmethod
     def from_dict(d) -> 'PostMetadata':
         date = datetime.strptime(d['date'], "%Y-%m-%d").date()
-        tags = [t.strip() for t in d['tags'].split(',')]
+        tags = [t.strip() for t in d['tags'].split(',') if t]
         data = {**d, 'date': date, 'tags': tags} 
         return PostMetadata(**data)
 
