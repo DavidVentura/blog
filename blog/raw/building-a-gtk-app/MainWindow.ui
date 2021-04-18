@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated with glade 3.22.2 -->
+<interface>
+  <requires lib="gtk+" version="3.20"/>
+  <requires lib="libhandy" version="1.0"/>
+  <template class="AppWindow" parent="HdyApplicationWindow">
+    <property name="can_focus">False</property>
+    <property name="default_width">360</property>
+    <property name="default_height">720</property>
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <property name="halign">center</property>
+        <property name="valign">center</property>
+        <property name="vexpand">true</property>
+        <child>
+          <object class="GtkButton">
+            <property name="label">Hello world</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton">
+            <property name="label">Another button</property>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>
