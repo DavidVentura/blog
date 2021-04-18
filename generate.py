@@ -6,7 +6,6 @@ import re
 import shutil
 import sys
 
-import markdown2
 import pytz
 
 from dataclasses import asdict, dataclass
@@ -17,6 +16,7 @@ from typing import Optional, List
 from bs4 import BeautifulSoup
 from feedgen.feed import FeedGenerator
 from jinja2 import Template
+from markdown2 import Markdown
 
 BLOG_URL = 'https://blog.davidventura.com.ar/'
 BODY_TEMPLATE_FILE = 'blog/template/body.html'
@@ -24,6 +24,7 @@ BODY_TEMPLATE = Template(open(BODY_TEMPLATE_FILE, 'r').read())
 INDEX_TEMPLATE = Template(open('blog/template/index.html', 'r').read())
 DEBUG = True
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
+EMBED_FILE_RE = re.compile(r'{embed-file (?P<fname>[^}]+)}')
 
 @dataclass
 class PostMetadata:
@@ -38,6 +39,15 @@ def debug(*msg):
     if DEBUG:
         print(*msg)
 
+def embed_files(relpath, text):
+    match_substr = None
+    for match in EMBED_FILE_RE.finditer(text):
+        fname = match.group('fname')
+        with open(os.path.join(relpath, fname), 'r') as fd:
+            fcontent = fd.read()
+        match_substr = match.group(0)
+        text = text.replace(match_substr, fcontent)
+    return text
 
 def parse_metadata(target) -> PostMetadata:
     data = open(target, 'r', encoding='utf-8').read()
@@ -73,6 +83,7 @@ def newer(f1, files):
 
 def main():
     this_script = __file__
+    md = Markdown(extras=["fenced-code-blocks", "nofollow", "footnotes"])
     for target in glob.glob("blog/raw/*"):
         post_file = os.path.join(target, 'POST.md')
         metadata_file = os.path.join(target, 'metadata.json')
@@ -100,7 +111,8 @@ def main():
 
         debug('generating body')
         md_str = open(post_file, encoding='utf-8').read()
-        body_str = markdown2.markdown(md_str, extras=["fenced-code-blocks", "nofollow", "footnotes"])
+        md_str = embed_files(target, md_str)
+        body_str = md.convert(md_str)
         debug('generating text post')
         html_str = generate_post(header, body_str, r.title, r.tags, r.description)
         html = BeautifulSoup(html_str, features='html5lib')
