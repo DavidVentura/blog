@@ -35,7 +35,7 @@ We can build this to get at the files that are inside
 docker build -f centos7.9 -t 7.9 .
 ```
 
-Sadly, you can't `export` an **image**'s filesystem<sup><a href='#1'>[1]</a></sup>, you have to export a **container**'s
+Sadly, you can't `export` an **image**'s filesystem[^1], you have to export a **container**'s
 filesystem -- the difference here being that a container is an instance of an image.
 
 ```bash
@@ -202,4 +202,4 @@ That's it! you are now rebooting into another kernel.
 Small demo:
 <asciinema-player poster="/images/kexec-demo.svg" src="/casts/kexec-demo.cast" cols="118" rows="31" preload=""></asciinema-player>
 
-<span id='1'>[1] flattened; you can get every layer individually with `docker save`</span>
+[^1]: flattened; you can get every layer individually with `docker save`</span>

@@ -149,7 +149,7 @@ root@OpenWrt:~# opkg list | grep libmosq
 libmosquitto-nossl - 1.6.12-1
 ```
 
-Cool, we need to get and cross-compile<sup><a href='#1'>[1]</a></sup> libmosquitto version 1.6.12
+Cool, we need to get and cross-compile[^1] libmosquitto version 1.6.12
 
 ```bash
 $ git clone https://github.com/eclipse/mosquitto.git
@@ -198,4 +198,4 @@ Ha! Turns out this crate is a bit broken. There's [an open PR](https://github.co
 
 I guess I'll take a look at other crates or see if I can build my own crate with the patch.
 
-<span id='1'>[1] maybe I could've just scp'd it from the router?</span>
+[^1]: maybe I could've just scp'd it from the router?</span>
