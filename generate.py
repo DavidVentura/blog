@@ -100,7 +100,7 @@ def main():
 
         debug('generating body')
         md_str = open(post_file, encoding='utf-8').read()
-        body_str = markdown2.markdown(md_str, extras=["fenced-code-blocks"])
+        body_str = markdown2.markdown(md_str, extras=["fenced-code-blocks", "nofollow", "footnotes"])
         debug('generating text post')
         html_str = generate_post(header, body_str, r.title, r.tags, r.description)
         html = BeautifulSoup(html_str, features='html5lib')
