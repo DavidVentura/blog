@@ -1,3 +1,9 @@
+---
+title: 3D printer woes
+date: 2018-05-02
+tags: 3dprinter
+description: 
+---
 I got a 3D printer, the Anet A8. After fiddling with the parts for a few hours I managed to get it assembled.
 
 

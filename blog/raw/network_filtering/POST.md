@@ -1,3 +1,10 @@
+---
+title: Network update part 4: Proxies
+date: 2018-05-28
+tags: networking
+incomplete: True
+description: 
+---
 While [segregating my network](https://blog.davidventura.com.ar/network-update-part-3-network-segregation.html) I ran into a few 'issues'; certain (mostly) LAN-only services required internet access to work! As a workaround I gave them internet access (temporarily) while I figured out how to best deal with the issue.
 
 My main requirement was being able to restrict http/s traffic based on domain (not IP). Turns out, a lot of proxies have this functionality, and after looking around for a bit I opted for `tinyproxy` because:

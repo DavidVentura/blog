@@ -1,3 +1,9 @@
+---
+title: Building a GTK based mobile app
+date: 2021-04-17
+tags: gtk, python, rust
+description: Learning GTK to build a mobile hackernews app, with ad-blocker and reader mode
+---
 <link href="/css/tabs.css" rel="stylesheet" type="text/css"/>
 
 I ordered a [pinephone](https://www.pine64.org/pinephone/) and while waiting for it I wanted to see how hard it'd be to write basic mobile apps for

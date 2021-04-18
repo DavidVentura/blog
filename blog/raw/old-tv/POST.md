@@ -1,3 +1,9 @@
+---
+title: Revamping an old tv as a gift
+date: 2019-10-14
+tags: python
+description: Putting a raspberry pi in a 60's CRT for a gift
+---
 This entry is a summary of what I built for my dad's 50th birthday, in 2017.
 
 The plan was to get a vintage TV to play some shows from the 70s-80s, and

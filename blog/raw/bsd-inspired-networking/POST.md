@@ -1,3 +1,9 @@
+---
+title: BSD inspired network setup
+date: 2019-09-22
+tags: networking
+description: I replaced my home dnsmasq with nsd, unbound and dhcpd for a more reliable environment.
+---
 For quite some time, I've been running a dnsmasq instance on my router that was
 acting as:
 

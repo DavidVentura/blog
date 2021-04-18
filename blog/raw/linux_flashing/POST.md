@@ -1,3 +1,9 @@
+---
+title: Flashing Linux disk images from an initramfs
+date: 2019-12-22
+tags: systems-deployment
+description: What is involved in flashing a disk image over PXE, includes grub, kernel, initrd and disk expansion
+---
 
 Recently I did a few installations of a preseeded iso (for centos, "kickstarted"),
 but this takes longer than necessary and is just plain wrong; there's no need to

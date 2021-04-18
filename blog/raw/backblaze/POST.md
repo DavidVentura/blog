@@ -1,3 +1,9 @@
+---
+title: Patching over Backblaze's B2 lack of CORS
+date: 2017-04-03
+tags: 
+description: 
+---
 I've been trying to move our video content from youtube to our own server, but keeping in mind that we add about ~40GB / Month to our collection (and it never goes away..) and that DigitalOcean's disks are not very cheap, I decided to serve our videos directly from Backblaze.
 
 Currently there's no CORS support on B2 ( https://help.backblaze.com/hc/en-us/articles/114094192774-Does-B2-have-CORS-headers-support- )

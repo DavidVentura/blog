@@ -1,2 +1,0 @@
-{ "title": "Building an MQTT client for the Kindle", "date": "2021-01-07", "tags": [ "iot", "kindle", "rust", "cross-compiling" ], "description": "The never-ending rabbit hole I found while trying to build a simple MQTT client for the kindle" }
-

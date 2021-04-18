@@ -1,3 +1,9 @@
+---
+title: Simplifying the IOT framework's API
+date: 2019-07-11
+tags: iot, changelog
+description: A small refactor in my IOT framework with the goal of simplifying the API
+---
 This post is more of a changelog combined with an explanation of my thought process for the changes.  
 
 [c50b112](https://github.com/DavidVentura/iot_home/commit/c50b112) - Use the `publish` function only from `common` instead of directly from `mqtt`. Doing this removes the requirement from the client to verify if the `mqtt` object has been initialized.

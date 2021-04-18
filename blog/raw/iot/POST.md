@@ -1,3 +1,9 @@
+---
+title: IOT house with Sonoff and MicroPython
+date: 2018-08-06
+tags: iot, python
+description: 
+---
 # Idea
 I bought a few sonoff basics and wanted to set up some sensors and triggers around the house, with some restrictions:
 

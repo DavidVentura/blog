@@ -1,3 +1,9 @@
+---
+title: OTA updates for the IOT house
+date: 2018-08-09
+tags: iot, python
+description: 
+---
 
 After setting up my lamp I realized that I had left the built in LED permanently on. For a nightlamp, this is extremely annoying and given that taking it apart was going to be a hassle, I decided to do it for one last time and do it right.
 

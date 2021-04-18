@@ -1,3 +1,9 @@
+---
+title: Docker-based images on baremetal
+date: 2021-01-23
+tags: systems-deployment
+description: The process behind creating multiple flash-able OS disk images from Dockerfiles and swapping between them on the host
+---
 Exploring how to achieve some of the properties of containerized deployments on bare
 metal servers.
 

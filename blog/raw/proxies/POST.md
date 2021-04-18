@@ -1,3 +1,9 @@
+---
+title: Good luck, I'm behind 4 reverse proxies
+date: 2017-06-29
+tags: 
+description: 
+---
 Serving content over https is trivial, right?
 
 It's not so trivial if you want to learn about HA and keep everything working with SSL.

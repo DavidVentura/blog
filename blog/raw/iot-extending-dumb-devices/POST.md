@@ -1,3 +1,9 @@
+---
+title: Extending the capabilities of dumb devices
+date: 2019-07-06
+tags: iot, python
+description: Hooking non-smart devices into the house automation framework
+---
 As with my [kindle hack](https://blog.davidventura.com.ar/integrating-a-kindle-into-house-automation.html), I wanted to extend a 'dumb' device, my HDMI input selector.
 
 The input selector originally looked like this:

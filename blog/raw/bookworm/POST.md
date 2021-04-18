@@ -1,3 +1,9 @@
+---
+title: Bookworm - Utility to download books via IRC
+date: 2019-10-13
+tags: architecture, reading
+description: Developing a tool to download e-books
+---
 I read a lot. There are currently 245 books on my kindle collection. And yet,
 Amazon seems to be unable to provide me with a hassle-free way to buy books.
 

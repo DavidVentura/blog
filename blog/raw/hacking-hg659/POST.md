@@ -1,3 +1,9 @@
+---
+title: Hacking the HG659
+date: 2018-03-10
+tags: 
+description: 
+---
 I want to have internet usage data from my router as it cannot be put in bridge mode. I currently use the services of T-Mobile (NL).
 
 ## Investigating the data

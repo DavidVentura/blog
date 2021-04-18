@@ -1,3 +1,9 @@
+---
+title: Meta blogging
+date: 2017-08-17
+tags: 
+description: 
+---
 ## Meta
 I wanted to write something to keep up with my buzzword-bingo,
 so I rewrote my blog using hip technologies.

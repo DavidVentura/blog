@@ -1,3 +1,9 @@
+---
+title: nginx, caching and X-Accel-Redirect
+date: 2017-06-29
+tags: nginx
+description: 
+---
 Nginx is awesome. I use it everywhere, for load balancing, file caching, reverse-proxying, rate-limiting, etc.
 
 Now, I'm trying to cache a file served from an X-Acccel-Redirect header and it seems impossible.

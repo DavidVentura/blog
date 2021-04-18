@@ -1,3 +1,9 @@
+---
+title: Automated Debian install
+date: 2019-06-30
+tags: debian, systems-deployment
+description: Fully automated debian vm creation
+---
 So far, anything that I've deployed in my lab has been running in a container,
 but when I wanted to deploy a VM I realized that I had to click through the
 debian netinstall and likely forget about the settings in the future.  

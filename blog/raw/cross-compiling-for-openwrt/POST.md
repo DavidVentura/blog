@@ -1,3 +1,9 @@
+---
+title: Cross compiling for OpenWRT platforms
+date: 2020-12-30
+tags: openwrt, rust, cross-compiling
+description: 
+---
 I own a TP-Link X which is an [ath79](https://openwrt.org/docs/techref/targets/ath79) based wireless router, which runs OpenWrt.
 
 I've been trying to get some specific software running on the router to do wifi-based presence detection to enable some automation, and I thought it'd be nice to get some experience doing this in rust.

@@ -1,3 +1,9 @@
+---
+title: GPU Passthrough in Debian
+date: 2018-02-27
+tags: 
+description: 
+---
 This is a recompilation of various sources to get gpu passthrough on Debian.
 
 ## General notes

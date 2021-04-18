@@ -1,3 +1,9 @@
+---
+title: Creating a golden CentOS image
+date: 2019-12-24
+tags: systems-deployment
+description: How to create a flash-able CentOS disk image
+---
 What is involved in creating a disk image that can be `dd`'d to a disk and boot
 into a working system? Is it too much? Why is everyone still using
 kickstart/preseed for images?

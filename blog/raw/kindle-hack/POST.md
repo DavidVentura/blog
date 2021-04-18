@@ -1,3 +1,9 @@
+---
+title: Integrating a Kindle into house automation
+date: 2018-12-15
+tags: iot, python
+description: 
+---
 # Idea
 Most nights I read from my Kindle until fall asleep, leaving my night light on.. after a few hours I usually wake up, annoyed at the light and turn it off, but some nights I cannot fall back asleep..
 

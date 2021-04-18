@@ -10,6 +10,7 @@ import pytz
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, date
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional, List
 
@@ -25,6 +26,7 @@ INDEX_TEMPLATE = Template(open('blog/template/index.html', 'r').read())
 DEBUG = True
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
 EMBED_FILE_RE = re.compile(r'{embed-file (?P<fname>[^}]+)}')
+md = Markdown(extras=["fenced-code-blocks", "nofollow", "footnotes", "metadata"])
 
 @dataclass
 class PostMetadata:
@@ -35,9 +37,24 @@ class PostMetadata:
     incomplete: bool = False
     path: Optional[str] = None
 
+    @staticmethod
+    def from_dict(d) -> 'PostMetadata':
+        date = datetime.strptime(d['date'], "%Y-%m-%d").date()
+        tags = [t.strip() for t in d['tags'].split(',')]
+        data = {**d, 'date': date, 'tags': tags} 
+        return PostMetadata(**data)
+
 def debug(*msg):
     if DEBUG:
         print(*msg)
+
+def convert_f(fname):
+    with open(fname, 'r') as fd:
+        return convert(fd.read())
+
+@lru_cache
+def convert(text):
+    return md.convert(text)
 
 def embed_files(relpath, text):
     match_substr = None
@@ -48,13 +65,6 @@ def embed_files(relpath, text):
         match_substr = match.group(0)
         text = text.replace(match_substr, fcontent)
     return text
-
-def parse_metadata(target) -> PostMetadata:
-    data = open(target, 'r', encoding='utf-8').read()
-    j = json.loads(data)
-    j['date'] = datetime.strptime(j['date'], "%Y-%m-%d").date()
-    return PostMetadata(**j)
-
 
 def generate_header(metadata: PostMetadata):
     template = Template('<h1>{{ title }}</h1><small>{{ date }}</small>')
@@ -83,38 +93,35 @@ def newer(f1, files):
 
 def main():
     this_script = __file__
-    md = Markdown(extras=["fenced-code-blocks", "nofollow", "footnotes"])
     for target in glob.glob("blog/raw/*"):
         post_file = os.path.join(target, 'POST.md')
-        metadata_file = os.path.join(target, 'metadata.json')
         if not os.path.exists(post_file):
             print("Target post file (%s) does not exist" % post_file)
-            continue
-        if not os.path.exists(metadata_file):
-            print("Target path (%s/metadata.json) does not exist" % target)
             continue
 
         debug(target)
 
-        r = parse_metadata(metadata_file)
+        md_str = open(post_file, encoding='utf-8').read()
+        md_str = embed_files(target, md_str)
+        body = convert(md_str)
+
+        r = PostMetadata.from_dict(body.metadata)
+
         if r.incomplete:
             debug('Incomplete - skipping')
             continue
+
         header = generate_header(r)
         safe_title = sanitize_title(r.title)
         html_fname = 'blog/html/%s.html' % safe_title
 
         if os.path.isfile(html_fname):
-            if newer(html_fname, [post_file, metadata_file, this_script, BODY_TEMPLATE_FILE]):
+            if newer(html_fname, [post_file, this_script, BODY_TEMPLATE_FILE]):
                 debug('Stale file')
                 continue
 
-        debug('generating body')
-        md_str = open(post_file, encoding='utf-8').read()
-        md_str = embed_files(target, md_str)
-        body_str = md.convert(md_str)
         debug('generating text post')
-        html_str = generate_post(header, body_str, r.title, r.tags, r.description)
+        html_str = generate_post(header, body, r.title, r.tags, r.description)
         html = BeautifulSoup(html_str, features='html5lib')
         for header in html.find('article').find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
             header.attrs["id"] = header.text.lower().replace(' ', '-')
@@ -162,8 +169,8 @@ def generate_index():
     items: List[PostMetadata] = []
     feed = generate_feed()
     last_update = None
-    for f in glob.glob("blog/raw/*/metadata.json"):
-        item = parse_metadata(f)
+    for f in glob.glob("blog/raw/*/POST.md"):
+        item = PostMetadata.from_dict(convert_f(f).metadata)
         if item.incomplete:
             continue
         item.path = "/%s.html" % sanitize_title(item.title)
@@ -183,15 +190,15 @@ def generate_index():
 
 def get_all_tags():
     tags = set()
-    for f in glob.glob("blog/raw/*/metadata.json"):
-        item = parse_metadata(f)
+    for f in glob.glob("blog/raw/*/POST.md"):
+        item = PostMetadata.from_dict(convert_f(f).metadata)
         tags = tags.union(set(item.tags))
     return tags
 
 def generate_tag_index(tag):
     items: List[PostMetadata] = []
-    for f in glob.glob("blog/raw/*/metadata.json"):
-        item = parse_metadata(f)
+    for f in glob.glob("blog/raw/*/POST.md"):
+        item = PostMetadata.from_dict(convert_f(f).metadata)
         if tag not in item.tags:
             continue
         item.path = "/%s.html" % sanitize_title(item.title)

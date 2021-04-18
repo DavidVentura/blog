@@ -1,3 +1,9 @@
+---
+title: Building an MQTT client for the Kindle
+date: 2021-01-07
+tags: iot, kindle, rust, cross-compiling
+description: The never-ending rabbit hole I found while trying to build a simple MQTT client for the kindle
+---
 I have a paperwhite kindle on which I run a very dumb python script that broadcasts its' screen events (screen on, off) over the network, it's detailed [here](https://blog.davidventura.com.ar/integrating-a-kindle-into-house-automation.html).
 
 Recently I read [this post](https://drewdevault.com/2020/10/09/Four-principles-of-software-engineering.html) and its

@@ -1,3 +1,9 @@
+---
+title: Reverse engineering the Bose QC35 bluetooth protocol
+date: 2020-01-10
+tags: reverse-engineering, android, bluetooth
+description: 
+---
 
 
 

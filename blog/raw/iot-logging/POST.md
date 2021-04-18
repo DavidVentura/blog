@@ -1,3 +1,9 @@
+---
+title: Logging and remote debugging on the IOT house
+date: 2019-07-06
+tags: iot, python
+description: 
+---
 I am trying to debug why my IOT devices don't always recover from a DNS/DHCP failure &ndash; it is quite hard as they simply get stuck, not doing anything until rebooted.   
 I'll go over what I am currently doing to try and shed some light on the possible causes.
 

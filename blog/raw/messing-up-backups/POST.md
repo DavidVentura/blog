@@ -1,3 +1,9 @@
+---
+title: Messing up backups
+date: 2019-08-04
+tags: backups, proxmox
+description: Never try to restore backups when sleep deprived
+---
 This is the story of how I managed to trash my server, all my VMs and 2 databases while upgrading proxmox during a
 boring Sunday afternoon.  
 

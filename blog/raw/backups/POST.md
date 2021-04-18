@@ -1,3 +1,9 @@
+---
+title: Backups, Backups, Backups
+date: 2017-02-23
+tags: backups, bash
+description: 
+---
 I reached a point where I could recreate all (or most) of my labs with ansible. What I had not yet configured is an extensive backup system. I'll explain here what I did.
 
 

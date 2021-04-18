@@ -1,3 +1,9 @@
+---
+title: Studying for the interview
+date: 2017-08-18
+tags: 
+description: 
+---
  Concepts to study / refresh
  
 (Post in progress)

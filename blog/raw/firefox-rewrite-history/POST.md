@@ -1,3 +1,9 @@
+---
+title: Rewriting history on Firefox to get reddit's old UI back
+date: 2018-11-18
+tags: 
+description: 
+---
 I do not like reddit's new UI - I liked the old and compact one a lot more; see the image for comparison
 ![reddit](/images/reddit-old-new.png)
 

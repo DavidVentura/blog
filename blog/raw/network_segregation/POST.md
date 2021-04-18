@@ -1,3 +1,9 @@
+---
+title: Network update part 3: Network segregation
+date: 2018-05-20
+tags: networking
+description: 
+---
 After adding a [fancy router](https://blog.davidventura.com.ar/network-update-part-1-custom-router-with-espressobin.html) to my setup and adding some [monitoring](https://blog.davidventura.com.ar/network-update-part-2-monitoring-the-network-with-netflow-influxdb-and-grafana.html) I decided I could segregate my network, as the current state was just bunching everything on the common VLAN.
 
 New setup:
