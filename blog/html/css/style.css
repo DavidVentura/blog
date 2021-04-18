@@ -168,7 +168,6 @@ blockquote p {
     width: 90%;
     margin: 0px auto;
   }
-  #blogheader { padding: 0px 10px; } 
 }
 
 @keyframes glow {
@@ -183,9 +182,6 @@ blockquote p {
 @media only screen and (max-width: 500px) {
   #blogpost {
     padding: 0px 5px !important;
-  }
-  #indexheader {
-    width: 90%;
   }
   body {
     width: 95%;
