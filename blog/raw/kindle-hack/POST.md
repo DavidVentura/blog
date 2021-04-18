@@ -1,7 +1,7 @@
 ---
 title: Integrating a Kindle into house automation
 date: 2018-12-15
-tags: iot, python
+tags: iot, python, kindle
 description: 
 ---
 # Idea
