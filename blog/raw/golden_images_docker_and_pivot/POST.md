@@ -12,7 +12,7 @@ The properties I'm interested in for this post are:
 * Fast deployment (+ fast rollbacks)
 * Testing different OS versions with production workloads
 
-I investigated [before](https://blog.davidventura.com.ar/creating-a-golden-centos-image.html) how to generate and flash custom OS images, and we can keep building
+I investigated [before](/creating-a-golden-centos-image.html) how to generate and flash custom OS images, and we can keep building
 based on those findings.
 
 The changes will be:
@@ -50,7 +50,7 @@ $ docker export $CONTAINER_ID | sudo tar -C 79
 $ docker stop $CONTAINER_ID
 ```
 
-With the container data we want to put on disk, we have to do the same as in [this post](https://blog.davidventura.com.ar/creating-a-golden-centos-image.html) so I will just list the
+With the container data we want to put on disk, we have to do the same as in [this post](/creating-a-golden-centos-image.html) so I will just list the
 repeated steps and go into more detail for the new ones.
 
 ## Create the disk

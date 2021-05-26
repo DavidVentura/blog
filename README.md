@@ -8,4 +8,4 @@ The idea of this repository is to explore and combine multiple technologies to a
 * Push a notification of successful deployment somewhere
 
 
-The result is [this](https://blog.davidventura.com.ar/).
+The result is [this](https://blog.davidv.dev/).

@@ -4,7 +4,7 @@ date: 2019-07-06
 tags: iot, python, kindle
 description: Hooking non-smart devices into the house automation framework
 ---
-As with my [kindle hack](https://blog.davidventura.com.ar/integrating-a-kindle-into-house-automation.html), I wanted to extend a 'dumb' device, my HDMI input selector.
+As with my [kindle hack](/integrating-a-kindle-into-house-automation.html), I wanted to extend a 'dumb' device, my HDMI input selector.
 
 The input selector originally looked like this:
 
@@ -22,7 +22,7 @@ which input is selected.. at least without getting the device out from the wall 
 ## Getting input 
 
 There are only 2 devices connected and one of them can output whether or not it has an HDMI cable connected by reading `/sys/devices/virtual/amhdmitx/amhdmitx0/hdmi/cable.0/state`.  
-As this device (Odroid) has a very limited linux runtime, I setteld on sending UDP messages (same as the [kindle](https://blog.davidventura.com.ar/integrating-a-kindle-into-house-automation.html)) to a local server that converts them to MQTT.
+As this device (Odroid) has a very limited linux runtime, I setteld on sending UDP messages (same as the [kindle](/integrating-a-kindle-into-house-automation.html)) to a local server that converts them to MQTT.
 
 ## Results
 

@@ -19,7 +19,7 @@ from feedgen.feed import FeedGenerator
 from jinja2 import Template
 from markdown2 import Markdown
 
-BLOG_URL = 'https://blog.davidventura.com.ar/'
+BLOG_URL = 'https://blog.davidv.dev/'
 BODY_TEMPLATE_FILE = 'blog/template/body.html'
 BODY_TEMPLATE = Template(open(BODY_TEMPLATE_FILE, 'r').read())
 INDEX_TEMPLATE = Template(open('blog/template/index.html', 'r').read())
