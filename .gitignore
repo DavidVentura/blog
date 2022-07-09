@@ -4,3 +4,6 @@ blog/html/*html
 blog/html/tags/*
 blog/html/rss.xml
 .venv
+venv
+node_modules
+.pnpm-debug.log
