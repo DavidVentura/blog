@@ -67,15 +67,16 @@ def embed_files(relpath, text):
     return text
 
 def generate_header(metadata: PostMetadata):
-    template = Template('<h1>{{ title }}</h1><small>{{ date }}</small>')
+    template = Template('<h1>{{ title }}</h1>')
     return template.render(asdict(metadata))
 
 
-def generate_post(header, body, title, tags, description):
+def generate_post(header, body, title, tags, description, date):
     rendered = BODY_TEMPLATE.render(header=header,
             post=body,
             title=title,
             tags=tags,
+            date=date,
             description=description,
             devmode=DEVMODE)
     return rendered
@@ -121,7 +122,7 @@ def main():
                 continue
 
         debug('generating text post')
-        html_str = generate_post(header, body, r.title, r.tags, r.description)
+        html_str = generate_post(header, body, r.title, r.tags, r.description, r.date)
         html = BeautifulSoup(html_str, features='html5lib')
         for header in html.find('article').find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
             header.attrs["id"] = header.text.lower().replace(' ', '-')
