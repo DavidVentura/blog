@@ -51,6 +51,10 @@
     #blogpost-content li code {
     @apply font-medium px-1 py-0.5 bg-gray-100 rounded text-sm;
   }
+
+  #blogpost-content blockquote {
+    @apply my-5 pl-4 border-l-2 border-gray-400 text-sm text-gray-600;
+  }
   
   /* Footnotes */
   #blogpost-content .footnotes {

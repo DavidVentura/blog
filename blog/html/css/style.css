@@ -583,6 +583,19 @@ p {
   font-weight: 500;
 }
 
+#blogpost-content blockquote {
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
+  border-left-width: 2px;
+  --tw-border-opacity: 1;
+  border-color: rgb(156 163 175 / var(--tw-border-opacity));
+  padding-left: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  --tw-text-opacity: 1;
+  color: rgb(75 85 99 / var(--tw-text-opacity));
+}
+
 /* Footnotes */
 
 #blogpost-content .footnotes {
