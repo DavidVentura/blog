@@ -2,7 +2,7 @@
     <head>
         <link rel="shortcut icon" type="image/x-icon" href="data:image/x-icon;,">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link href="/css/style.css" rel="stylesheet" type="text/css">
+        <link href="/css/new-style.css" rel="stylesheet" type="text/css">
         <link href="/css/syntax.css" rel="stylesheet" type="text/css">
         <meta charset="UTF-8">
         <meta name="referrer" content="no-referrer">
@@ -10,33 +10,48 @@
         {% if devmode %}
         <script type="text/javascript" src="/live.js"></script>
         {% endif %}
-        <title>{{ title }}</title>
+        <title>{{ title }} - Mumbling about computers</title>
     </head>
     <body>
-        <div id="indexheader">
-            <h1>
-                <a href="/">Mumbling about computers</a>
-            </h1>
-        </div>
-        <div id="entry">
-            <article>
-                <div id="blogpost">
-                    <div id="blogheader">
-                        {{ header }}
-                        {% if tags %}
-                        <span>[
-                        {% for tag in tags %}<a href="/tags/{{tag}}">{{tag}}</a> {% endfor %}
-                        ]
-                        </span>
-                        {%endif%}
-                    </div>
+        <div class="layout">
+            <header class="my-2 flex flex-col md:gap-2 md:flex-row md:items-baseline">
+                <svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" class="w-6 h-6 md:w-8 md:h-8">
+                    <path
+                        d="m8.878 13.62-2.839-2.84a.669.669 0 0 0-.946 0 2.656 2.656 0 0 0-.784 1.893c0 .715.278 1.387.784 1.892a2.657 2.657 0 0 0 1.892.785c.715 0 1.387-.279 1.893-.784a.669.669 0 0 0 0-.947Zm-2.839 0a1.33 1.33 0 0 1-.347-1.294l1.64 1.64a1.366 1.366 0 0 1-1.293-.347Zm2.954 2.399L11 12.673l2.007 3.346H8.993Zm5.282 2.712-1.197.598c-.017-.032-.54-.969-2.078-.969-1.538 0-2.061.937-2.082.977l-1.193-.607c.035-.07.881-1.708 3.275-1.708 2.393 0 3.24 1.638 3.275 1.709Zm1.686-7.95-2.839 2.838a.669.669 0 0 0 0 .946 2.657 2.657 0 0 0 1.893.785c.714 0 1.387-.279 1.892-.784a2.657 2.657 0 0 0 .784-1.893 2.66 2.66 0 0 0-.784-1.893.67.67 0 0 0-.946 0Zm0 2.838a1.368 1.368 0 0 1-1.294.347l1.64-1.64a1.329 1.329 0 0 1-.347 1.293Zm3.738-2.866v-1.76c0-1.473-1.2-2.008-2.007-2.008h-6.023V4.186a2.005 2.005 0 0 0 1.338-1.884A2.01 2.01 0 0 0 11 .294a2.01 2.01 0 0 0-2.007 2.008c0 .871.561 1.607 1.338 1.884v2.8H4.309c-1.473 0-2.008 1.2-2.008 2.007v1.76c-1.076.248-2.007 1.071-2.007 2.59v2.68c.013 1.154.646 2.316 2.007 2.602V19.7c0 1.473 1.2 2.007 2.008 2.007h13.383c1.472 0 2.007-1.2 2.007-2.007v-1.073c1.361-.288 1.993-1.45 2.007-2.61v-2.674c0-1.517-.93-2.341-2.007-2.589ZM2.301 17.228c-.558-.255-.664-.836-.669-1.213v-2.673c0-.697.311-1.04.67-1.201v5.087ZM11 1.632a.67.67 0 0 1 0 1.338.67.67 0 0 1 0-1.338ZM18.36 19.69c-.008.31-.13.678-.67.678H4.317c-.308-.008-.677-.13-.677-.67V9.002c.008-.31.13-.677.67-.677h13.375c.31.008.677.13.677.669V19.69Zm2.007-3.684c-.005.384-.11.965-.669 1.221V12.14c.358.163.669.505.669 1.202v2.664Z"
+                        fill="#000" />
+                </svg>
+                <h2 class="blog-title">
+                    <a href='/'>Mumbling about computers</a>
+                </h2>
+            </header>
+            <nav class="mb-4 pb-4 border-b border-gray-500 md:mb-8 md:pb-8">
+                <ul class="flex items-center gap-2">
+                    <li>
+                        <a href="/rss.xml">RSS</a>
+                    </li>
+                    <li>
+                        <a href="/blogs-i-follow.html">Blogs I follow</a>
+                    </li>
+                </ul>
+            </nav>
+            <article id="blogpost">
+                <header id="blogheader" class="mb-4 md:mb-8">
+                    <time datetime="{{ date }}" class="text-sm text-gray-500">{{ date }}</time>
+                    {{ header }}
+                    {%- if tags -%}
+                    <ul class="flex flex-wrap gap-2">
+                        {%- for tag in tags -%}
+                        <li>
+                            <a href="/tags/{{tag}}" class="tag">{{ tag }}</a>
+                        </li>
+                        {%- endfor -%}
+                    </ul>
+                    {%- endif -%}
+                </header>
+                <section id="blogpost-content">
                     {{ post }}
-                </div>
+                </section>
             </article>
-            <div id=footer>
-                <a href="/rss.xml">RSS</a>
-                <a style='float:right' href="/blogs-i-follow.html">Blogs I follow</a>
-            </div>
         </div>
     </body>
 </html>

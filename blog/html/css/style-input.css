@@ -1,0 +1,93 @@
+@tailwind base;
+
+@layer base {
+  .layout {
+    @apply max-w-2xl px-4 mx-auto py-4 md:py-10;
+  }
+  h1, .blog-title {
+    @apply font-semibold text-3xl md:text-4xl;
+  }
+  h2 {
+    @apply font-semibold text-xl md:text-2xl;
+  }
+  h3 {
+    @apply font-semibold text-lg md:text-xl;
+  }
+  h4 {
+    @apply font-semibold text-base md:text-lg;
+  }
+  a.tag {
+    @apply transition-all underline underline-offset-2 decoration-dotted decoration-gray-300 text-gray-600 text-sm hover:decoration-gray-400 hover:text-gray-700;
+  }
+
+  /* Post Styles */
+  #blogpost-content h2,
+  #blogpost-content h3,
+  #blogpost-content h4 {
+    @apply mt-6 mb-4;
+  }
+  p {
+    @apply my-3 text-base;
+  }
+  #blogpost-content ol,
+  #blogpost-content ul {
+    @apply pl-3;
+    list-style-type: revert;
+  }
+  #blogpost-content > ol,
+  #blogpost-content > ul {
+    @apply my-3 ml-3;
+  }
+  #blogpost-content li {
+    @apply my-0.5;
+  }
+  #blogpost-content hr {
+    @apply my-10;
+  }
+  #blogpost-content a {
+    @apply font-medium underline underline-offset-2 decoration-dotted decoration-gray-300 hover:text-blue-400 visited:text-blue-900;
+  }
+  #blogpost-content p code,
+    #blogpost-content li code {
+    @apply font-medium px-1 py-0.5 bg-gray-100 rounded text-sm;
+  }
+
+  #blogpost-content blockquote {
+    @apply my-5 pl-4 border-l-2 border-gray-400 text-sm text-gray-600;
+  }
+  
+  /* Footnotes */
+  #blogpost-content .footnotes {
+    @apply text-sm opacity-75;
+  }
+  #blogpost-content .footnotes li p {
+    @apply my-0;
+  }
+
+  pre {
+    @apply font-mono bg-gray-100 p-2 rounded border border-gray-200 overflow-x-auto max-w-full my-4;
+  }
+
+  pre code {
+    @apply text-xs;
+  }
+
+  table {
+    @apply w-full table-auto text-sm text-left my-4 border border-gray-200;
+  }
+
+  table th {
+    @apply p-2 font-medium bg-gray-50 text-gray-700;
+  }
+
+  table td {
+    @apply p-2 opacity-75; 
+  }
+
+  table tr {
+    @apply border-b border-gray-200;
+  }
+}
+
+@tailwind components;
+@tailwind utilities;

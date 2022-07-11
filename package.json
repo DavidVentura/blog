@@ -1,0 +1,24 @@
+{
+  "name": "blog",
+  "version": "1.0.0",
+  "description": "The idea of this repository is to explore and combine multiple technologies to achieve a static blog.",
+  "main": "blog/html/index.html",
+  "scripts": {
+    "tailwind": "npx tailwindcss -i ./blog/html/css/style-input.css -o ./blog/html/css/new-style.css",
+    "generate": "./venv/bin/python generate.py dev",
+    "build": "pnpm tailwind && pnpm generate"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DavidVentura/blog.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/DavidVentura/blog/issues"
+  },
+  "homepage": "https://github.com/DavidVentura/blog#readme",
+  "dependencies": {
+    "tailwindcss": "^3.1.5"
+  }
+}
