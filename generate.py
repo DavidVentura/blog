@@ -26,7 +26,7 @@ INDEX_TEMPLATE = Template(open('blog/template/index.html', 'r').read())
 DEBUG = True
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
 EMBED_FILE_RE = re.compile(r'{embed-file (?P<fname>[^}]+)}')
-md = Markdown(extras=["fenced-code-blocks", "nofollow", "footnotes", "metadata"])
+md = Markdown(extras=["fenced-code-blocks", "nofollow", "footnotes", "metadata", "tables", "header-ids"])
 
 @dataclass
 class PostMetadata:
