@@ -3,6 +3,7 @@ title: Measuring keyboard to display latency
 date: 2022-07-09
 tags: rp2040, sdl, latency
 description: 
+incomplete: true
 ---
 
 I've got fed up with some latency I've been experiencing when using the work-issued VPN (remote desktop over IP), and wanted to 
@@ -51,12 +52,16 @@ Here's a very basic schematic:
 
 |Target|Measurement|Notes|
 |------|-----------|-----|
-|Linux 5.13, Dell P2418D|53ms|60Hz, VSync|
-|Linux 5.13, Dell P2418D|36ms|60Hz, VSync, Enabled "Game Mode"|
-|Linux 5.13, Dell+VPN|+34ms (70-87ms)||
-|Linux 5.7, Thinkpad T430|??|60Hz, *no* VSync|
-|14" M1 Macbook Pro|??|60Hz, *no* VSync|
+|Linux 5.13, Dell P2418D|53ms|60Hz|
+|Linux 5.13, Dell P2418D|36ms|60Hz, Enabled "Game Mode"|
+|Linux 5.13, Dell+VPN|70-87ms|High variance|
+|Linux 5.7, Thinkpad T430|51ms|60Hz, **no VSync**|
+|14" M1 Macbook Pro|??|60Hz|
 
+
+## Source
+
+You can find the repo with the sources + schematic [here](https://github.com/DavidVentura/display-latency-measurement).
 
 ## References
 
