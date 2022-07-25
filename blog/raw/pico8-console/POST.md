@@ -153,25 +153,6 @@ This snippet improved my dev life _dramatically_.
 
 Afterwards I also added a udev script that automatically mounts & copies the latest build to the RP2040 when it is detected. This means that pressing "r" over UART will end up with a new build in the pico in ~8s.
 
-## Improving performance
-
-Ran some basic tests on performance and saw that the "hello world" demo was taking 21ms to render a frame, putting a hard limit of ~45fps on it.  This is quite terrible, as more complex games would take longer to render and be limited even further.
-
-These 21ms are split in ~9ms to process the `_draw` function in the Lua code and ~12ms to copy the backbuffer over SPI to the display.
-
-The first step I took was to change the default SPI clock rate from ~30MHz to 62.5MHz (based on [GameTiger's repo](https://github.com/codetiger/GameTiger-Console)), making the framebuffer copy take ~5ms. **Time per frame: ~17ms**
-
-Afterwards, I moved the framebuffer copy step to the second core, which, while it took the same amount of time, it no longer blocked the render cycle (frame = 9ms). This was **so easy**:
-
-* call `multicore_launch_core1(put_buffer)` on engine init
-* have `put_buffer` block on a queue (`multicore_fifo_pop_blocking()`)
-* have the `gfx_flip` platform-specific engine function push into this queue `multicore_fifo_push_blocking`
-
-**Time per frame: ~12ms**
-
-Overclocked the RP2040 to 260MHz,.  **Time per frame: ~5ms**
-
-Now this puts a hard limit for "hello world" of ~200FPS which, while still slow, is not unreasonable.
 
 ## Supporting Lua language extensions
 
