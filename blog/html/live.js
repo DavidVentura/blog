@@ -1,16 +1,12 @@
 window.addEventListener("load", () => {
-  let last_data = null;
+  const now = new Date();
   const check_and_reload = () => {
-    fetch(window.location.toString()).then((response) => response.text()).then((data) => {
+    fetch(window.location.toString(), {method: 'HEAD', headers: {'If-Modified-Since': now.toGMTString()}}).then((response) => {
       setTimeout(() => check_and_reload(), 200);
-      if(last_data === null) {
-        last_data = data;
+      if(response.status === 304) {
         return;
       }
-      if (last_data != data) {
-        last_data = data;
-        document.location.reload();
-      }
+      document.location.reload();
     });
   };
   setTimeout(() => check_and_reload(), 200);
