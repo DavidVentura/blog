@@ -108,7 +108,7 @@ def main():
 
         r = PostMetadata.from_dict(body.metadata)
 
-        if r.incomplete:
+        if r.incomplete and not DEVMODE:
             debug('Incomplete - skipping')
             continue
 
@@ -172,7 +172,7 @@ def generate_index():
     last_update = None
     for f in glob.glob("blog/raw/*/POST.md"):
         item = PostMetadata.from_dict(convert_f(f).metadata)
-        if item.incomplete:
+        if item.incomplete and not DEVMODE:
             continue
         item.path = "/%s.html" % sanitize_title(item.title)
         items.append(item)
