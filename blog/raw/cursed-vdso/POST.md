@@ -6,8 +6,8 @@ description: Replacing time-related vDSO entries at runtime
 incomplete: false
 ---
 
-We found a bug on Python's `Event` object: if the system's clock moved backwards while an `Event` was being waited on, 
-it would seemingly hang "forever".
+We found... unexpected behavior on Python's `Event` object: if the system's clock moves backwards while an `Event` is being waited on, 
+it will seemingly hang "forever".
 
 ```python
 Event.wait(5)  # time moves backwards during these 5 seconds
@@ -97,9 +97,12 @@ for i in range(0, timeout):
         break
     time.sleep(1)
 ```
+
+---
+
 So, how to test that the bug is fixed? We could've introduced the same bug if `time.sleep` used `gettimeofday` internally!
 
-A proper test is complicated: changing the system clock requires root permissions, and it's not trivial to execute in CI, so we have to resort to mocking.
+A proper test is complicated: changing the system clock usually requires root permissions and is not trivial to execute in CI, so we have to resort to mocking.
 
 There are some existing projects that deal with this:
 
@@ -120,7 +123,17 @@ The goal for today is to replace `gettimeofday` (and friends) with something tha
 * Does not require the `LD_PRELOAD` trick
 * Is user-space controllable
 
-As `gettimeofday` is a [vDSO](https://en.wikipedia.org/wiki/VDSO) function call (and _not_ a syscall), all the necessary information about vDSO is in the process memory space.
+## The vDSO
+
+`gettimeofday` is an external function, provided by a shared library coming from the kernel: the ["vDSO"](https://en.wikipedia.org/wiki/VDSO) (virtual, dynamic shared object).
+
+The kernel automatically maps this shared library into the address space of all programs, which do not know that this is happening, they merely resolve external symbols (in this case `gettimeofday`) to a function they can call.
+
+The point of the vDSO mechanism is to speed up some system calls: there is overhead on executing a syscall due to context-switching into the kernel, and this vastly dominates the time it takes to execute the actual requested function.
+
+By mapping these functions directly to userspace, the context switch is bypassed and the necessary time to execute `gettimeofday` drops dramatically.
+
+As this function must be dynamically loaded into the process at startup, all the information for linking should be available to the process itself, and indeed it is mapped in its own special region (`[vdso]`):
 
 ```bash
 $ grep vdso /proc/self/maps
@@ -159,11 +172,11 @@ Each of these symbols is _just a function_ that can be called, and at the same t
 
 The steps could be summarized as:
 
-* Find the vDSO memory range by scanning /proc/self/maps
-* Read the vDSO ELF blob
-* Overwrite vDSO area with a user-provided function
+* Find the vDSO memory range by scanning `/proc/self/maps`.
+* Read the vDSO ELF blob.
+* Overwrite vDSO area with a user-provided function.
 
-## Find the process' vDSO range
+## Find the process' vDSO address
 
 Thanks to the [proc filesystem](https://en.wikipedia.org/wiki/Procfs), a process can inspect its own metadata very easily; `/proc/self/maps` contains all the relevant information
 in an easy-to-parse, whitespace-delimited, format (trimmed down):
@@ -179,85 +192,86 @@ in an easy-to-parse, whitespace-delimited, format (trimmed down):
 
 Where each line represents a single, contiguous range.
 
-## Parsing the vDSO ELF blob
+## Parsing the vDSO
 
 In a similar vein, we can read our own memory at `/proc/self/mem`, skip ahead to the vDSO range (based on the `/proc/self/maps` metadata) and read the vDSO ELF blob. Thanks to the [goblin](https://docs.rs/goblin/latest/goblin/index.html) crate, interpreting these bytes as a walkable structure is trivial.
 
-The [ELF Format](https://www.caichinger.com/elf.html) is reasonable, though there are some things to keep in mind to extract the data we want
+The ELF format ([1](https://www.caichinger.com/elf.html), [2](https://linuxhint.com/understanding_elf_file_format/), [3](https://wiki.osdev.org/ELF)) is reasonable and greatly documented[^1].
 
-The Elf Format defines a set of sections, and some of them contain partial information
+A short summary of the ELF format, that only covers the parts relevant for this task:
 
-```
-  [Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al
-  [ 0]                   NULL            0000000000000000 000000 000000 00      0   0  0
-  [ 1] .hash             HASH            0000000000000120 000120 000048 04   A  3   0  8
-  [ 2] .gnu.hash         GNU_HASH        0000000000000168 000168 00005c 00   A  3   0  8
-  [ 3] .dynsym           DYNSYM          00000000000001c8 0001c8 000138 18   A  4   1  8
-  [ 4] .dynstr           STRTAB          0000000000000300 000300 00008b 00   A  0   0  1
-  [ 5] .gnu.version      VERSYM          000000000000038c 00038c 00001a 02   A  3   0  2
-  [ 6] .gnu.version_d    VERDEF          00000000000003a8 0003a8 000038 00   A  4   2  8
-  [ 7] .dynamic          DYNAMIC         00000000000003e0 0003e0 000120 10  WA  4   0  8
-  [11] .text             PROGBITS        00000000000006e0 0006e0 00066c 00  AX  0   0 16
-```
+* There is a `Program Header Table`, which holds an array of `Program Header`.
+* Each `Program Header` points to a `Section Header Table`
+* Each `Section Header Table` holds an array of `Section Header`
+* Each `Section Header` points to a `Section`
+* Each `Section` holds an array of `Symbol`
+* Each `Symbol` has:
+    * Name: an _offset_ into the `STRTAB`
+    * Size: the amount of bytes of code
+    * Address: the offset, **relative to the start of the ELF**, where the first byte of program is.
 
-The symbols we are interested in are dynamic, and we want to extract two things for each of them: their name and address (to know what to overwrite and where).
+This is probably better explained via a diagram:
 
-The information in the `DYNSYM` table has:
+![](/images/elf.png)
 
-* name: the index on the dynamic string table
-* value: the offset of this symbol from the section's virtual address
-* size: size in bytes of the symbol
-    * though the actual space taken by the symbol is `max(size, section.alignment)`
 
-the dynamic string table is a null-delimited bag of bytes
-```
-__vdso_gettimeofday\0__vdso_time\0__vdso_clock_gettime\0__vdso_clock_getres\0...
-       ^ "gettimeofday" would point to this index
-^ "__vdso_gettimeofday" would point to this index
-```
-
-Example:
+After extraction, this is what some symbols look like:
 
 ```rust
 DynSym { name: "clock_gettime", address: 3088, size: 5 },
 DynSym { name: "__vdso_gettimeofday", address: 3024, size: 5 },
 ```
 
-where address is dynsym addr + symbol offset, not including the vDSO addr in memory
-
-we now can call the vDSO function by address
+where address is just the offset from the start of the ELF, not including the vDSO address in memory.
 
 ## Calling functions by address
 
+Having the address of a function and its signature, is all that's really needed to execute a function.
+
+As an example, calling a 
+
 ```rust
+extern "C" my_gettimeofday(tp: *mut libc::timeval, tz: *mut c_void) {
+    // ...
+};
+
+// Virtual Address of the function
 let fptr = my_gettimeofday as *const ();
+
+// Assign a type to the function, so the compiler will let us call it
 let code: extern "C" fn(tp: *mut libc::timeval, tz: *mut c_void) =
     unsafe { std::mem::transmute(fptr) };
 
+// Call the function
 (code)(&mut tv, std::ptr::null_mut());
 
+// Observe the result
 println!(
     "called mygettimeofday manually {} {}",
     tv.tv_sec, tv.tv_usec
 );
 ```
 
-this worked as expected, so we can now validate the addresses obtained from the vDSO by calling them:
+This worked as expected! We can now attempt to directly call the addresses obtained from the vDSO, if it works, it will validate the mechanism used to extract it.
+
+We can replace `fptr` in the previous example:
 
 ```rust
 let fptr = ((vdso_range.start as u64) + dynsym.address) as *const ();
-let code: extern "C" fn(tp: *mut libc::timeval, tz: *mut c_void) =
-    unsafe { std::mem::transmute(fptr) };
-(code)(&mut tv, std::ptr::null_mut());
-println!("{} {}", tv.tv_sec, tv.tv_usec);
 ```
 
-this also worked! the extraction of the addresses from the ELF blob is correct.
+Which also worked!
 
 
 ## Overwrite the vDSO
 
-As we now know the name and address of each symbol, we should be able to overwrite them with our own code, something like:
+We now know:
+
+* How to extract dynamic symbols from the vDSO
+    * The name and address of the interesting symbols
+* How to call functions by address (if we know the signature)
+
+With this knowledge, we should be able to overwrite some vDSO symbols with our own code, something like:
 
 ```rust
 let addr = (vdso_range.start as u64) + dynsym.address;
@@ -266,14 +280,17 @@ unsafe {
 }
 ```
 
-this, sadly, immediately dies a horrible death by segfault -- writing to this address wasn't allowed.
+This code, sadly, immediately exits the program, with return code 139 (Segmentation Fault).
+
+Writing to this memory address wasn't allowed by the operating system.
 
 From the memory map, we knew the process has no write permissions to the vDSO pages:
 ```bash
 $ grep vdso /proc/self/maps
 7ffd9f1d1000-7ffd9f1d3000 r-xp 00000000 00:00 0                          [vdso]
 ```
-but the process _should_ be the owner of these pages, and able to change the permissions.
+
+but the process should be the _owner_ of these pages, and able to change the permissions.
 
 ```rust
 unsafe {
@@ -285,18 +302,27 @@ unsafe {
 }
 ```
 
-Verifying that the `write` bit is set
+Verifying that the `write` bit is set[^2]
 ```bash
 $ grep vdso /proc/self/maps
 7ffd9f1d1000-7ffd9f1d3000 rwxp 00000000 00:00 0                          [vdso]
 ```
 
-After this, writing to the vDSO range succeeds! We can dump the state of the vDSO before and after to verify the changes:
+With the pages being writable, we can attempt to write on the vDSO again:
+
+```rust
+let addr = (vdso_range.start as u64) + dynsym.address;
+unsafe {
+    std::ptr::write_bytes((addr + 0) as *mut u8, 0xC3, 1); // RET
+    std::ptr::write_bytes((addr + 1) as *mut u8, 0x90, 15); // NOP
+}
+```
+Which succeeds! We can dump the state of the vDSO before and after to verify the changes:
 
 Before:
 
 ```objdump
-0000000000000c10 <__vdso_clock_gettime@@LINUX_2.6>:
+<__vdso_clock_gettime@@LINUX_2.6>:
  c10:	e9 9b fb ff ff       	jmp    7b0 <LINUX_2.6@@LINUX_2.6+0x7b0>
  c15:	66 66 2e 0f 1f 84 00 	data16 cs nop WORD PTR [rax+rax*1+0x0]
  c1c:	00 00 00 00 
@@ -305,49 +331,67 @@ Before:
 After:
 
 ```objdump
-0000000000000c10 <__vdso_clock_gettime@@LINUX_2.6>:
- c10:	c3                   	ret    
- c11:	9b                   	fwait                    ; this is a broken analysis by
- c12:	fb                   	sti                      ; objdump, the byte 9b is the samee
- c13:	ff                   	(bad)                    ; second byte as was present before
- c14:	ff 66 66             	jmp    *0x66(%rsi)       ; but it makes no sense by itself
- c17:	2e 0f 1f 84 00 00 00 	cs nopl 0x0(%rax,%rax,1) ; (after a ret), and breaks further
- c1e:	00 00                                            ; decoding
+<__vdso_clock_gettime@@LINUX_2.6>:
+ c10:	c3                   	ret
+ c11:	90                   	nop
+ c12:	90                   	nop
+ c13:	90                   	nop
+ c14:	90                      nop
+ ...
 ```
 
-the first byte is `C3` (`RET`)!
-
-Now the only thing left is placing our function in this area
+Now the only thing left is actually placing our function in this area.
 
 **However.**
 
-These blocks must be multiples of 16 (ELF sector alignment value)bytes in size, and some of them are **just 16 bytes**, drastically limiting the functions that can be placed in this space.
+These symbols must be multiples of the ${ELF-sector alignment} in size.
 
-I thought about modifying the ELF and re-writing the vDSO to have more space, but that would also shift the following symbols and, generally, any code that has already run might have kept a reference to the the original function address around, which wouldn't work anymore.
+In this case that is 16 bytes, and some of the symbols are **just 16 bytes**, drastically limiting the functions that can be placed in this space.
 
-What we **can** do with 16 bytes though is to put a [trampoline](https://en.wikipedia.org/wiki/Trampoline_(computing)), and use it to land in an "unrestricted" function.
+I thought about modifying the ELF itself and re-writing the vDSO to have as much space as necessary, but that would also shift the following symbols and, generally, any code that has already run might have kept a reference to the the original function address around, which wouldn't work anymore.
 
-This, conceptually is very easy, overwrite the code to execute with a single `jmp $DST` instruction. In practice, I had a bunch of problems:
+What we **can** do with 16 bytes though, is building a [trampoline](https://en.wikipedia.org/wiki/Trampoline_(computing)) and use it to land in an "unrestricted-size" function.
 
-* You [can't](https://www.felixcloutier.com/x86/jmp) jump to an _absolute_ address that's represented as an immediate, it must be either of {indirect, relative, in a register}
+This, conceptually, is very easy: overwrite the code to execute with a single `jmp $DST` instruction. In practice, I had a bunch of problems:
+
+* In `x86_64`, you [can't jump](https://www.felixcloutier.com/x86/jmp) to an _absolute_ address that's represented as an immediate, it must be either of {indirect, relative, in a register}
 * There's [a million](https://www.felixcloutier.com/x86/mov) opcodes for MOV, it really wasn't clear which one I should use
 
-So I cheated, and let `nasm` deal with it for me; wrote
+So I cheated, and let `nasm` and `objdump` deal with it for me; wrote
 
 ```asm
-        global  _start
-        section .text
+   global  _start
+   section .text
 _start:
-        mov		rax, 0x12ff34ff56ff78ff
-        jmp 		rax
+   mov	   rax, 0x12ff34ff56ff78ff
+   jmp 	   rax
 ```
 
-and got the opcodes from `nasm -f elf64`.. which I manually copied into my source code.
+Which `nasm -f elf64` compiled for me, and `objdump -M intel` dumped:
 
+```objdump
+<_start>:
+   0:   48 b8 ff 78 ff 56 ff    movabs rax,0x12ff34ff56ff78ff
+   7:   34 ff 12 
+   a:   ff e0                   jmp    rax
+```
+
+The function to overwrite the vDSO now looks like this:
+```rust
+// MOV RAX, <address>
+std::ptr::write_bytes((addr + 0) as *mut u8, 0x48, 1);
+std::ptr::write_bytes((addr + 1) as *mut u8, 0xB8, 1);
+std::ptr::copy(&dst_address as *const u64, (addr + 2) as *mut u64, 1);
+// JMP
+std::ptr::write_bytes((addr + 10) as *mut u8, 0xFF, 1);
+std::ptr::write_bytes((addr + 11) as *mut u8, 0xE0, 1);
+// NOP the remaining space, unnecessary, but useful when debugging
+std::ptr::write_bytes((addr + 12) as *mut u8, 0x90, padding_size);
+```
 Re-dumped a modified vDSO and got...
 
 ```objdump
-0000000000000c10 <__vdso_clock_gettime@@LINUX_2.6>:
+<__vdso_clock_gettime@@LINUX_2.6>:
  c10:   48 b8 30 4f 87 bb 65    movabs rax,0x5565bb874f30                                  
  c17:   55 00 00                                                                           
  c1a:   ff e0                   jmp    rax                                                 
@@ -403,7 +447,13 @@ extern "C" fn my_gettimeofday(tp: *mut libc::timeval, _tz: *mut c_void) {
 }
 ```
 
-This is what I set out to achieve, so I'm calling it a success! As a bit of an extra, I made a separate crate with Python bindings, via [PyO3](https://github.com/PyO3/pyo3), which now lives at [py-tpom](https://github.com/DavidVentura/py-tpom), and can show the usefulness of such a thing:
+This is what I set out to achieve, so I'm calling it a success!
+
+---
+
+## Python bindings
+
+As a bit of an extra, I made a separate crate with Python bindings, via [PyO3](https://github.com/PyO3/pyo3), which now lives at [py-tpom](https://github.com/DavidVentura/py-tpom), and can show the usefulness of such a thing:
 
 ```python
 def test_time_changes():
@@ -416,3 +466,6 @@ def test_time_changes():
 
 
 You can find the source code [here](https://github.com/davidVentura/tpom).
+
+[^1]: [dumpelf](https://linux.die.net/man/1/dumpelf) is great for understanding ELF
+[^2]: this is just an example, `grep` has its own vDSO with its own status
