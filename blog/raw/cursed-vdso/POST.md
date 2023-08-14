@@ -3,7 +3,6 @@ title: Cursing a process' vDSO for time hacking
 date: 2022-11-30
 tags: cursed, rust
 description: Replacing time-related vDSO entries at runtime
-incomplete: false
 ---
 
 We found... unexpected behavior on Python's `Event` object: if the system's clock moves backwards while an `Event` is being waited on, 
