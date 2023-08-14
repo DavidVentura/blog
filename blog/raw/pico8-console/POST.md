@@ -1,7 +1,7 @@
 ---
 title: Making a handheld Pico8 console, part 1
 date: 2022-07-24
-tags: rp2040, sdl, embedded
+tags: rp2040, sdl, embedded, pico8, picopico
 description: Building a RP2040 based Pico-8 handheld console
 ---
 
