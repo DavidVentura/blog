@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/DavidVentura/blog#readme",
   "dependencies": {
+    "pnpm": "^8.6.12",
     "tailwindcss": "^3.1.5"
   },
   "devDependencies": {

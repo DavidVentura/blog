@@ -1,5 +1,5 @@
 /*
-! tailwindcss v3.1.5 | MIT License | https://tailwindcss.com
+! tailwindcss v3.3.3 | MIT License | https://tailwindcss.com
 */
 
 /*
@@ -30,6 +30,8 @@
 2. Prevent adjustments of font size after orientation changes in iOS.
 3. Use a more readable tab size.
 4. Use the user's configured `sans` font-family by default.
+5. Use the user's configured `sans` font-feature-settings by default.
+6. Use the user's configured `sans` font-variation-settings by default.
 */
 
 html {
@@ -44,6 +46,10 @@ html {
   /* 3 */
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, Noto Sans, sans-serif, Segoe UI Symbol;
   /* 4 */
+  font-feature-settings: normal;
+  /* 5 */
+  font-variation-settings: normal;
+  /* 6 */
 }
 
 /*
@@ -184,6 +190,10 @@ optgroup,
 select,
 textarea {
   font-family: inherit;
+  /* 1 */
+  font-feature-settings: inherit;
+  /* 1 */
+  font-variation-settings: inherit;
   /* 1 */
   font-size: 100%;
   /* 1 */
@@ -336,6 +346,14 @@ menu {
 }
 
 /*
+Reset default styling for dialogs.
+*/
+
+dialog {
+  padding: 0;
+}
+
+/*
 Prevent resizing textareas horizontally by default.
 */
 
@@ -349,13 +367,6 @@ textarea {
 */
 
 input::-moz-placeholder, textarea::-moz-placeholder {
-  opacity: 1;
-  /* 1 */
-  color: #9ca3af;
-  /* 2 */
-}
-
-input:-ms-input-placeholder, textarea:-ms-input-placeholder {
   opacity: 1;
   /* 1 */
   color: #9ca3af;
@@ -417,6 +428,12 @@ video {
   height: auto;
 }
 
+/* Make elements with the HTML hidden attribute stay hidden by default */
+
+[hidden] {
+  display: none;
+}
+
 .layout {
   margin-left: auto;
   margin-right: auto;
@@ -434,14 +451,14 @@ video {
   }
 }
 
-h1,  .blog-title {
+h1, .blog-title {
   font-size: 1.875rem;
   line-height: 2.25rem;
   font-weight: 600;
 }
 
 @media (min-width: 768px) {
-  h1,  .blog-title {
+  h1, .blog-title {
     font-size: 2.25rem;
     line-height: 2.5rem;
   }
@@ -491,12 +508,9 @@ a.tag {
   line-height: 1.25rem;
   --tw-text-opacity: 1;
   color: rgb(75 85 99 / var(--tw-text-opacity));
-  -webkit-text-decoration-line: underline;
-          text-decoration-line: underline;
-  -webkit-text-decoration-color: #d1d5db;
-          text-decoration-color: #d1d5db;
-  -webkit-text-decoration-style: dotted;
-          text-decoration-style: dotted;
+  text-decoration-line: underline;
+  text-decoration-color: #d1d5db;
+  text-decoration-style: dotted;
   text-underline-offset: 2px;
   transition-property: all;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
@@ -506,14 +520,13 @@ a.tag {
 a.tag:hover {
   --tw-text-opacity: 1;
   color: rgb(55 65 81 / var(--tw-text-opacity));
-  -webkit-text-decoration-color: #9ca3af;
-          text-decoration-color: #9ca3af;
+  text-decoration-color: #9ca3af;
 }
 
 /* Post Styles */
 
-#blogpost-content h2, 
-  #blogpost-content h3, 
+#blogpost-content h2,
+  #blogpost-content h3,
   #blogpost-content h4 {
   margin-top: 1.5rem;
   margin-bottom: 1rem;
@@ -526,13 +539,13 @@ p {
   line-height: 1.4;
 }
 
-#blogpost-content ol, 
+#blogpost-content ol,
   #blogpost-content ul {
   padding-left: 0.75rem;
   list-style-type: revert;
 }
 
-#blogpost-content > ol, 
+#blogpost-content > ol,
   #blogpost-content > ul {
   margin-top: 0.75rem;
   margin-bottom: 0.75rem;
@@ -551,12 +564,9 @@ p {
 
 #blogpost-content a {
   font-weight: 500;
-  -webkit-text-decoration-line: underline;
-          text-decoration-line: underline;
-  -webkit-text-decoration-color: #d1d5db;
-          text-decoration-color: #d1d5db;
-  -webkit-text-decoration-style: dotted;
-          text-decoration-style: dotted;
+  text-decoration-line: underline;
+  text-decoration-color: #d1d5db;
+  text-decoration-style: dotted;
   text-underline-offset: 2px;
 }
 
@@ -569,7 +579,7 @@ p {
   color: rgb(96 165 250 / var(--tw-text-opacity));
 }
 
-#blogpost-content p code, 
+#blogpost-content p code,
     #blogpost-content li code {
   border-radius: 0.25rem;
   --tw-bg-opacity: 1;
@@ -629,6 +639,10 @@ pre code {
   line-height: 1rem;
 }
 
+.codehilite {
+  line-height: .75rem;
+}
+
 table {
   margin-top: 1rem;
   margin-bottom: 1rem;
@@ -676,53 +690,9 @@ table tr {
   --tw-pan-y:  ;
   --tw-pinch-zoom:  ;
   --tw-scroll-snap-strictness: proximity;
-  --tw-ordinal:  ;
-  --tw-slashed-zero:  ;
-  --tw-numeric-figure:  ;
-  --tw-numeric-spacing:  ;
-  --tw-numeric-fraction:  ;
-  --tw-ring-inset:  ;
-  --tw-ring-offset-width: 0px;
-  --tw-ring-offset-color: #fff;
-  --tw-ring-color: rgb(59 130 246 / 0.5);
-  --tw-ring-offset-shadow: 0 0 #0000;
-  --tw-ring-shadow: 0 0 #0000;
-  --tw-shadow: 0 0 #0000;
-  --tw-shadow-colored: 0 0 #0000;
-  --tw-blur:  ;
-  --tw-brightness:  ;
-  --tw-contrast:  ;
-  --tw-grayscale:  ;
-  --tw-hue-rotate:  ;
-  --tw-invert:  ;
-  --tw-saturate:  ;
-  --tw-sepia:  ;
-  --tw-drop-shadow:  ;
-  --tw-backdrop-blur:  ;
-  --tw-backdrop-brightness:  ;
-  --tw-backdrop-contrast:  ;
-  --tw-backdrop-grayscale:  ;
-  --tw-backdrop-hue-rotate:  ;
-  --tw-backdrop-invert:  ;
-  --tw-backdrop-opacity:  ;
-  --tw-backdrop-saturate:  ;
-  --tw-backdrop-sepia:  ;
-}
-
-::-webkit-backdrop {
-  --tw-border-spacing-x: 0;
-  --tw-border-spacing-y: 0;
-  --tw-translate-x: 0;
-  --tw-translate-y: 0;
-  --tw-rotate: 0;
-  --tw-skew-x: 0;
-  --tw-skew-y: 0;
-  --tw-scale-x: 1;
-  --tw-scale-y: 1;
-  --tw-pan-x:  ;
-  --tw-pan-y:  ;
-  --tw-pinch-zoom:  ;
-  --tw-scroll-snap-strictness: proximity;
+  --tw-gradient-from-position:  ;
+  --tw-gradient-via-position:  ;
+  --tw-gradient-to-position:  ;
   --tw-ordinal:  ;
   --tw-slashed-zero:  ;
   --tw-numeric-figure:  ;
@@ -770,6 +740,9 @@ table tr {
   --tw-pan-y:  ;
   --tw-pinch-zoom:  ;
   --tw-scroll-snap-strictness: proximity;
+  --tw-gradient-from-position:  ;
+  --tw-gradient-via-position:  ;
+  --tw-gradient-to-position:  ;
   --tw-ordinal:  ;
   --tw-slashed-zero:  ;
   --tw-numeric-figure:  ;
@@ -837,10 +810,6 @@ table tr {
   }
 }
 
-.invisible {
-  visibility: hidden;
-}
-
 .static {
   position: static;
 }
@@ -854,7 +823,6 @@ table tr {
 }
 
 .sticky {
-  position: -webkit-sticky;
   position: sticky;
 }
 
@@ -878,10 +846,6 @@ table tr {
 
 .block {
   display: block;
-}
-
-.inline {
-  display: inline;
 }
 
 .flex {
@@ -908,10 +872,6 @@ table tr {
   width: 1.5rem;
 }
 
-.resize {
-  resize: both;
-}
-
 .flex-col {
   flex-direction: column;
 }
@@ -932,12 +892,6 @@ table tr {
   --tw-space-y-reverse: 0;
   margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));
   margin-bottom: calc(0.5rem * var(--tw-space-y-reverse));
-}
-
-.truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .border-b {
@@ -968,19 +922,14 @@ table tr {
   color: rgb(107 114 128 / var(--tw-text-opacity));
 }
 
-.blur {
-  --tw-blur: blur(8px);
-  filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow);
-}
-
 .filter {
   filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow);
 }
 
 .transition {
-  transition-property: color, background-color, border-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-text-decoration-color, -webkit-backdrop-filter;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-backdrop-filter;
   transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-text-decoration-color, -webkit-backdrop-filter;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-backdrop-filter;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
 }
@@ -1011,12 +960,12 @@ table tr {
     align-items: baseline;
   }
 
-  .md\:gap-2 {
-    gap: 0.5rem;
-  }
-
   .md\:gap-1 {
     gap: 0.25rem;
+  }
+
+  .md\:gap-2 {
+    gap: 0.5rem;
   }
 
   .md\:pb-8 {

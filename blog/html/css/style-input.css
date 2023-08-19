@@ -72,6 +72,11 @@
     @apply text-xs;
   }
 
+  .codehilite {
+ 	  @apply leading-3;
+  }
+  
+
   table {
     @apply w-full table-auto text-sm text-left my-4 border border-gray-200;
   }
