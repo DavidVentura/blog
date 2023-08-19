@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import glob
-import json
 import os
 import re
 import shutil
@@ -46,7 +45,7 @@ class PostMetadata:
 
 def debug(*msg):
     if DEBUG:
-        print(*msg)
+        print(*msg, flush=True)
 
 def convert_f(fname):
     with open(fname, 'r') as fd:
@@ -55,6 +54,13 @@ def convert_f(fname):
 @lru_cache
 def convert(text):
     return md.convert(text)
+
+def files_to_embed(relpath, text):
+    ret = []
+    for match in EMBED_FILE_RE.finditer(text):
+        fname = match.group('fname')
+        ret.append(os.path.join(relpath, fname))
+    return ret
 
 def embed_files(relpath, text):
     match_substr = None
@@ -104,6 +110,7 @@ def main():
 
         md_str = open(post_file, encoding='utf-8').read()
         md_str = embed_files(target, md_str)
+        _files_to_embed = files_to_embed(target, md_str)
         body = convert(md_str)
 
         r = PostMetadata.from_dict(body.metadata)
@@ -117,7 +124,7 @@ def main():
         html_fname = 'blog/html/%s.html' % safe_title
 
         if os.path.isfile(html_fname):
-            if newer(html_fname, [post_file, this_script, BODY_TEMPLATE_FILE]):
+            if newer(html_fname, [post_file, this_script, BODY_TEMPLATE_FILE] + _files_to_embed):
                 debug('Stale file')
                 continue
 
