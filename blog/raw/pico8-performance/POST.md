@@ -1,6 +1,6 @@
 ---
 title: Pico8 console, part 2: performance
-date: 2022-07-24
+date: 2022-07-25
 tags: rp2040, sdl, embedded, pico8, picopico
 description: Improving the performance of my RP2040 based Pico-8 handheld console
 ---
