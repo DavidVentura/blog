@@ -98,12 +98,14 @@ def newer(f1, files):
     return all([mtime(f1) > mtime(x) for x in files])
 
 
-def main():
+def main(filter_name: Optional[str]):
     this_script = __file__
     for target in glob.glob("blog/raw/*"):
         post_file = os.path.join(target, 'POST.md')
         if not os.path.exists(post_file):
             print("Target post file (%s) does not exist" % post_file)
+            continue
+        if filter_name and filter_name.lower() not in post_file.lower():
             continue
 
         debug(target)
@@ -227,6 +229,7 @@ if __name__ == '__main__':
         DEVMODE = True
     for tag in get_all_tags():
         generate_tag_index(tag)
-    main()
+    filter_name = sys.argv[2] if len(sys.argv) > 2 else None
+    main(filter_name)
     generate_index()
     copy_followed()
