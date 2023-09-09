@@ -1,0 +1,328 @@
+---
+title: Pico8 console, part 3: Writing a compiler
+date: 2023-09-03
+tags: c, lua, pico8, picopico
+description: 
+incomplete: true
+---
+
+In [part 2](https://blog.davidv.dev/pico8-console-part-2-performance.html) I was stuck trying to make `Rockets!` work with optimized bytecode; I pursued this for a bit and realized it was probably never going to be fast enough.
+
+
+So I set out to write a compiler.
+
+It was a dumb idea, but it worked.
+
+
+For a proof of concept, I started writing the compiler in C++. I do not really know C++. It was [a terrible idea](https://github.com/DavidVentura/lua-but-worse/blob/7b232ffe9a124c56af5fefccdd4fba6de917cd05/test_cases/metatable/out.cpp).
+
+I got something kinda working, but the parser had the completely wrong abstraction, and the generated C++ was also terribly dumb.
+
+After a while, I decided to ditch that, re-write the parser and output plain C11; the current state of the compiler works for _most_ cases, though there are still some bugs.
+
+A very basic compiler can be thought of as 3 parts:
+
+* Parser: read source code and generate an abstract syntax tree
+* Intermediate representation: Convert the source AST into an AST that is more amenable for the target output
+* Code emitter: generates concrete representation from the AST
+
+## Dealing with types
+
+Lua is a dynamically typed language, with only 6 types:
+
+- Number
+- Nil
+- Table
+- String
+- Boolean
+- Function
+
+and it allows certain operations to span distinct types:
+
+```lua
+a = 1
+b = "hi"
+print(a..b) -- ".." is the concatenation operator
+```
+
+As C is a statically typed language, the type of each argument must be defined in advance.
+Writing/generating functions in C that can take any combination of types would be a tremendous pain, so 
+the way that I'm dealing with this is by using [sum types (a tagged union)](https://en.wikipedia.org/wiki/Tagged_union).
+
+```c
+typedef struct TValue_s {
+	union {
+		uint16_t str_idx;
+		fix32_t num;
+		uint16_t table_idx;
+		Func_t fun;
+	};
+	enum typetag_t tag;
+} TValue_t;
+```
+
+and I'm defining the `typetag_t` type to match the necessary types:
+```c
+enum typetag_t {NUL=0, STR=1, TAB=2, FUN=3, NUM=4, BOOL=5};
+```
+
+Given that now all types are representable by "one type" on their C representation, the type system will happily let us "mix types", as they are just `TValue_t`s.
+
+```c
+function concat(TValue_t a, TValue_t b) {
+/* You can imagine something like
+ * if (a.tag == NUM) {
+ * ...
+ * }
+ */
+}
+```
+
+## First-Class Functions
+
+Lua allows you to do many things that are not really possible to express in C: anonymous functions, closures, optional arguments, etc.
+
+As an example, an anonymous function can be assigned to a variable:
+
+```lua
+a = function()
+...
+end
+```
+
+These semantics have to be transformed into something that's possible to express in C, so in this case we could replace the anonymous function with a named (and obfuscated, to prevent collisions) function
+
+```c
+function __anonymous_function_a() {
+...
+}
+```
+and assigning a TValue wrapper to the local variable
+
+```c
+a = TFUN(__anonymous_function_a);
+```
+
+Apart from having anonymous functions, all arguments that a function declares in its signature are optional:
+```lua
+function f(a,b,c,d)
+  print(a)
+end
+f()
+```
+
+Any value that's not passed in, will be `nil`.
+
+On top of _that_, you can also pass extra arguments to functions:
+```lua
+function f()
+end
+f(1,2,3,4)
+```
+
+To deal with this, I wrote the following calling convention:
+
+All functions receive a single argument of type `TVSlice_t` (a slice being an array of `TValue` + an explicit `length` field).
+
+You can imagine that all calls end up looking like
+
+```c
+void f(TVSlice_t arguments) {
+// ...
+}
+
+f((TVSlice_t){.elems=NULL, length=0}); // equivalent of f()
+f((TVSlice_t){.elems=(TValue_t[]){1}, length=1}); // equivalent of f(1)
+// ...
+```
+
+And to deal with the possibility of missing arguments, the function itself is rewritten as
+```c
+// Equivalent of function f(a,b,c,d) .. end
+void f(TVSlice_t arguments) {
+    TValue_t a = __get_arg(arguments, 0);
+    TValue_t b = __get_arg(arguments, 1);
+    TValue_t c = __get_arg(arguments, 2);
+    TValue_t d = __get_arg(arguments, 3);
+}
+```
+
+where `__get_arg` will return `nil` if there were not enough arguments passed in.
+
+### Closures
+
+Lua's functions are allowed to enclose values from their context/scope, even after the context has exited. This is usually called a `closure`.
+
+In the most basic case,
+```lua
+local captured = 7
+a = function()
+  return captured
+end
+a()
+```
+
+we "capture" values that are defined _outside_ the function itself.  This is mildly problematic, as there's nothing similar to this in C.
+
+What I did is to transform all closures into "regular" functions in a few steps:
+
+First, make the captured arguments an explicit table
+```lua
+local captured = 7
+a = function(captured_args)
+  return captured_args.captured
+end
+a()
+```
+
+This obviously fails, the argument is now explicit and we are not passing it in, so in the following AST transformation pass, we pass all the necessary captured arguments in a temporary table:
+
+```lua
+local captured = 7
+a = function(captured_args)
+  return captured_args.captured
+end
+_env_for_a = {captured=captured}
+a(_env_for_a)
+```
+
+This representation is fairly trivial, but it took me quite a bit to understand the scoping rules of what gets captured, how and when.
+
+When a variable (`captured`) is not defined in local scope, walk the scopes upwards, looking for the `captured` node as either:
+  - a `LocalAssign` AST node (`local captured`)
+  - a function's `Argument` (`function f(captured) ... end`)
+  - an `Assign` node in the global scope (`captured = 7`)
+
+If we combine this with standard function arguments, a secret, extra argument named `lambda_args` is added:
+
+```lua
+local captured = 7
+a = function(some_arg)
+  return captured*some_arg
+end
+a(5)
+```
+
+becomes
+
+```c
+TValue_t captured = 7;
+
+void a(TVSlice_t arguments) {
+  TValue_t some_arg    = __get_arg(arguments, 0);
+  TValue_t lambda_args = __get_arg(arguments, 1);
+  TValue_t captured    = get_tabvalue(lambda_args, "captured");
+  // equivalent of `lambda_args.captured`
+
+  return some_arg * captured;
+}
+
+TValue_t lambda_args = make_table();
+set_tabvalue(lambda_args, "captured", captured);
+a((TVSlice_t){.elems=(TValue_t[]){5, lambda_args}, length=2});
+// equivalent of a(5, {captured=captured})
+```
+
+## Memory management
+
+### Garbage collection
+
+`__attribute__((cleanup))`
+
+not enough for intermediate, allocating values. only `tostring` for now
+
+### Refcounting
+
+
+---
+When moving the transformations to the AST level, I ended up with a bunch of passes to update the AST to be more amenable to generating C.
+
+Some are necessary, such as:
+
+```python
+def transform_anonymous_functions(tree): -> None
+      """
+      Rewrite AnonymousFunction (`a = function() ... end`) into:
+      ```
+      function __anonymous_function_a_1(...) ... end
+      a = TFUN(__anonymous_function_a_1)
+      ```
+      """
+	  ...
+
+def transform_table_functions(tree):
+    """
+    Rewrite table-based functions (`function tab.fn() ... end`) into:
+    ```
+    function __table_function_tab_fn(...) ... end
+    tab.fn = TFUN(__table_function_tab_fn)
+    ```
+    """
+	...
+
+
+def transform_methods(tree):
+    """
+    Rewrite methods (`function tab:method() ... end`) into:
+    ```
+    function __tab_method(...) ... end
+    tab["method"] = __tab_method
+    ```
+
+    And method calls (`tab:method(arg)`) into table calls with a self-argument and an argument array:
+
+    ```
+    tab['method'](tab, {arg})
+    ```
+    """
+
+```
+
+Successive passes will update the table accesses based on being reads/writes to specialized `SetTabValue`/`GetTabValue` nodes.
+
+## Optimization passes
+
+
+There are also some optimization passes, for example
+
+```python
+def ensure_table_fields(tree):
+    """
+    Ensure that every Table is created with sufficient capacity for known keys
+    ```
+    a = {}
+    a.b = 5
+    ```
+    =>
+    ```
+    a = make_table(1) // 1 as field b is known statically
+    ```
+    """
+```
+
+or
+```python
+def const_strings(tree):
+    """
+    Replaces all literal strings ("string_1") with StringRef("string_1")
+    Also Table fields ({"a"=5})
+    And Index access by name (a.b)
+    """
+```
+Later, all `StringRef` instances will be emitted in such a way to be interned on startup, removing runtime cost.
+
+## Writing a stdlib
+
+## Testing
+
+## Pain
+
+Currently-broken nested closures with different scopes
+
+## It works
+
+Output .so though
+
+## The future
+
+Figure out the loader bit, more tests, make Rockets fully work
