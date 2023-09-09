@@ -225,13 +225,61 @@ a((TVSlice_t){.elems=(TValue_t[]){5, lambda_args}, length=2});
 
 ## Memory management
 
-### Garbage collection
+In Lua, memory management is automatic; there's a garbage collector which visits all objects and decides whether they need to be cleaned up. The user of Lua does not have to think about managing memory in any way.
 
-`__attribute__((cleanup))`
+This is notoriously different from C, where any heap allocation must be explicitly freed by the programmer.
 
+I didn't want to implement a garbage collector, as I thought that it's unlikely to help much; Lua handles simple types by value (Number, Boolean, Nil) and complex ones (String, Table) by reference.
+
+Having automatic reference counting for complex values should be sufficient for _most_ cases
+
+
+### Reference counting
+
+Reference counting is very simple: whenever an object is referenced, its internal counter goes up; and whenever it stops being referenced somewhere, its internal counter goes down.
+When the counter reaches zero, the object should be destroyed.
+
+As an example:
+
+```lua
+table = {} -- the anonymous table `{}` is now being referenced by the `table` variable; it's internal counter is now 1.
+other_table = table -- now `{}` has a refcount of 2
+table = 5 -- `{}` is no longer referenced by table, it's counter is down to 1
+other_table = 5 -- `{}` is not referenced anywhere, it can be cleaned up
+```
+
+The way that I've implemented this is very straight forward, whenever doing a `set` operation (variable assignment):
+
+1. The source (right-hand-side value) has its counter increased
+2. The destination (left-hand-side value), if non-nil, has its counter decreased
+
+This is great! Most of the work is done. The only remaining thing to solve is variables going out of scope:
+
+```
+function a()
+  table = {}
+end
+-- `{}` is no longer referenced by `table`, as `table` is no longer in scope 
+```
+
+C11 provides a way to _automatically_ execute a function whenever a variable goes out of scope, the `cleanup` attribute. This attribute is placed _on_ the variable, and references a function to run:
+
+```c
+void decref(TValue_t* ptr) {
+  // *ptr is going out of scope, do something with it, like
+  ptr->refcount--;
+  if (ptr->refcount == 0) free(ptr->data);
+}
+void main() {
+  TValue_t __attribute__((cleanup(decref))) my_var;
+}
+```
+
+This approach has been sufficient for _most_ things, except:
+
+- Returning values  go out of scope
+- Intermediate allocations (`tostring`)
 not enough for intermediate, allocating values. only `tostring` for now
-
-### Refcounting
 
 
 ---
@@ -326,3 +374,12 @@ Output .so though
 ## The future
 
 Figure out the loader bit, more tests, make Rockets fully work
+
+
+### Some references
+
+- [Lua AOT 5.4](https://github.com/hugomg/lua-aot-5.4)
+- [Linkers blog series](https://www.airs.com/blog/archives/42)
+- [ELF from scratch](https://www.conradk.com/elf-from-scratch/)
+- [PLT and GOT](https://www.technovelty.org/linux/plt-and-got-the-key-to-code-sharing-and-dynamic-libraries.html)
+- [GCC builtins](https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html)
