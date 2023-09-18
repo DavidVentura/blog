@@ -385,3 +385,9 @@ fn main() {
     .unwrap();
 }
 ```
+
+
+# Final result
+
+<video controls="true"><source src="videos/kindle_light.mp4"></video>
+
