@@ -73,8 +73,11 @@ def embed_files(relpath, text):
     return text
 
 def generate_header(metadata: PostMetadata):
+    title = metadata.title
+    if metadata.incomplete:
+        title = f"[DRAFT] {metadata.title}"
     template = Template('<h1>{{ title }}</h1>')
-    return template.render(asdict(metadata))
+    return template.render(title=title)
 
 
 def generate_post(header, body, title, tags, description, date):
