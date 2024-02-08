@@ -167,7 +167,7 @@ I don't really know where the other ~12ms come from.
 
 **Boot time: 12.4ms**
 
-### On memory sizing
+### On memory sizes
 
 I noticed that the boot time went up significantly when assigning larger memory sizes to the VM: 
 <center>![](/images/minimizing-linux-boot-times/boot_time_vs_memory_size_4k.png)</center>
@@ -227,15 +227,11 @@ Luckily, there's another way to reduce page faults: using 2MB pages!
 I made a [simple patch](https://github.com/DavidVentura/firecracker/commit/6f14487e4642fc7a369016edcea9935d6e547677) for Firecracker to allow specifying whether the VM's memory should be backed
 by huge pages or not, and the boot time looks promising:
 
-<center>
-![](/images/minimizing-linux-boot-times/boot_time_hugepages.png)
-</center>
+<center>![](/images/minimizing-linux-boot-times/boot_time_hugepages.png)</center>
 
 and the time spent in the VMM is even reduced! Though I'm not sure why.
 
-<center>
-![](/images/minimizing-linux-boot-times/boot_and_vm_creation_hugepages.png)
-</center>
+<center>![](/images/minimizing-linux-boot-times/boot_and_vm_creation_hugepages.png)</center>
 
 For a simple hello-world program, only 11 hugepages were touched:
 
@@ -249,6 +245,27 @@ $ cat /sys/kernel/mm/hugepages/hugepages-2048kB/free_hugepages
 
 **Boot time: 8.06ms**
 
-We are solidly under 10ms so I'm going to call it quits -
+### On the VMM time
+
+Analyzing Firecracker is now interesting, as it _dominates_ the time to launch a VM. It's weird, calling `kvm.create_vm()` takes a very variable amount of time, with some executions at ~0ms and some taking up to 40ms.
+`kvm.create_vm()` is effectively just calling `ioctl(18, KVM_CREATE_VM, 0)` and `strace` confirms that this randomly takes 20+ms
+
+<center>![](/images/minimizing-linux-boot-times/vmm_creation_variance.png)</center>
+
+When looking up `KVM_CREATE_VM slow`, I found [this](https://github.com/firecracker-microvm/firecracker/issues/2129) Firecracker issue, which led me to [this](https://github.com/firecracker-microvm/firecracker/blob/main/docs/prod-host-setup.md#linux-61-boot-time-regressions) documentation page; with the Cgroups settings changed, the time to call the `ioctl` goes down:
+
+<center>![](/images/minimizing-linux-boot-times/boot_and_vm_creation_cgroups_hugepages.png)</center>
+
+
+**Final boot time: 8.06ms**
+
+**Final boot time (with VM Creation): 11.06ms**
+
+### Other
+
+I didn't really know of any tools to measure boot times precisely, I'd have loved to somehow get a flamegraph of where time is being spent during boot (and early boot!). All of the analysis I did on these was basically achieved by placing prints and measuring time it took to get to them.
+
+The scripts used to run, measure & graph the VM startup times live [here](https://github.com/DavidVentura/blog/tree/master/blog/raw/minimizing-linux-boot-times), along with the data used to generate them.
+
 
 [^1]: Why is the exit code shifted left?
