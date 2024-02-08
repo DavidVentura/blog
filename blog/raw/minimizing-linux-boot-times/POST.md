@@ -31,6 +31,8 @@ The testing environment consists of:
 - A "default-sized" VM: 1 vCPU and 128MB RAM 
 
 
+## Running an init program
+
 To start, I built the most minimal C program which could show some signs of life
 
 ```c
@@ -58,7 +60,8 @@ Hello!
 
 Success!
 
-As I don't really want to write my userspace applications in C, I prepared a demo Golang program:
+## Running a _cooler_ init program
+As I don't really want to write my userspace applications in C, I wrote an equivalent program in Go:
 ```go
 package main
 
@@ -73,13 +76,12 @@ func main() {
 }
 ```
 
-But when I set it up as init I would just get 
+But it really was not having any of this:
 ```
-Kernel panic - not syncing: Requested init /goinit failed (error -8).
+Kernel panic - not syncing: Requested init /goinit failed (error ENOEXEC).
 ```
-Where -8 is `ENOEXEC`: Exec format error
 
-After enabling `CONFIG_IA32_EMULATION` I got a "way better" result:
+The file itself had the executable bit set in the filesystem, so it must be something else; after enabling `CONFIG_IA32_EMULATION` I got a "way better" result:
 ```
 futexwakeup addr=0x815ba50 returned -38
 SIGSEGV: segmentation violation
@@ -98,11 +100,11 @@ runtime.park_m(0x9406600)
     /home/david/.bin/go/src/runtime/proc.go:3745 +0x167 fp=0x9437fd8 sp=0x9437fbc pc=0x8085237
 runtime.mcall()
     /home/david/.bin/go/src/runtime/asm_386.s:329 +0x44 fp=0x9437fe0 sp=0x9437fd8 pc=0x80a5ed4
+...
 ```
 
-At least the runtime starts, though clearly it's missing something.
+At least the runtime starts, though it's clearly unhappy, so I ran this program under a static build of `strace` (yes, `strace` as pid 1, we live in wild times!)
 
-I ran this program under `strace -f` and got
 ```
 futex(0x815ba50, FUTEX_WAIT_PRIVATE, 0, NULL) = -1 ENOSYS (Function not implemented)
 ```
@@ -120,6 +122,7 @@ Hello Go!
 **Boot time: 38.5ms**.
 
 ### Talking to the outside world
+
 A VM that can't talk to anything else is no fun, so we can set a [static IP configuration](https://docs.kernel.org/admin-guide/nfs/nfsroot.html) in the kernel command line by passing
 ```
 ip=172.16.0.2::172.16.0.1:255.255.255.0:hostname:eth0:off
@@ -154,25 +157,29 @@ right before the IP auto-configuration. I [made a patch](https://github.com/Davi
 ### On core counts
 
 It seems like boot time goes up by roughly 2.5ms per existing core:
-<center>![](/images/minimizing-linux-boot-times/boot_time_vs_vcpu_count_smp.png)</center>
+<center>![](/images/minimizing-linux-boot-times/boot_time_vs_vcpu_count_smp.svg)</center>
 
 What if we remove the handling of multiple cores altogether? By disabling SMP, the usable cores on a system is capped to 1, but that doesn't
 matter for ther 1 vCPU / 128MB VM that we are benchmarking:
 
-<center>![](/images/minimizing-linux-boot-times/boot_time_vs_vcpu_count_no_smp.png)</center>
+<center>![](/images/minimizing-linux-boot-times/boot_time_vs_vcpu_count_no_smp.svg)</center>
 
-I've tried to dig into what's taking so long and found that 14ms come from 2 `rcu_barrier` calls, one initiates from `mark_rodata_ro` and one from enabling `AF_INET`.
+That's a **big** difference, I tried to dig into what's taking so long, but couldn't explain why the difference is so lage, I found:
+- 14ms from 2 `rcu_barrier` calls
+  - one initiates from `mark_rodata_ro`
+  - one from enabling `AF_INET`
+- 1ms extra on `cpu_init`
 
-I don't really know where the other ~12ms come from.
+I don't really know where the other ~12ms come from, but I'm not complaining about a free speedup.
 
 **Boot time: 12.4ms**
 
 ### On memory sizes
 
-I noticed that the boot time went up significantly when assigning larger memory sizes to the VM: 
-<center>![](/images/minimizing-linux-boot-times/boot_time_vs_memory_size_4k.png)</center>
+The boot time goes up significantly when assigning more memory to the VM: 
+<center>![](/images/minimizing-linux-boot-times/boot_time_vs_memory_size_4k.svg)</center>
 
-As the only difference between these was the memory size, the time was spent setting up the kernel's page structures, which didn't make any sense to me.
+As the only difference between these was the memory size, the time _must_ be getting spent setting up the kernel's page structures, which didn't make any sense to me.
 
 This is the kernel code that's called in a loop to initialize the page structures:
 ```c
@@ -195,9 +202,11 @@ void __meminit __init_single_page(struct page *page, unsigned long pfn,
 }
 ```
 
-If I replaced this function with one that did nothing, the time necessary to set up the page structures went back to "fast" (and the kernel immediately panic'd, which is fine).
+If I replaced this function with an empty stub, the bootup time remained flat, regardless of memory size (and the kernel immediately panic'd, which is reasonable).
 
-As soon as _anything_ was done to `page`, the execution time shot back up, so this was not time spent processing, but triggered by merely accessing the memory. Could it be page faulting on the host?
+As soon as _anything_ was done to `page`, the execution time shot back up, so this was not time spent processing, but triggered by merely accessing the memory.
+
+Could it be page faulting on the host?
 
 At this point I went to look at how Firecracker backs the guest's memory and it's [just a memory map](https://github.com/firecracker-microvm/firecracker/blob/4f19254474a296ecc1b78fd3444c303ac4922728/src/vmm/src/vstate/memory.rs#L185) but notably, these are the flags passed:
 
@@ -214,26 +223,22 @@ To validate my hypothesis about the delays being caused by page faults, I added 
 
 This brought the boot time down by 4ms at 128MB sizes, which confirms that we were spending significant time page-faulting.
 
-<center>![](/images/minimizing-linux-boot-times/boot_time_with_populate.png)</center>
+<center>![](/images/minimizing-linux-boot-times/boot_time_with_populate.svg)</center>
 
 However.. the time to create the VM itself went up.. a lot:
 
-<center>![](/images/minimizing-linux-boot-times/boot_and_vm_creation_populate.png)</center>
+<center>![](/images/minimizing-linux-boot-times/boot_and_vm_creation_populate.svg)</center>
 
-This doesn't really help - while the kernel boot time goes down, the wall time to launch the VM goes **up**.
+This doesn't really help - while the kernel boot time goes down, the total time to launch the VM goes way up.
 
 Luckily, there's another way to reduce page faults: using 2MB pages!
 
 I made a [simple patch](https://github.com/DavidVentura/firecracker/commit/6f14487e4642fc7a369016edcea9935d6e547677) for Firecracker to allow specifying whether the VM's memory should be backed
 by huge pages or not, and the boot time looks promising:
 
-<center>![](/images/minimizing-linux-boot-times/boot_time_hugepages.png)</center>
+<center>![](/images/minimizing-linux-boot-times/boot_time_hugepages.svg)</center>
 
-and the time spent in the VMM is even reduced! Though I'm not sure why.
-
-<center>![](/images/minimizing-linux-boot-times/boot_and_vm_creation_hugepages.png)</center>
-
-For a simple hello-world program, only 11 hugepages were touched:
+I looked at actual memory usage on a 128MB instance and only 11 hugepages were touched:
 
 ```bash
 $ cat /sys/kernel/mm/hugepages/hugepages-2048kB/free_hugepages 
@@ -243,18 +248,28 @@ $ cat /sys/kernel/mm/hugepages/hugepages-2048kB/free_hugepages
 1013
 ```
 
+This would've been _at most_ 5632 (2MB / 4KB * 11 pages) page faults, which explains the 4ms.
+
+As a cherry on top, the time spent in the VMM went down, though I'm not sure why
+
+<center>![](/images/minimizing-linux-boot-times/boot_and_vm_creation_hugepages.svg)</center>
+
+
 **Boot time: 8.06ms**
 
 ### On the VMM time
 
 Analyzing Firecracker is now interesting, as it _dominates_ the time to launch a VM. It's weird, calling `kvm.create_vm()` takes a very variable amount of time, with some executions at ~0ms and some taking up to 40ms.
-`kvm.create_vm()` is effectively just calling `ioctl(18, KVM_CREATE_VM, 0)` and `strace` confirms that this randomly takes 20+ms
+`kvm.create_vm()` is effectively just calling `ioctl(18, KVM_CREATE_VM, 0)` and `strace` confirms that this ioctl randomly takes 20~40ms
 
-<center>![](/images/minimizing-linux-boot-times/vmm_creation_variance.png)</center>
+The distribution of the duration of these calls is just _weird_:
+<center>![](/images/minimizing-linux-boot-times/vmm_creation_variance.svg)</center>
 
-When looking up `KVM_CREATE_VM slow`, I found [this](https://github.com/firecracker-microvm/firecracker/issues/2129) Firecracker issue, which led me to [this](https://github.com/firecracker-microvm/firecracker/blob/main/docs/prod-host-setup.md#linux-61-boot-time-regressions) documentation page; with the Cgroups settings changed, the time to call the `ioctl` goes down:
+When looking up `KVM_CREATE_VM slow`, I found [this](https://github.com/firecracker-microvm/firecracker/issues/2129) Firecracker issue, which led me to [this](https://github.com/firecracker-microvm/firecracker/blob/main/docs/prod-host-setup.md#linux-61-boot-time-regressions) documentation page; which suggests mounting cgroups with the `favordynmods` flags.
 
-<center>![](/images/minimizing-linux-boot-times/boot_and_vm_creation_cgroups_hugepages.png)</center>
+When applying the flag, the duration of the `ioctl` calls goes down consistently:
+
+<center>![](/images/minimizing-linux-boot-times/boot_and_vm_creation_cgroups_hugepages.svg)</center>
 
 
 **Final boot time: 8.06ms**

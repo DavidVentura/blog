@@ -31,17 +31,17 @@ def render_scatter_vmm_time():
 
     x = list(range(0, len(data)))
 
-    _, axs = plt.subplots(1, 2, figsize=(10, 4), sharex=True)
-    axs[0].set_title("Sorted by execution time")
+    _, axs = plt.subplots(1, 2, figsize=(8, 4), sharex=True)
+    axs[0].set_title("Unsorted")
     axs[0].scatter(x, data)
     #axs[0][1].scatter(x, data_4k)
     axs[0].set_ylabel('ms')
     #axs[0][1].set_ylabel('ms')
 
-    axs[1].set_title("Sorted by runtime")
+    axs[1].set_title("Sorted by call duration")
     axs[1].scatter(x, sorted(data))
     #axs[1][1].scatter(x, sorted(data_4k))
-    plt.xlabel('Execution #')
+    #plt.xlabel('Execution #')
     return plt
 
 def render_lineplot(series: list, label="Memory Size (MB)", xticks=None, ymax=None):
@@ -50,7 +50,6 @@ def render_lineplot(series: list, label="Memory Size (MB)", xticks=None, ymax=No
         plt.plot(s['vm_sizes'], s['times'], marker='o', linestyle='-', label=s['label'])
     plt.xlabel(label)
     plt.ylabel("Time to Boot (ms)")
-    plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
     plt.grid(True)
     plt.ylim(ymin=0)
     if ymax is not None:
@@ -58,6 +57,8 @@ def render_lineplot(series: list, label="Memory Size (MB)", xticks=None, ymax=No
     if xticks is not None:
         plt.xticks(xticks)
     plt.legend()
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.95) # default is 0.9, otherwise title is cropped
 
     return plt
 
@@ -116,35 +117,35 @@ plot = render_lineplot([
     {**transform(smp_cpu, 'kernel_boot'), 'label': 'Baseline'},
     ], label="vCPU count", xticks=[1,2,3,4], ymax=60)
 plot.title("Kernel Boot time vs vCPU count (128MB)")
-plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_time_vs_vcpu_count_smp.png", format="png")
+plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_time_vs_vcpu_count_smp.svg", format="svg")
 
 plot = render_lineplot([
     {**transform(smp_cpu, 'kernel_boot'), 'label': 'SMP'},
     {**transform(no_smp_cpu, 'kernel_boot'), 'label': 'No-SMP'},
     ], label="vCPU count", xticks=[1,2,3,4], ymax=60)
 plot.title("Kernel Boot time vs vCPU count (128MB)")
-plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_time_vs_vcpu_count_no_smp.png", format="png")
+plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_time_vs_vcpu_count_no_smp.svg", format="svg")
 
 
 plot = render_lineplot([
     {**transform(baseline, 'kernel_boot'), 'label': 'Baseline'},
     ])
 plot.title("Kernel Boot time vs Memory usage")
-plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_time_vs_memory_size_4k.png", format="png")
+plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_time_vs_memory_size_4k.svg", format="svg")
 
 plot = render_lineplot([
     {**transform(baseline, 'kernel_boot'), 'label': 'Baseline'},
     {**transform(populated_4k, 'kernel_boot'), 'label': 'MAP_POPULATE'},
     ])
 plot.title("Kernel Boot time with MAP_POPULATE")
-plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_time_with_populate.png", format="png")
+plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_time_with_populate.svg", format="svg")
 
 plot = render_stacked_bar_chart([
     {**baseline, 'label': 'Baseline'},
     {**populated_4k, 'label': 'MAP_POPULATE'},
     ], ymax=450)
 plot.title("MAP_POPULATE")
-plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_and_vm_creation_populate.png", format="png")
+plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_and_vm_creation_populate.svg", format="svg")
 
 
 plot = render_lineplot([
@@ -153,14 +154,14 @@ plot = render_lineplot([
     ])
 
 plot.title("Kernel Boot time with hugepages")
-plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_time_hugepages.png", format="png")
+plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_time_hugepages.svg", format="svg")
 
 plot = render_stacked_bar_chart([
     {**baseline, 'label': 'Baseline'},
     {**normal_huge, 'label': 'Hugepages (2MB)'},
     ], ymax=80)
 
-plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_and_vm_creation_hugepages.png", format="png")
+plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_and_vm_creation_hugepages.svg", format="svg")
 
 
 plot = render_stacked_bar_chart([
@@ -168,7 +169,7 @@ plot = render_stacked_bar_chart([
     {**cgroups_fast_huge, 'label': 'Hugepages (2MB) + favordynmods'},
     ], ymax=50)
 
-plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_and_vm_creation_cgroups_hugepages.png", format="png")
+plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_and_vm_creation_cgroups_hugepages.svg", format="svg")
 
 plot = render_scatter_vmm_time()
-plot.savefig("blog/html/images/minimizing-linux-boot-times/vmm_creation_variance.png", format="png")
+plot.savefig("blog/html/images/minimizing-linux-boot-times/vmm_creation_variance.svg", format="svg", bbox_inches='tight')
