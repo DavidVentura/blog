@@ -119,7 +119,7 @@ Hello Go!
 [    0.005732] Kernel panic - not syncing: Attempted to kill init! exitcode=0x00000500
 ```
 
-**Boot time: 38.5ms**.
+**Boot time: 35.2ms**.
 
 ### Talking to the outside world
 
@@ -139,7 +139,7 @@ PING 172.16.0.2 (172.16.0.2) 56(84) bytes of data.
 64 bytes from 172.16.0.2: icmp_seq=4 ttl=64 time=0.273 ms
 ```
 
-**Boot time: 58.7ms**. Huh?! How could configuring a static IP take 20ms??
+**Boot time: 55.6ms**. Huh?! How could configuring a static IP take 20ms??
 
 Looking at [kernel sources](https://github.com/torvalds/linux/blob/v6.7/net/ipv4/ipconfig.c#L1519) I found
 
@@ -152,7 +152,7 @@ msleep(CONF_POST_OPEN);
 right before the IP auto-configuration. I [made a patch](https://github.com/DavidVentura/fast-kernel-boot/blob/master/linux_sleep.patch) to disable this, and the regression went away.
 
 
-**Boot time: 38.7ms**.
+**Boot time: 35.3ms**.
 
 ### On core counts
 
@@ -166,13 +166,13 @@ matter for ther 1 vCPU / 128MB VM that we are benchmarking:
 
 That's a **big** difference, I tried to dig into what's taking so long, but couldn't explain why the difference is so lage, I found:
 - 14ms from 2 `rcu_barrier` calls
-  - one initiates from `mark_rodata_ro`
-  - one from enabling `AF_INET`
+  - one from `mark_rodata_ro`
+  - one from `ipv4_offload_init`
 - 1ms extra on `cpu_init`
 
 I don't really know where the other ~12ms come from, but I'm not complaining about a free speedup.
 
-**Boot time: 12.4ms**
+**Boot time: 9.1ms**
 
 ### On memory sizes
 
@@ -248,14 +248,14 @@ $ cat /sys/kernel/mm/hugepages/hugepages-2048kB/free_hugepages
 1013
 ```
 
-This would've been _at most_ 5632 (2MB / 4KB * 11 pages) page faults, which explains the 4ms.
+This would've been _at most_ 5632 (2MB / 4KB * 11 pages) page faults, which explains the 3ms.
 
 As a cherry on top, the time spent in the VMM went down, though I'm not sure why
 
 <center>![](/images/minimizing-linux-boot-times/boot_and_vm_creation_hugepages.svg)</center>
 
 
-**Boot time: 8.06ms**
+**Boot time: 5.94ms**
 
 ### On the VMM time
 
@@ -272,9 +272,9 @@ When applying the flag, the duration of the `ioctl` calls goes down consistently
 <center>![](/images/minimizing-linux-boot-times/boot_and_vm_creation_cgroups_hugepages.svg)</center>
 
 
-**Final boot time: 8.06ms**
+**Final boot time: 6.0ms**
 
-**Final boot time (with VM Creation): 11.06ms**
+**Final boot time (with VM Creation): 8.9ms**
 
 ### Other
 

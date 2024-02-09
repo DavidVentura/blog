@@ -1,120 +1,120 @@
 {
     "base_res": {
-        "kernel_boot": 38.617566666666654,
-        "vm_creation": 42.6228,
-        "total_time": 81.24036666666666
+        "kernel_boot": 35.21256666666668,
+        "vm_creation": 39.097366666666666,
+        "total_time": 74.30993333333335
     },
     "net_res": {
-        "kernel_boot": 58.950933333333325,
-        "vm_creation": 43.010933333333334,
-        "total_time": 101.96186666666665
+        "kernel_boot": 55.60369999999998,
+        "vm_creation": 40.89853333333333,
+        "total_time": 96.50223333333332
     },
     "populate": {
         "./firecracker-pages-populate": {
             "4KB": {
                 "128": {
-                    "kernel_boot": 11.061799999999998,
-                    "vm_creation": 70.50636666666668,
-                    "total_time": 81.56816666666668
+                    "kernel_boot": 8.035233333333334,
+                    "vm_creation": 54.212866666666656,
+                    "total_time": 62.248099999999994
                 },
                 "1024": {
-                    "kernel_boot": 17.29286666666667,
-                    "vm_creation": 230.65813333333335,
-                    "total_time": 247.95100000000002
+                    "kernel_boot": 13.015766666666662,
+                    "vm_creation": 184.70053333333334,
+                    "total_time": 197.7163
                 },
                 "2048": {
-                    "kernel_boot": 23.718766666666667,
-                    "vm_creation": 407.47083333333325,
-                    "total_time": 431.1895999999999
+                    "kernel_boot": 19.38783333333333,
+                    "vm_creation": 346.0494333333334,
+                    "total_time": 365.43726666666674
                 }
             },
             "2MB": {
                 "128": {
-                    "kernel_boot": 7.910333333333335,
-                    "vm_creation": 41.80493333333333,
-                    "total_time": 49.715266666666665
+                    "kernel_boot": 5.162099999999999,
+                    "vm_creation": 39.108133333333335,
+                    "total_time": 44.27023333333334
                 },
                 "1024": {
-                    "kernel_boot": 9.724366666666668,
-                    "vm_creation": 105.98006666666666,
-                    "total_time": 115.70443333333333
+                    "kernel_boot": 6.576433333333335,
+                    "vm_creation": 105.03893333333332,
+                    "total_time": 111.61536666666666
                 },
                 "2048": {
-                    "kernel_boot": 11.903699999999999,
-                    "vm_creation": 179.11773333333332,
-                    "total_time": 191.0214333333333
+                    "kernel_boot": 8.912433333333333,
+                    "vm_creation": 179.43573333333336,
+                    "total_time": 188.34816666666669
                 }
             }
         },
         "./firecracker-apipages": {
             "4KB": {
                 "128": {
-                    "kernel_boot": 12.200833333333337,
-                    "vm_creation": 32.106433333333335,
-                    "total_time": 44.30726666666667
+                    "kernel_boot": 8.7548,
+                    "vm_creation": 21.499433333333336,
+                    "total_time": 30.254233333333335
                 },
                 "1024": {
-                    "kernel_boot": 20.5141,
-                    "vm_creation": 40.612,
-                    "total_time": 61.1261
+                    "kernel_boot": 16.9152,
+                    "vm_creation": 38.044399999999996,
+                    "total_time": 54.959599999999995
                 },
                 "2048": {
-                    "kernel_boot": 30.03466666666667,
-                    "vm_creation": 41.60040000000001,
-                    "total_time": 71.63506666666667
+                    "kernel_boot": 25.07083333333333,
+                    "vm_creation": 40.84676666666667,
+                    "total_time": 65.9176
                 }
             },
             "2MB": {
                 "128": {
-                    "kernel_boot": 8.669033333333335,
-                    "vm_creation": 31.215733333333336,
-                    "total_time": 39.88476666666667
+                    "kernel_boot": 5.947566666666669,
+                    "vm_creation": 19.3345,
+                    "total_time": 25.282066666666665
                 },
                 "1024": {
-                    "kernel_boot": 11.121799999999999,
-                    "vm_creation": 28.980066666666666,
-                    "total_time": 40.101866666666666
+                    "kernel_boot": 7.948499999999999,
+                    "vm_creation": 25.886866666666663,
+                    "total_time": 33.83536666666666
                 },
                 "2048": {
-                    "kernel_boot": 13.888499999999997,
-                    "vm_creation": 29.505999999999997,
-                    "total_time": 43.394499999999994
+                    "kernel_boot": 11.094266666666663,
+                    "vm_creation": 22.177666666666667,
+                    "total_time": 33.27193333333333
                 }
             }
         }
     },
     "no_smp": {
         "1": {
-            "kernel_boot": 12.379166666666666,
-            "vm_creation": 32.43106666666666,
-            "total_time": 44.81023333333333
+            "kernel_boot": 9.098700000000001,
+            "vm_creation": 33.55283333333333,
+            "total_time": 42.65153333333333
         },
         "2": {
-            "kernel_boot": 12.404833333333336,
-            "vm_creation": 28.939999999999998,
-            "total_time": 41.344833333333334
+            "kernel_boot": 8.744499999999999,
+            "vm_creation": 22.7936,
+            "total_time": 31.5381
         },
         "4": {
-            "kernel_boot": 11.906266666666669,
-            "vm_creation": 43.9893,
-            "total_time": 55.89556666666667
+            "kernel_boot": 8.3887,
+            "vm_creation": 11.745633333333334,
+            "total_time": 20.134333333333334
         }
     },
     "smp": {
         "1": {
-            "kernel_boot": 38.970499999999994,
-            "vm_creation": 43.44866666666666,
-            "total_time": 82.41916666666665
+            "kernel_boot": 35.543533333333336,
+            "vm_creation": 40.09546666666666,
+            "total_time": 75.639
         },
         "2": {
-            "kernel_boot": 42.97503333333332,
-            "vm_creation": 42.08823333333333,
-            "total_time": 85.06326666666665
+            "kernel_boot": 38.913999999999994,
+            "vm_creation": 39.291766666666675,
+            "total_time": 78.20576666666668
         },
         "4": {
-            "kernel_boot": 49.489900000000006,
-            "vm_creation": 42.45006666666668,
-            "total_time": 91.93996666666669
+            "kernel_boot": 46.311266666666675,
+            "vm_creation": 37.70216666666666,
+            "total_time": 84.01343333333334
         }
     }
 }

@@ -25,7 +25,8 @@ def run(rc: RunConfig):
     fc_config = {
       "boot-source": {
         "kernel_image_path": rc.kernel,
-        "boot_args": f"earlyprintk=serial,ttyS0 console=ttyS0,115200 panic=-1 reboot=t no_timer_check printk.time=1  cryptomgr.notests tsc=reliable 8250.nr_uarts=1 iommu=off pci=off mitigations=off root=/dev/vda {rc.cmdline_extra} quiet init=/magic"
+        # earlyprintk=serial,ttyS0 = some millis?
+        "boot_args": f"console=ttyS0,115200 panic=-1 reboot=t no_timer_check cryptomgr.notests tsc=reliable 8250.nr_uarts=1 iommu=off pci=off mitigations=off root=/dev/vda {rc.cmdline_extra} quiet init=/magic"
       },
       "machine-config": {
         "vcpu_count": rc.vcpu,
@@ -119,7 +120,7 @@ def run_with_slow_cgroups():
                                              mem=128,
                                              vcpu=cores,
                                              hugepages=False,
-                                             cmdline_extra=_ipcfg))
+                                             cmdline_extra=f'{_ipcfg}'))
 
     # -smp
     no_smp_res = {}
@@ -129,7 +130,7 @@ def run_with_slow_cgroups():
                                         mem=128,
                                         vcpu=cores,
                                         hugepages=False,
-                                        cmdline_extra=_ipcfg))
+                                        cmdline_extra=f'{_ipcfg}'))
     # +populate
     populate = {}
     for vmm in ['./firecracker-pages-populate', './firecracker-apipages']:
@@ -143,7 +144,7 @@ def run_with_slow_cgroups():
                                                          mem=memsize,
                                                          vcpu=1,
                                                          hugepages=huge,
-                                                         cmdline_extra=_ipcfg))
+                                                         cmdline_extra=f'{_ipcfg}'))
 
     with open('results.json', 'w') as fd:
         json.dump({
@@ -164,9 +165,10 @@ def run_with_fast_cgroups():
                                         vcpu=1,
                                         hugepages=True,
                                         cmdline_extra=_ipcfg))
-    with open('results-fast-cg.json', 'w') as fd:
+    with (here / 'results-fast-cg.json').open('w') as fd:
         json.dump({
             'fast_cgroup_no_smp_res': no_smp,
             }, fd, indent=4)
 
 run_with_fast_cgroups()
+#run_with_slow_cgroups()
