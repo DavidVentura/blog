@@ -45,19 +45,22 @@ def render_scatter_vmm_time():
     return plt
 
 def render_lineplot(series: list, label="Memory Size (MB)", xticks=None, ymax=None):
-    plt.figure(figsize=(8, 6))
+    _, axs = plt.subplots(1, 1, figsize=(8, 6))
+    #plt.figure(figsize=(8, 6))
+    axs.set_prop_cycle(color=['tab:cyan','tab:red'])
     for s in series:
-        plt.plot(s['vm_sizes'], s['times'], marker='o', linestyle='-', label=s['label'])
-    plt.xlabel(label)
-    plt.ylabel("Time to Boot (ms)")
-    plt.grid(True)
-    plt.ylim(ymin=0)
+        axs.plot(s['vm_sizes'], s['times'], marker='o', linestyle='-', label=s['label'])
+    axs.set_xlabel(label)
+    axs.set_ylabel("Time to Boot (ms)")
+    axs.set_ylim(ymin=0)
     if ymax is not None:
-        plt.ylim(ymax=ymax)
+        axs.set_ylim(ymax=ymax)
     if xticks is not None:
-        plt.xticks(xticks)
+        axs.set_xticks(xticks)
+    plt.grid(True)
     plt.legend()
     plt.tight_layout()
+    # color = set3 or accent
     plt.subplots_adjust(top=0.95) # default is 0.9, otherwise title is cropped
 
     return plt

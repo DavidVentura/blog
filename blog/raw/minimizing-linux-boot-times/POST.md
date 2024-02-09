@@ -9,7 +9,7 @@ incomplete: yes
 I recently read about [a project](https://www.usenix.org/publications/loginonline/freebsd-firecracker) to boot the FreeBSD kernel as fast as possible, and that made me wonder: How fast can you boot linux?
 
 
-To get a baseline, I'm using Firecracker with their provided [example 5.10 kernel](https://github.com/firecracker-microvm/firecracker/blob/main/docs/getting-started.md#running-firecracker); this takes 1.037s to boot.
+To get a baseline, I'm using [Firecracker](https://firecracker-microvm.github.io/), a very small VMM (virtual machine monitor) with their provided [example 5.10 kernel](https://github.com/firecracker-microvm/firecracker/blob/main/docs/getting-started.md#running-firecracker); this takes 1.037s to boot.
 
 I started "bottom up"; by compiling my own kernel with `make tinylinux` and working up to a kernel that would boot.
 
@@ -29,7 +29,7 @@ With these options, I got a 1.6MB `bzImage`, which is about 10x smaller than the
 The testing environment consists of:
 - My laptop (Ryzen 5 7640U, no tuning, kernel 6.2)
 - A "default-sized" VM: 1 vCPU and 128MB RAM 
-
+- Runtimes are measured by running every configuration 30 times and averaging
 
 ## Running an init program
 
@@ -43,10 +43,11 @@ int main() {
 }
 ```
 
-After running this as init, I got the exit code[^1] on the panic logs:
+After running this as init, I got the exit code on the panic logs:
 ```
 Kernel panic - not syncing: Attempted to kill init! exitcode=0x00000400
 ```
+<smaller>_Aside: Why is the exit code shifted left?_</smaller>
 
 but my `Hello!` message was nowhere to be found.
 
@@ -121,6 +122,8 @@ Hello Go!
 
 **Boot time: 35.2ms**.
 
+## Optimizing init time
+
 ### Talking to the outside world
 
 A VM that can't talk to anything else is no fun, so we can set a [static IP configuration](https://docs.kernel.org/admin-guide/nfs/nfsroot.html) in the kernel command line by passing
@@ -164,7 +167,7 @@ matter for ther 1 vCPU / 128MB VM that we are benchmarking:
 
 <center>![](/images/minimizing-linux-boot-times/boot_time_vs_vcpu_count_no_smp.svg)</center>
 
-That's a **big** difference, I tried to dig into what's taking so long, but couldn't explain why the difference is so lage, I found:
+That's a **big** difference, I tried to dig into what's taking so long, but couldn't explain why the difference is so large, I found:
 - 14ms from 2 `rcu_barrier` calls
   - one from `mark_rodata_ro`
   - one from `ipv4_offload_init`
@@ -221,7 +224,7 @@ let flags = if shared {
 
 To validate my hypothesis about the delays being caused by page faults, I added `libc::MAP_POPULATE` to the flags.
 
-This brought the boot time down by 4ms at 128MB sizes, which confirms that we were spending significant time page-faulting.
+This brought the boot time down by ~1ms at 128MB sizes, which confirms that we were spending some time page-faulting.
 
 <center>![](/images/minimizing-linux-boot-times/boot_time_with_populate.svg)</center>
 
@@ -248,7 +251,7 @@ $ cat /sys/kernel/mm/hugepages/hugepages-2048kB/free_hugepages
 1013
 ```
 
-This would've been _at most_ 5632 (2MB / 4KB * 11 pages) page faults, which explains the 3ms.
+This would've been _at most_ 5632 (2MB / 4KB * 11 pages) page faults, which explains the ~3ms.
 
 As a cherry on top, the time spent in the VMM went down, though I'm not sure why
 
@@ -259,8 +262,11 @@ As a cherry on top, the time spent in the VMM went down, though I'm not sure why
 
 ### On the VMM time
 
-Analyzing Firecracker is now interesting, as it _dominates_ the time to launch a VM. It's weird, calling `kvm.create_vm()` takes a very variable amount of time, with some executions at ~0ms and some taking up to 40ms.
-`kvm.create_vm()` is effectively just calling `ioctl(18, KVM_CREATE_VM, 0)` and `strace` confirms that this ioctl randomly takes 20~40ms
+Analyzing Firecracker is now interesting, as it _dominates_ the time to launch a VM.
+
+Firecracker spends most of its time on the call to `kvm.create_vm()`, which weirdly takes a very variable amount of time, with some executions at ~0ms and some taking up to 40ms.
+
+`kvm.create_vm()` is effectively just calling `ioctl(18, KVM_CREATE_VM, 0)` and `strace` confirms that this ioctl randomly takes 20~40ms 
 
 The distribution of the duration of these calls is just _weird_:
 <center>![](/images/minimizing-linux-boot-times/vmm_creation_variance.svg)</center>
@@ -276,11 +282,11 @@ When applying the flag, the duration of the `ioctl` calls goes down consistently
 
 **Final boot time (with VM Creation): 8.9ms**
 
-### Other
+## Other
 
 I didn't really know of any tools to measure boot times precisely, I'd have loved to somehow get a flamegraph of where time is being spent during boot (and early boot!). All of the analysis I did on these was basically achieved by placing prints and measuring time it took to get to them.
 
 The scripts used to run, measure & graph the VM startup times live [here](https://github.com/DavidVentura/blog/tree/master/blog/raw/minimizing-linux-boot-times), along with the data used to generate them.
 
 
-[^1]: Why is the exit code shifted left?
+
