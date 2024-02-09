@@ -143,7 +143,7 @@ plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_time_with_popula
 plot = render_stacked_bar_chart([
     {**baseline, 'label': 'Baseline'},
     {**populated_4k, 'label': 'MAP_POPULATE'},
-    ], ymax=450)
+    ], ymax=400)
 plot.title("MAP_POPULATE")
 plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_and_vm_creation_populate.svg", format="svg")
 
@@ -159,7 +159,7 @@ plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_time_hugepages.s
 plot = render_stacked_bar_chart([
     {**baseline, 'label': 'Baseline'},
     {**normal_huge, 'label': 'Hugepages (2MB)'},
-    ], ymax=80)
+    ], ymax=70)
 
 plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_and_vm_creation_hugepages.svg", format="svg")
 
@@ -167,7 +167,7 @@ plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_and_vm_creation_
 plot = render_stacked_bar_chart([
     {**normal_huge, 'label': 'Hugepages (2MB)'},
     {**cgroups_fast_huge, 'label': 'Hugepages (2MB) + favordynmods'},
-    ], ymax=50)
+    ], ymax=40)
 
 plot.savefig("blog/html/images/minimizing-linux-boot-times/boot_and_vm_creation_cgroups_hugepages.svg", format="svg")
 
