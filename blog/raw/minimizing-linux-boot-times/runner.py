@@ -3,6 +3,9 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
+
+here = Path(__file__).parent
 
 @dataclass
 class RunConfig:
@@ -52,7 +55,6 @@ def run(rc: RunConfig):
     except FileNotFoundError:
         pass
     command = [rc.vmm, '--boot-timer', '--no-api', '--config-file', '/tmp/asd.json', '--no-seccomp']
-    # command = ['./run-direct.sh', rc.vmm, '/tmp/asd.json']
     s = subprocess.run(command, capture_output=True)
     assert s.stdout is not None
 
@@ -63,7 +65,7 @@ def run(rc: RunConfig):
         if 'VM Request' in line:
             date, _, _ = line.partition(' ')
             vm_requested = datetime.datetime.fromisoformat(date)
-        if 'VM created' in line:
+        if 'VM Created' in line or 'VM created' in line:
             date, _, _ = line.partition(' ')
             vm_created = datetime.datetime.fromisoformat(date)
         if 'Guest-boot-time' in line:
@@ -146,7 +148,7 @@ def run_with_slow_cgroups():
                                                          hugepages=huge,
                                                          cmdline_extra=f'{_ipcfg}'))
 
-    with open('results.json', 'w') as fd:
+    with (here / 'results.json').open('w') as fd:
         json.dump({
             'base_res': base_res,
             'net_res': net_res,
