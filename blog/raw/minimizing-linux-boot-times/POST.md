@@ -121,7 +121,6 @@ Hello Go!
 
 **Boot time: 35.2ms**.
 
-## Optimizing init time
 
 ### Talking to the outside world
 
@@ -156,6 +155,7 @@ right before the IP auto-configuration. I [made a patch](https://github.com/Davi
 
 **Boot time: 35.3ms**.
 
+## Optimizing init time
 ### On core counts
 
 It seems like boot time goes up by roughly 2.5ms per existing core:
