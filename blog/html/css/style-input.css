@@ -2,7 +2,7 @@
 
 @layer base {
   .layout {
-    @apply max-w-3xl px-4 mx-auto py-4 md:py-10;
+    @apply max-w-5xl px-4 mx-auto py-4 md:py-10;
   }
   h1, .blog-title {
     @apply font-semibold text-3xl md:text-4xl;
