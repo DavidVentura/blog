@@ -231,7 +231,7 @@ This is notoriously different from C, where any heap allocation must be explicit
 
 I didn't want to implement a garbage collector, as I thought that it's unlikely to help much; Lua handles simple types by value (Number, Boolean, Nil) and complex ones (String, Table) by reference.
 
-Having automatic reference counting for complex values should be sufficient for _most_ cases
+Having automatic reference counting for complex types should be sufficient for _most_ cases
 
 
 ### Reference counting
@@ -255,7 +255,7 @@ The way that I've implemented this is very straight forward, whenever doing a `s
 
 This is great! Most of the work is done. The only remaining thing to solve is variables going out of scope:
 
-```
+```lua
 function a()
   table = {}
 end
@@ -275,9 +275,43 @@ void main() {
 }
 ```
 
-This approach has been sufficient for _most_ things, except:
+This works out for _most_ scenarios, but not all:
 
-- Returning values  go out of scope
+Returning a complex type is problematic:
+```lua
+function a()
+  local var = {field=1}
+  return var
+end
+a()
+```
+
+as the reference count of `var` would drop to 0 when the scope finishes, the actual table would be deleted!
+
+The solution is fairly easy, for complex types, increase their reference count right before returning them:
+```lua
+function a()
+  local var = {field=1}
+  _incref(var) -- inserted during AST transformation
+  return var
+end
+a()
+```
+
+This works, though now we have a new problem, the returned `var` will forever have an extra reference, so it'll never be cleaned up.
+
+The solution is not to just run a bare `_incref`, but to also schedule a `_decref` to balance it out.
+The reason to do it this way, instead of scheduling a `_decref` always, is that only a small subset of all variables are returned, adding extra overhead for deferring.
+```lua
+function a()
+  local var = {field=1}
+  _mark_for_gc(var)
+  return var
+end
+a()
+```
+where `_mark_for_gc` just stores the reference to `var`, with which it'll run `_decref` later.
+
 - Intermediate allocations (`tostring`)
 not enough for intermediate, allocating values. only `tostring` for now
 
