@@ -158,6 +158,7 @@ def generate_feed():
     fg.link(href=("%srss.xml" % BLOG_URL), rel='self')
     fg.description('Blog')
     fg.language('en')
+    fg.logo('https://blog.davidv.dev/images/logo.svg')
     return fg
 
 
@@ -213,6 +214,8 @@ def generate_tag_index(tag):
     for f in glob.glob("blog/raw/*/POST.md"):
         item = PostMetadata.from_dict(convert_f(f).metadata)
         if tag not in item.tags:
+            continue
+        if item.incomplete and not DEVMODE:
             continue
         item.path = "/%s.html" % sanitize_title(item.title)
         items.append(item)
