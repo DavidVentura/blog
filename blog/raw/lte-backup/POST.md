@@ -2,8 +2,7 @@
 title: Homelab backup LTE connection
 date: 2024-03-15
 tags: homelab, wireguard
-incomplete: no
-description: 
+description: Setting up a wireguard backup tunnel over LTE
 ---
 
 For quite a while I wanted to set up a backup connection into my homelab — at least _once_ the router has dropped its DHCP lease when I was away and 
