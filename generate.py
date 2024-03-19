@@ -25,6 +25,7 @@ INDEX_TEMPLATE = Template(open('blog/template/index.html', 'r').read())
 DEBUG = True
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
 EMBED_FILE_RE = re.compile(r'{embed-file (?P<fname>[^}]+)}')
+TOOLTIP_RE = re.compile(r'{\^(?P<hint>[^|]+)[|](?P<content>[^}]+)}')
 md = Markdown(extras=["fenced-code-blocks", "cuddled-lists", "footnotes", "metadata", "tables", "header-ids"])
 
 @dataclass
@@ -54,6 +55,9 @@ def convert_f(fname):
 @lru_cache
 def convert(text):
     return md.convert(text)
+
+def populate_tooltips(text):
+    return TOOLTIP_RE.sub(r'<span data-tooltip="\2">\1</span>', text)
 
 def files_to_embed(relpath, text):
     ret = []
@@ -115,6 +119,7 @@ def main(filter_name: Optional[str]):
 
         md_str = open(post_file, encoding='utf-8').read()
         md_str = embed_files(target, md_str)
+        md_str = populate_tooltips(md_str)
         _files_to_embed = files_to_embed(target, md_str)
         body = convert(md_str)
 

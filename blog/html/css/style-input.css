@@ -92,6 +92,28 @@
   table tr {
     @apply border-b border-gray-200;
   }
+
+  [data-tooltip] {
+  	position: relative;
+  	text-decoration: underline dotted gray;
+    	cursor: help;
+  }
+  [data-tooltip]:hover::after {
+    display: block;
+    position: absolute;
+    content: attr(data-tooltip);
+    border: 1px solid black;
+    background: #eee;
+    padding: .25em;
+    left: 50%;
+    top: 0px;
+    transform: translate(0%, -100%);
+    min-width: 180px;
+    font-size: 0.925rem;
+    max-width: 500px;
+    text-align: center;
+	box-shadow: 3px 3px 0px 0px rgba(0,0,0,0.5);
+  }
 }
 
 @tailwind components;
