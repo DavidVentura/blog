@@ -3,7 +3,6 @@ title: Measuring keyboard to display latency
 date: 2022-07-09
 tags: rp2040, sdl, latency
 description: 
-incomplete: true
 ---
 
 I've got fed up with some latency I've been experiencing when using the work-issued VPN (remote desktop over IP), and wanted to 
@@ -20,7 +19,7 @@ The approach is as basic and end-to-end as I could think of: emulate a USB keybo
 
 ## Software on the target to measure
 
-Wrote a very basic [SDL]() program to flash the screen white while the spacebar is being held down, effectively it boils down to:
+Wrote a very basic [SDL](https://www.libsdl.org/) program to flash the screen white while the spacebar is being held down, effectively it boils down to:
 
 ```c
 if (key_pressed) {
