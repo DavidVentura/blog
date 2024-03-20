@@ -92,6 +92,7 @@ def generate_post(header, body, title, tags, description, date):
             date=date,
             description=description,
             devmode=DEVMODE)
+    assert rendered is not None
     return rendered
 
 
@@ -145,7 +146,9 @@ def main(filter_name: Optional[str]):
             header.attrs["id"] = header.text.lower().replace(' ', '-')
 
         if html.find('asciinema-player'):
-            html.find('body').insert_after(html.new_tag('script', src="/js/asciinema-player.js"))
+            body = html.find('body')
+            assert body is not None
+            body.insert_after(html.new_tag('script', src="/js/asciinema-player.js"))
 
         blog_post = str(html)
         debug('writing to file')
