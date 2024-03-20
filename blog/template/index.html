@@ -17,7 +17,7 @@
                     <a href='/'>Mumbling about computers</a>
                 </h1>
             </header>
-            <nav class="mb-4 pb-4 border-b border-gray-500 md:mb-8 md:pb-8">
+            <nav class="mb-4 pb-4 border-b border-gray-500">
                 <ul class="flex items-center gap-2">
                     <li>
                         <a href="/rss.xml">RSS</a>
@@ -29,7 +29,7 @@
             </nav>
             <main id="indexlist">
                 {% for post in index %}
-                <article class="my-4 md:my-8">
+                <article class="my-4 md:my-6">
                     <h2>
                         <a href="{{post['path']}}">
                             {{ post.get_title() }}
