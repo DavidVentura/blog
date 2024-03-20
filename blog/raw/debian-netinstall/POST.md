@@ -1,7 +1,7 @@
 ---
 title: Automated Debian install
 date: 2019-06-30
-tags: debian, systems-deployment
+tags: debian, systems-deployment, homelab
 description: Fully automated debian vm creation
 ---
 So far, anything that I've deployed in my lab has been running in a container,

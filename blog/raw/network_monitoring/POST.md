@@ -1,7 +1,7 @@
 ---
 title: Network update part 2: Monitoring the network with NetFlow, InfluxDB and Grafana
 date: 2018-05-19
-tags: networking
+tags: networking, homelab
 description: 
 ---
 After adding a fancy router (see [here](/network-update-part-1-custom-router-with-espressobin.html)) to my setup I decided to monitor my network (now that it is possible). Having already a Grafana+InfluxDB setup for my standard monitoring I decided to (somehow) feed the network data into this setup.

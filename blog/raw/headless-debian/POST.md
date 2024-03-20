@@ -1,7 +1,7 @@
 ---
 title: Debian stretch headless install
 date: 2018-02-24
-tags: debian, systems-deployment
+tags: debian, systems-deployment, homelab
 description: 
 ---
 This is my adaptation of [this](https://sowhatisthesolution.wordpress.com/2016/03/13/headless-debian-install-via-ssh/) for debian stretch.

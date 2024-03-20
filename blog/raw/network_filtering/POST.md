@@ -1,7 +1,7 @@
 ---
 title: Network update part 4: Proxies
 date: 2018-05-28
-tags: networking
+tags: networking, homelab
 incomplete: True
 description: 
 ---

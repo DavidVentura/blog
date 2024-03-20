@@ -1,7 +1,7 @@
 ---
 title: Cross compiling for OpenWRT platforms
 date: 2020-12-30
-tags: openwrt, rust, cross-compiling
+tags: openwrt, rust, cross-compiling, homelab
 description: 
 ---
 I own a TP-Link X which is an [ath79](https://openwrt.org/docs/techref/targets/ath79) based wireless router, which runs OpenWrt.

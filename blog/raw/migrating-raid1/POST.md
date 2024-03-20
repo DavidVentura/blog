@@ -1,7 +1,7 @@
 ---
 title: Migrating single disk to RAID1 on Debian
 date: 2016-10-19
-tags: 
+tags: homelab
 description: 
 ---
 I have set up a system with /dev/sda as its only disk.

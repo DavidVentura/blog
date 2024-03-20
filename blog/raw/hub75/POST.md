@@ -2,6 +2,7 @@
 title: Exploring HUB75
 date: 2024-03-20
 tags: rust, esp32, embedded, rp2040
+slug: exploring-hub75
 incomplete: yes
 description: 
 ---
