@@ -28,18 +28,39 @@ EMBED_FILE_RE = re.compile(r'{embed-file (?P<fname>[^}]+)}')
 TOOLTIP_RE = re.compile(r'{\^(?P<hint>[^|]+)[|](?P<content>[^}]+)}')
 md = Markdown(extras=["fenced-code-blocks", "cuddled-lists", "footnotes", "metadata", "tables", "header-ids"])
 
+
 @dataclass
 class PostMetadata:
     title: str
     tags: List[str]
     description: str
     date: date
-    incomplete: bool = False
     slug: Optional[str] = None
-    path: Optional[str] = None
+    incomplete: bool = False
+
+    def get_title(self):
+        title = self.title
+        if self.incomplete:
+            title = f"[DRAFT] {self.title}"
+        return title
+
+    @property
+    def path(self) -> str:
+        return "/%s.html" % self.get_slug()
 
     def get_slug(self) -> str:
-        return self.slug or sanitize_title(self.title)
+        if self.slug:
+            return self.slug
+
+        tmp_title = self.title.replace(' ', '-').replace('"', '').lower().strip('-')
+        slug = valid_title_chars.sub('', tmp_title).strip('-')
+        return slug
+
+    @staticmethod
+    @lru_cache
+    def from_path(fname) -> 'PostMetadata':
+        with open(fname, 'r') as fd:
+            return PostMetadata.from_dict(md.convert(fd.read()).metadata)
 
     @staticmethod
     def from_dict(d) -> 'PostMetadata':
@@ -51,10 +72,6 @@ class PostMetadata:
 def debug(*msg):
     if DEBUG:
         print(*msg, flush=True)
-
-def convert_f(fname):
-    with open(fname, 'r') as fd:
-        return convert(fd.read())
 
 @lru_cache
 def convert(text):
@@ -81,28 +98,21 @@ def embed_files(relpath, text):
     return text
 
 def generate_header(metadata: PostMetadata):
-    title = metadata.title
-    if metadata.incomplete:
-        title = f"[DRAFT] {metadata.title}"
+    title = metadata.get_title()
     template = Template('<h1>{{ title }}</h1>')
     return template.render(title=title)
 
 
-def generate_post(header, body, title, tags, description, date):
+def generate_post(header, body, meta):
     rendered = BODY_TEMPLATE.render(header=header,
             post=body,
-            title=title,
-            tags=tags,
-            date=date,
-            description=description,
+            title=meta.get_title(),
+            tags=meta.tags,
+            date=meta.date,
+            description=meta.description,
             devmode=DEVMODE)
     assert rendered is not None
     return rendered
-
-
-def sanitize_title(title):
-    tmp_title = title.replace(' ', '-').lower().strip('-')
-    return valid_title_chars.sub('', tmp_title).strip('-')
 
 
 def newer(f1, files):
@@ -143,7 +153,7 @@ def main(filter_name: Optional[str]):
                 continue
 
         debug('generating text post')
-        html_str = generate_post(header, body, r.title, r.tags, r.description, r.date)
+        html_str = generate_post(header, body, r)
         html = BeautifulSoup(html_str, features='html5lib')
         for header in html.find('article').find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
             header.attrs["id"] = header.text.lower().replace(' ', '-')
@@ -183,7 +193,7 @@ def make_rss_entry(feed, item: PostMetadata):
     fe.author({'name': 'David Ventura',
                'email': 'davidventura27+blog@gmail.com'})
     fe.pubDate(tstamp)
-    fe.title(item.title)
+    fe.title(item.get_title())
     if item.description:
         fe.description(item.description)
     # everything was mutated inside feed
@@ -195,10 +205,9 @@ def generate_index():
     feed = generate_feed()
     last_update = None
     for f in glob.glob("blog/raw/*/POST.md"):
-        item = PostMetadata.from_dict(convert_f(f).metadata)
+        item = PostMetadata.from_path(f)
         if item.incomplete and not DEVMODE:
             continue
-        item.path = "/%s.html" % sanitize_title(item.title)
         items.append(item)
 
     s_items = sorted(items, key=lambda k: k.date)
@@ -209,6 +218,7 @@ def generate_index():
         last_update = max(last_update, tstamp)
 
     rendered = INDEX_TEMPLATE.render(index=reversed(s_items))
+    assert rendered is not None
     open('blog/html/index.html', 'w', encoding='utf-8').write(rendered)
     feed.updated(last_update)
     feed.rss_file('blog/html/rss.xml', pretty=True)
@@ -216,29 +226,26 @@ def generate_index():
 def get_all_tags():
     tags = set()
     for f in glob.glob("blog/raw/*/POST.md"):
-        item = PostMetadata.from_dict(convert_f(f).metadata)
+        item = PostMetadata.from_path(f)
         tags = tags.union(set(item.tags))
     return tags
 
 def generate_tag_index(tag):
     items: List[PostMetadata] = []
     for f in glob.glob("blog/raw/*/POST.md"):
-        item = PostMetadata.from_dict(convert_f(f).metadata)
+        item = PostMetadata.from_path(f)
         if tag not in item.tags:
             continue
         if item.incomplete and not DEVMODE:
             continue
-        item.path = "/%s.html" % sanitize_title(item.title)
         items.append(item)
 
     s_items = sorted(items, key=lambda k: k.date, reverse=True)
     rendered = INDEX_TEMPLATE.render(index=s_items)
+    assert rendered is not None
     fpath = Path('blog/html/tags/%s/index.html' % tag)
     fpath.parent.mkdir(parents=True, exist_ok=True)
     open(str(fpath), 'w', encoding='utf-8').write(rendered)
-
-def copy_followed():
-    shutil.copyfile('blog/template/blogs-i-follow.html', 'blog/html/blogs-i-follow.html')
 
 if __name__ == '__main__':
     DEVMODE = False
@@ -249,4 +256,3 @@ if __name__ == '__main__':
     filter_name = sys.argv[2] if len(sys.argv) > 2 else None
     main(filter_name)
     generate_index()
-    copy_followed()
