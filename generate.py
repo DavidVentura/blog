@@ -35,7 +35,11 @@ class PostMetadata:
     description: str
     date: date
     incomplete: bool = False
+    slug: Optional[str] = None
     path: Optional[str] = None
+
+    def get_slug(self) -> str:
+        return self.slug or sanitize_title(self.title)
 
     @staticmethod
     def from_dict(d) -> 'PostMetadata':
@@ -131,8 +135,7 @@ def main(filter_name: Optional[str]):
             continue
 
         header = generate_header(r)
-        safe_title = sanitize_title(r.title)
-        html_fname = 'blog/html/%s.html' % safe_title
+        html_fname = 'blog/html/%s.html' % r.get_slug()
 
         if os.path.isfile(html_fname):
             if newer(html_fname, [post_file, this_script, BODY_TEMPLATE_FILE] + _files_to_embed):
