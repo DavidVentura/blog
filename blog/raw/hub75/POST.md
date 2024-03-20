@@ -1,6 +1,6 @@
 ---
 title: Exploring HUB75
-date: 2024-03-15
+date: 2024-03-20
 tags: rust, esp32, embedded, rp2040
 incomplete: yes
 description: 
@@ -21,14 +21,10 @@ What we consider normal colors are usually represented in 3 channels, R, G and B
 
 FIXME
 
+take the blue channel as an example
+
 A bit plane of a digital discrete signal is a set of bits corresponding to a given bit position in each of the binary numbers representing the signal.
 and if we take the same analogy, we can split a single _channel_ into different _bitplanes_ where a bitplane is 
-
-<center>
-	<img width="70%" src="/images/hub75/channel_exploded_bitplane.svg"/>
-</center>
-
-and making the bitplane relationship more explicit:
 
 <center>
 	<img width="70%" src="/images/hub75/bitplane_exploded.svg"/>
@@ -42,15 +38,16 @@ one and let our eyes do the "integration" of the image brightness.
 
 In this case we'd be displaying the {^MSB|most significant bit} for 8 "periods", the next one for 4, then 2, then 1. 
 
-<center>
-	<img width="70%" src="/images/hub75/bitplane_over_time.svg"/>
-</center>
-
 Displaying brightness this way is called [binary coded modulation](http://www.batsocks.co.uk/readme/p_art_bcm.htm) or BCM.
+
+Representing a complex color over time with bitplanes
+<center>
+	<img width="90%" src="/images/hub75/rgb_exploded.svg"/>
+</center>
 
 With all of these concepts in mind, we can display an image on the HUB75 displays.
 
-### Protocol
+## HUB75 protocol
 
 The basic operation of the display:
 
@@ -62,7 +59,7 @@ This lets you display an entire row of data. Repeat this with different values f
 
 In this case, we are shifting the 3 (R, G, B) bitplanes at once; on top of that, these displays usually populate two rows in parallel: [row index] and [row index + 16]; the second row is fed (R2, G2, B2).
 
-### Math
+## Math
 
 For a given color depth D, we need to shift in 2<sup>D</sup> bitplanes, which constitute of R rows and C columns.
 
@@ -70,53 +67,111 @@ Taking my screen as an example (64 columns, 32 rows) and a 4 bit depth image, we
 
 Going to 5 bit depth doubles the pixels per frame to 65536 and 6 bit to 131072.
 
-### Software implementation
+## Software implementation
 
 As the protocol does not rely on a fixed clock, we can shift data in as fast/slow as we want, which leaves a lot of room
 to [bit-bang](https://en.wikipedia.org/wiki/Bit_banging) the protocol
 
-Naive with `set_high()`/`set_low()`
-like 80ms
-
-We can manipulate each pin individually
+We can manipulate each pin individually, as an example:
 ```rust
-	if element.r1 > 0 {
-		self.pins.r1().set_high()?;
-	} else {
-		self.pins.r1().set_low()?;
-	}
-	if element.g1 > 0 {
-		self.pins.g1().set_high()?;
-	} else {
-		self.pins.g1().set_low()?;
-	}
-	if element.b1 > 0 {
-		self.pins.b1().set_high()?;
-	} else {
-		self.pins.b1().set_low()?;
-	}
+if element.r1 > 0 {
+	self.pins.r1().set_high()?;
+} else {
+	self.pins.r1().set_low()?;
+}
+if element.g1 > 0 {
+	self.pins.g1().set_high()?;
+} else {
+	self.pins.g1().set_low()?;
+}
+// ...
+self.pins._clk.set_low()?;
+self.pins._clk.set_high()?;
 ```
 
-what's the cost of all these individual writes to register + error unwrapping?
-write to all data values (most ops by far) with `write_volatile` to the mmap address
+[full code](https://github.com/DavidVentura/hub75-esp/blob/1d14ca3713b7ee1625bf3dc9b1c6a54c50e3b75c/src/hub75.rs)
 
-idk 100x faster
+5-bit image = 116ms
 
+optimizing clock speed => `CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y`
+5-bit image = 77ms; 50% speedup
+
+optimizing build => `lto = true` in `Cargo.toml`
+5-bit image = ~67ms; 15% speedup
+
+
+The ESP32 supports setting/clearing the lower 32 pins (0..=31) in one memory write:
+```rust
+fn fast_pin_set(pins: u32) {
+    unsafe { core::ptr::write_volatile(GPIO_OUT_W1TS_REG as *mut _, pins); }
+}
+fn fast_pin_clear(pins: u32) {
+    unsafe { core::ptr::write_volatile(GPIO_OUT_W1TC_REG as *mut _, pins); }
+}
+```
+
+where each bit in `pins` marks which bit will be set/cleared, as an example; calling `fast_pin_set(0b00000000000000000000000000010101)` will set the pins `[0, 2, 4]`.
+
+knowing that, we can remove the branching & individual pin writes for the hot loop, like this:
+
+```rust
+let rgb = (r1 >> 5)
+	| (g1 >> 2)
+	| (b1 << 1)
+	| (r2 << 15)
+	| (g2 << 18)
+	| (b2 << 21);
+let not_rgb = !rgb & rgb_mask;
+fast_pin_clear(not_rgb);
+fast_pin_set(rgb & rgb_mask);
+self.pins._clk.set_low();
+self.pins._clk.set_high();
+```
+5bit = 25ms, 270% speedup
+
+include clock in the blob set/clear:
+```rust
+let rgb = (r1 >> 5)
+	| (g1 >> 2)
+	| (b1 << 1)
+	| (r2 << 15)
+	| (g2 << 18)
+	| (b2 << 21);
+let not_rgb = !rgb & rgb_mask;
+fast_pin_clear(not_rgb | (1 << clkpin));
+fast_pin_set((rgb & rgb_mask) | (1 << clkpin));
+
+```
+5bit = 4.8ms (!!); 520% speedup. why does this change so much?
+
+do the same to addr, 4.0ms
+```rust
+let addrdata: u32 = (i as u32) << 12;
+let not_addrdata: u32 = !addrdata & addrmask;
+fast_pin_clear(not_addrdata);
+fast_pin_set(addrdata);
+```
 change data format to remove all bit shifting - mention pin reordering to match
-idk 2x faster
 
-do the same for remaining oe/lat/addr
-idk 2x faster
 
-Outcome:
+116ms -> 4ms; 29x total speedup; fairer would be 67ms->4ms; 16x speedup
+
+### Result
+
+This is with 6 bit color depth, each frame takes 7.9ms to render
+
 <video src="/videos/esp32-rust-projects/hub75-done-nyan.mp4" controls></video>
 
-#### Problems
-problems: no more pins for the nice new 64 pix tall screens
+### Problems
 
-test: toggle `E` bit with software, impact?
+I wanted a higher resolution for a project, so I bought some screens which use an extra address pin (`E`) and the ESP32 does not have any more contiguous pins.
+This requires some shuffling of the address values (`(addr & 0b1111) | (addr & 0b10000) << n`) which slows down the frame to XXX ms.
 
-### "Hardware" implementation
+On top of that, I chose a resolution of 128x64, 4 times as much as the numbers we were working with so far; on a 6-bit depth that'd be 32ms per frame which very visibly flickers.
+
+Going to 5-bit depth halves the required time, to 16ms which is barely enough.
+
+## "Hardware" implementation
 
 something on the RP2040 PIO
 
