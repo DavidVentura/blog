@@ -7,7 +7,7 @@ import sys
 
 import pytz
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, date
 from functools import lru_cache
 from pathlib import Path
