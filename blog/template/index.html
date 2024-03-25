@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<html lang="en">
     <head>
         <link rel="shortcut icon" type="image/svg" href="/images/logo.svg">
         <link href="/css/new-style.css" rel="stylesheet" type="text/css">
@@ -11,20 +12,14 @@
     </head>
     <body>
         <div class="layout">
-            <header class="my-2 flex flex-col md:gap-2 md:flex-row md:items-baseline">
-            <img src="/images/logo.svg" class="w-6 h-6 md:w-8 md:h-8" alt="Angry robot logo">
-                <h1>
-                    <a href='/'>Mumbling about computers</a>
-                </h1>
+            <header class="my-2 gap-2 items-end">
+                <img src="/images/logo.svg" class="w-8 h-8 inline-block align-baseline" alt="Angry robot logo">
+                <h1 class="inline-block"><a href='/'>Mumbling about computers</a></h1>
             </header>
             <nav class="mb-4 pb-4 border-b border-gray-500">
                 <ul class="flex items-center gap-2">
-                    <li>
-                        <a href="/rss.xml">RSS</a>
-                    </li>
-                    <li>
-                        <a href="/blogs-i-follow.opml">Blogs I follow</a>
-                    </li>
+                    <li><a href="/rss.xml">RSS</a></li>
+                    <li><a href="/blogs-i-follow.opml">Blogs I follow</a></li>
                 </ul>
             </nav>
             <main id="indexlist">
@@ -35,7 +30,7 @@
                             {{ post.get_title() }}
                         </a>
                     </h2>
-                    <ul class="flex flex-col md:flex-row md:gap-1">
+                    <ul class="flex flex-row gap-2">
                         <li>
                             <span class="text-sm text-gray-500">{{post['date']}}</span>
                         </li>
