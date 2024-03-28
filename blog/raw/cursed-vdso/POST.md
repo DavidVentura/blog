@@ -182,12 +182,12 @@ in an easy-to-parse, whitespace-delimited, format (trimmed down):
 
 | Address                         |Perms|Offset  |Path|
 |---------------------------------|-----|--------|------------|
-|`5604dff9a000-5604dff9c000`|`r--p`|000000|/usr/bin/cat|
-|`5604e121d000-5604e123e000`|`rw-p`|000000|[heap]|
-|`7f38a9bd8000-7f38a9c02000`|`r-xp`|002000|ld-linux-x86-64.so.2|
-|`7fff378cb000-7fff378ec000`|`rw-p`|000000|[stack]|
-|`7fff3794f000-7fff37953000`|`r--p`|000000|[vvar]|
-|`7fff37953000-7fff37955000`|`r-xp`|000000|[vdso]|
+|`5604dff9a000-5604dff9c000` | `r--p` |000000|/usr/bin/cat|
+|`5604e121d000-5604e123e000` | `rw-p` |000000|[heap]|
+|`7f38a9bd8000-7f38a9c02000` | `r-xp` |002000|ld-linux-x86-64.so.2|
+|`7fff378cb000-7fff378ec000` | `rw-p` |000000|[stack]|
+|`7fff3794f000-7fff37953000` | `r--p` |000000|[vvar]|
+|`7fff37953000-7fff37955000` | `r-xp` |000000|[vdso]|
 
 Where each line represents a single, contiguous range.
 
