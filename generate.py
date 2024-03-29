@@ -2,7 +2,6 @@
 import glob
 import os
 import re
-import shutil
 import sys
 
 import pytz
@@ -51,6 +50,9 @@ class PostMetadata:
     def get_slug(self) -> str:
         if self.slug:
             return self.slug
+
+        if not self.slug and self.date.year >= 2024:
+            raise ValueError(f"New posts must have slugs: {self.title} does not have it")
 
         tmp_title = self.title.replace(' ', '-').replace('"', '').lower().strip('-')
         slug = valid_title_chars.sub('', tmp_title).strip('-')

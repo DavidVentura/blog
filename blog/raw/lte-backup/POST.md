@@ -2,6 +2,7 @@
 title: Homelab backup LTE connection
 date: 2024-03-15
 tags: homelab, wireguard
+slug: homelab-backup-lte-connection
 description: Setting up a wireguard backup tunnel over LTE
 ---
 

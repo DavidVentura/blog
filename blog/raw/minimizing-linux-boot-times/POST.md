@@ -2,6 +2,7 @@
 title: Minimizing Linux boot times
 date: 2024-02-05
 tags: firecracker, linux, optimization
+slug: minimizing-linux-boot-times
 description: Getting Linux to boot in 6ms
 ---
 
