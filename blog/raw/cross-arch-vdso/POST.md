@@ -110,7 +110,7 @@ My expectation was that this would be done automatically by the kernel every tim
 
 When looking on how to flush these caches, I found an [ARM blog post](https://community.arm.com/arm-community-blogs/b/architectures-and-processors-blog/posts/caches-and-self-modifying-code), which mentions that GCC has a built-in ([`__clear_cache`](https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html#index-_005f_005fbuiltin_005f_005f_005fclear_005fcache)) specifically designed to clear the D/I caches in a given range. 
 
-## Solution
+## Calling `__clear_cache`
 
 I needed to call a GCC/LLVM builtin, but `rustc` does not expose it. I could/should have yoinked the code from LLVM/GCC's implementation but instead I chose to rely on their implementation by creating a static, shared library ([cacheflush-sys](https://github.com/DavidVentura/cacheflush-sys)) which only exports the compiler built-in.
 
