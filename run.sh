@@ -1,8 +1,10 @@
 #!/bin/bash
 [ -z "$VIRTUAL_ENV" ] && source venv/bin/activate
 set -e
-venv/bin/python generate.py
+echo 'Generating..'
+venv/bin/python generate.py >/dev/null
 
+grep -r live.js blog/html/ && echo "Dev mode found in blogs, aborting" && exit 1
 dot blog/raw/bookworm/architecture.dot -Tpng > blog/html/images/bookworm-architecture.png
 
 echo 'syncing'
