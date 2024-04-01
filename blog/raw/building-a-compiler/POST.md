@@ -1,9 +1,9 @@
 ---
-title: Pico8 console, part 3: Writing a compiler
+title: Pico8 console, part 3: Writing a compiler & Lua runtime
 date: 2023-09-03
 tags: c, lua, pico8, picopico
+slug: picopico-compiler-runtime
 description: 
-incomplete: true
 ---
 
 In [part 2](https://blog.davidv.dev/pico8-console-part-2-performance.html) I was stuck trying to make `Rockets!` work with optimized bytecode; I pursued this for a bit and realized it was probably never going to be fast enough.
@@ -90,7 +90,7 @@ a = function()
 end
 ```
 
-These semantics have to be transformed into something that's possible to express in C, so in this case we could replace the anonymous function with a named (and obfuscated, to prevent collisions) function
+These semantics have to be transformed into something that's possible to express in C, so in this case we could replace the anonymous function with a named function
 
 ```c
 function __anonymous_function_a() {
@@ -120,7 +120,7 @@ end
 f(1,2,3,4)
 ```
 
-To deal with this, I wrote the following calling convention:
+To deal with this, I decided on the following calling convention:
 
 All functions receive a single argument of type `TVSlice_t` (a slice being an array of `TValue` + an explicit `length` field).
 
@@ -131,9 +131,8 @@ void f(TVSlice_t arguments) {
 // ...
 }
 
-f((TVSlice_t){.elems=NULL, length=0}); // equivalent of f()
-f((TVSlice_t){.elems=(TValue_t[]){1}, length=1}); // equivalent of f(1)
-// ...
+f({.elems=NULL, length=0}); 			// equivalent to f()
+f({.elems=(TValue_t[]){1}, length=1}); 	// equivalent to f(1)
 ```
 
 And to deal with the possibility of missing arguments, the function itself is rewritten as
@@ -151,9 +150,9 @@ where `__get_arg` will return `nil` if there were not enough arguments passed in
 
 ### Closures
 
-Lua's functions are allowed to enclose values from their context/scope, even after the context has exited. This is usually called a `closure`.
+Lua's functions are allowed to enclose values from their context/scope, even after the context has exited.
 
-In the most basic case,
+In the most basic case:
 ```lua
 local captured = 7
 a = function()
@@ -223,21 +222,113 @@ a((TVSlice_t){.elems=(TValue_t[]){5, lambda_args}, length=2});
 // equivalent of a(5, {captured=captured})
 ```
 
-## Memory management
+## Implementing Lua
+
+With the compiler in this state, code can be transformed to syntactically correct C, but the expected behavior is not yet implemented. 
+
+### Runtime
+
+I opted to manage memory with three arenas:
+
+- Tables
+- Strings
+- Closures
+
+Doing it this way, the arenas are as compact as possible and there's no need to check for union discriminators on any operation.
+
+Keeping each complex type in an arena (a big array) also allows for:
+
+- References to be an index into the array (handle/descriptor), which saves 2 bytes when compared to using a pointer (on a 32bit platform).
+- Re-using the same objects over and over instead of freeing and re-allocating
+- The comparison operator for complex values to be reduced to comparing the indexes
+
+The 'value' type is then:
+
+```c
+typedef struct TValue_s {
+	union {
+		uint16_t str_idx;
+		uint16_t table_idx;
+		uint16_t fun_idx;
+		fix32_t num;
+	};
+	enum typetag_t tag;
+} TValue_t;
+```
+
+which is 5 bytes.
+
+### Tables
+
+Tables store key-value pairs, both key and values can be of any type (number, string, function, table)
+
+They can be defined as:
+```c
+typedef struct Table_s {
+	Metamethod_t* mm;
+	KVSlice_t kvp;
+	uint16_t metatable_idx;
+	uint8_t refcount;
+} Table_t;
+
+typedef struct Metamethod_s {
+	TValue_t __index;
+	TValue_t __add;
+	TValue_t __mul;
+	TValue_t __sub;
+	TValue_t __div;
+	TValue_t __unm;
+	TValue_t __pow;
+	TValue_t __concat;
+} Metamethod_t;
+
+typedef struct  KVSlice_s {
+	KV_t* kvs;
+	uint16_t capacity;
+	uint16_t len;
+} KVSlice_t;
+
+typedef struct KV_s {
+	TValue_t key;
+	TValue_t value;
+} KV_t;
+```
+
+#### Metatables & Metamethods
+
+I chose to implement the metamethods as a dedicated structure instead of using keys on the table, this allows us to skip walking the table in search of the key every time there's an addition/substraction/... operation between tables -- it's very common to assign a table as it's own metatable, and it may require walking tens of keys for each operation.
+
+I've not benchmarked whether this is faster/worth the extra memory usage.
+
+### Closures
+As a type, a closure only associates a function (some code) and a table (some data/environment) together.
+
+I chose to use a regular table to store the closure's environment, to it can be defined as:
+
+```c
+typedef void (*Func_t)(TVSlice_t, TValue_t*);
+typedef struct TFunc_s {
+	Func_t fun;
+	uint16_t env_table_idx;
+} TFunc_t;
+```
+
+
+### Coroutines
+
+I didn't implement them yet, but I had the idea of abusing the closure implementation and adding a `step` parameter, then replacing `yield` points with a `switch` statement; along with probably moving the local variables to the closure state table.
+
+### Memory management
 
 In Lua, memory management is automatic; there's a garbage collector which visits all objects and decides whether they need to be cleaned up. The user of Lua does not have to think about managing memory in any way.
 
-This is notoriously different from C, where any heap allocation must be explicitly freed by the programmer.
+I didn't want to implement a full garbage collector, as I thought that it'd be too complex; Lua handles simple types by value (Number, Boolean, Nil) and complex ones (String, Table) by reference.
 
-I didn't want to implement a garbage collector, as I thought that it's unlikely to help much; Lua handles simple types by value (Number, Boolean, Nil) and complex ones (String, Table) by reference.
+Using reference counting for the complex types should be sufficient for _most_ cases, and reference counting is very simple:
 
-Having automatic reference counting for complex types should be sufficient for _most_ cases
-
-
-### Reference counting
-
-Reference counting is very simple: whenever an object is referenced, its internal counter goes up; and whenever it stops being referenced somewhere, its internal counter goes down.
-When the counter reaches zero, the object should be destroyed.
+* When a reference to A is _stored_, A's internal counter goes _up_
+* When a reference to A is _dropped_, A's internal counter goes _down_
+* When A's counter reaches zero, A should be destroyed
 
 As an example:
 
@@ -277,7 +368,7 @@ void main() {
 
 This works out for _most_ scenarios, but not all:
 
-Returning a complex type is problematic:
+Returning values is problematic:
 ```lua
 function a()
   local var = {field=1}
@@ -288,7 +379,7 @@ a()
 
 as the reference count of `var` would drop to 0 when the scope finishes, the actual table would be deleted!
 
-The solution is fairly easy, for complex types, increase their reference count right before returning them:
+To prevent this, we can increase the reference count right before returning the value:
 ```lua
 function a()
   local var = {field=1}
@@ -312,108 +403,20 @@ a()
 ```
 where `_mark_for_gc` just stores the reference to `var`, with which it'll run `_decref` later.
 
-- Intermediate allocations (`tostring`)
-not enough for intermediate, allocating values. only `tostring` for now
-
-
----
-When moving the transformations to the AST level, I ended up with a bunch of passes to update the AST to be more amenable to generating C.
-
-Some are necessary, such as:
-
-```python
-def transform_anonymous_functions(tree): -> None
-      """
-      Rewrite AnonymousFunction (`a = function() ... end`) into:
-      ```
-      function __anonymous_function_a_1(...) ... end
-      a = TFUN(__anonymous_function_a_1)
-      ```
-      """
-	  ...
-
-def transform_table_functions(tree):
-    """
-    Rewrite table-based functions (`function tab.fn() ... end`) into:
-    ```
-    function __table_function_tab_fn(...) ... end
-    tab.fn = TFUN(__table_function_tab_fn)
-    ```
-    """
-	...
-
-
-def transform_methods(tree):
-    """
-    Rewrite methods (`function tab:method() ... end`) into:
-    ```
-    function __tab_method(...) ... end
-    tab["method"] = __tab_method
-    ```
-
-    And method calls (`tab:method(arg)`) into table calls with a self-argument and an argument array:
-
-    ```
-    tab['method'](tab, {arg})
-    ```
-    """
-
-```
-
-Successive passes will update the table accesses based on being reads/writes to specialized `SetTabValue`/`GetTabValue` nodes.
-
-## Optimization passes
-
-
-There are also some optimization passes, for example
-
-```python
-def ensure_table_fields(tree):
-    """
-    Ensure that every Table is created with sufficient capacity for known keys
-    ```
-    a = {}
-    a.b = 5
-    ```
-    =>
-    ```
-    a = make_table(1) // 1 as field b is known statically
-    ```
-    """
-```
-
-or
-```python
-def const_strings(tree):
-    """
-    Replaces all literal strings ("string_1") with StringRef("string_1")
-    Also Table fields ({"a"=5})
-    And Index access by name (a.b)
-    """
-```
-Later, all `StringRef` instances will be emitted in such a way to be interned on startup, removing runtime cost.
-
-## Writing a stdlib
+Turns out, I did build a simple GC if this [deferred cleanup](https://bitbashing.io/gc-for-systems-programmers.html) counts!
 
 ## Testing
 
-## Pain
+I built a basic testing framework which takes in Lua files, compiles them to C and then runs them, comparing the output on the official Lua interpreter and my version.
 
-Currently-broken nested closures with different scopes
+This has proven super valuable, both on tests for expected behavior, but also seeing how my changes to the compiler affect the generated code.
 
-## It works
+## Future
 
-Output .so though
-
-## The future
-
-Figure out the loader bit, more tests, make Rockets fully work
-
+* Benchmarking
+* Dynamic loading of the built object, to be able to download games in the console
 
 ### Some references
 
 - [Lua AOT 5.4](https://github.com/hugomg/lua-aot-5.4)
-- [Linkers blog series](https://www.airs.com/blog/archives/42)
-- [ELF from scratch](https://www.conradk.com/elf-from-scratch/)
-- [PLT and GOT](https://www.technovelty.org/linux/plt-and-got-the-key-to-code-sharing-and-dynamic-libraries.html)
 - [GCC builtins](https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html)
