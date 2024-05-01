@@ -5,8 +5,8 @@
   "main": "blog/html/index.html",
   "scripts": {
     "tailwind": "npx tailwindcss -i ./blog/html/css/style-input.css -o ./blog/html/css/new-style.css",
-    "generate": "./venv/bin/python generate.py dev",
-    "build": "pnpm tailwind && pnpm generate"
+    "generate": "./venv/bin/python generate.py",
+    "build": "pnpm generate && pnpm tailwind"
   },
   "repository": {
     "type": "git",
