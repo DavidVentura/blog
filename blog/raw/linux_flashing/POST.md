@@ -224,7 +224,7 @@ While having a network is a big step forward, we still need some kind of
 software that will allow us to download files. I did not think too much about
 this and went with cURL, but maybe wget or some other tool would've been easier.
 
-As with busybox, [clone curl](git@github.com:curl/curl.git) and build it to get
+As with busybox, [clone curl](https://github.com/curl/curl) and build it to get
 a static binary:
 
 ```
