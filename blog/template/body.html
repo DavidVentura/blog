@@ -2,16 +2,27 @@
 <html lang="en">
     <head>
         <link rel="shortcut icon" type="image/svg" href="/images/logo.svg">
+		<link rel="canonical" href="{{ full_url }}">
+
+        <meta property="og:title" content='{{ title }}'>
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="{{ full_url }}" />
+        <meta property="og:site_name" content="Mumbling about computers" />
+
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link href="/css/new-style.css" rel="stylesheet" type="text/css">
-        <link href="/css/syntax.css" rel="stylesheet" type="text/css">
         <meta charset="UTF-8">
         <meta name="referrer" content="no-referrer">
         <meta name="description" content="{{description}}">
+
+        <link href="/css/new-style.css" rel="stylesheet" type="text/css">
+        <link href="/css/syntax.css" rel="stylesheet" type="text/css">
         {% if devmode %}
         <script type="text/javascript" src="/live.js"></script>
         {% endif %}
-        <title>{{ title }} - Mumbling about computers</title>
+        <script type="application/ld+json">
+            {{ structured_metadata }}
+       </script>
+        <title>{{ title }}</title>
     </head>
     <body>
         <div class="layout">
@@ -33,16 +44,20 @@
             </nav>
             <article id="blogpost">
                 <header id="blogheader" class="mb-4 md:mb-8">
-                    <time datetime="{{ date }}" class="text-sm text-gray-500">{{ date }}</time>
                     {{ header }}
-                    {%- if tags -%}
-                    <ul class="flex flex-wrap gap-2">
-                        {%- for tag in tags -%}
-                        <li>
-                            <a href="/tags/{{tag}}/" class="tag">{{ tag }}</a>
-                        </li>
-                        {%- endfor -%}
-                    </ul>
+                    <div class="flex flex-wrap gap-1 text-sm text-gray-500 mt-1">
+                      Posted on <time class="font-bold" datetime="{{ date }}">{{ date }}</time>
+                      {%- if tags -%}
+                      under [
+                      <ul class="flex flex-wrap gap-2">
+                          {%- for tag in tags -%}
+                          <li>
+                              <a href="/tags/{{tag}}/" class="tag">{{ tag }}</a>
+                          </li>
+                          {%- endfor -%}
+                      </ul>
+                      ]
+                    </div>
                     {%- endif -%}
                 </header>
                 <section id="blogpost-content">

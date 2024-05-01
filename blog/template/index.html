@@ -7,14 +7,18 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta name="referrer" content="no-referrer">
-        <title>Mumbling about computers</title>
         <meta name="description" content="Blog where I ramble about computer stuff">
+        <title>Mumbling about computers{% if tag is defined %} - {{tag}}{% endif %}</title>
+        <div itemscope itemtype="https://schema.org/WebSite">
+          <meta itemprop="url" content="https://blog.davidv.dev/"/>
+          <meta itemprop="name" content="David's computing blog"/>
+        </div>
     </head>
     <body>
         <div class="layout">
             <header class="my-2 gap-2 items-end">
                 <img src="/images/logo.svg" class="w-8 h-8 inline-block align-baseline" alt="Angry robot logo">
-                <h1 class="inline-block"><a href='/'>Mumbling about computers</a></h1>
+                <h1 class="inline-block"><a href='/'>Mumbling about computers{% if tag is defined %} - {{tag}}{% endif %}</a></h1>
             </header>
             <nav class="mb-4 pb-4 border-b border-gray-500">
                 <ul class="flex items-center gap-2">
@@ -25,11 +29,11 @@
             <main id="indexlist">
                 {% for post in index %}
                 <article class="my-4 md:my-6">
-                    <h2>
+                    <span class="font-semibold text-xl md:text-2xl">
                         <a href="{{post['path']}}">
                             {{ post.get_title() }}
                         </a>
-                    </h2>
+                    </span>
                     <ul class="flex flex-row gap-2">
                         <li>
                             <span class="text-sm text-gray-500">{{post['date']}}</span>

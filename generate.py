@@ -3,6 +3,7 @@ import glob
 import os
 import re
 import sys
+import json
 
 import pytz
 
@@ -27,6 +28,28 @@ EMBED_FILE_RE = re.compile(r'{embed-file (?P<fname>[^}]+)}')
 TOOLTIP_RE = re.compile(r'{\^(?P<hint>[^|]+)[|](?P<content>[^}]+)}')
 md = Markdown(extras=["fenced-code-blocks", "cuddled-lists", "footnotes", "metadata", "tables", "header-ids"])
 
+@dataclass
+class BlogPosting:
+    """
+    {
+      "@context": "https://schema.org",
+      "@type": "NewsArticle",
+      "headline": "Analyzing Google Search traffic drops",
+      "datePublished": "2021-07-20T08:00:00+08:00",
+      "dateModified": "2021-07-20T09:20:00+08:00"
+    }
+    """
+    date: date
+    title: str
+
+    def as_dict(self):
+        return {
+          "@context": "https://schema.org",
+          "@type": "BlogPosting",
+          "author": "David Ventura",
+          "dateCreated": self.date.isoformat(),
+          "headline": self.title,
+          }
 
 @dataclass
 class PostMetadata:
@@ -71,6 +94,14 @@ class PostMetadata:
         data = {**d, 'date': date, 'tags': tags} 
         return PostMetadata(**data)
 
+    @property
+    def as_schema_posting(self) -> BlogPosting:
+        return BlogPosting(date=self.date, title=self.title)
+
+    @property
+    def full_url(self) -> str:
+        return f'{BLOG_URL}{self.get_slug()}.html'
+
 def debug(*msg):
     if DEBUG:
         print(*msg, flush=True)
@@ -105,13 +136,15 @@ def generate_header(metadata: PostMetadata):
     return template.render(title=title)
 
 
-def generate_post(header, body, meta):
+def generate_post(header: str, body: str, meta: PostMetadata):
     rendered = BODY_TEMPLATE.render(header=header,
             post=body,
             title=meta.get_title(),
             tags=meta.tags,
             date=meta.date,
             description=meta.description,
+            full_url=meta.full_url,
+            structured_metadata=json.dumps(meta.as_schema_posting.as_dict()),
             devmode=DEVMODE)
     assert rendered is not None
     return rendered
@@ -187,7 +220,7 @@ def generate_feed():
 
 def make_rss_entry(feed, item: PostMetadata):
     fe = feed.add_entry()
-    url = '%s%s' % (BLOG_URL, item.path[1:])
+    url = item.full_url
     fe.id(url)
     tstamp = datetime.combine(item.date, datetime.min.time())
     tstamp = pytz.timezone("Europe/Amsterdam").localize(tstamp)
@@ -243,7 +276,7 @@ def generate_tag_index(tag):
         items.append(item)
 
     s_items = sorted(items, key=lambda k: k.date, reverse=True)
-    rendered = INDEX_TEMPLATE.render(index=s_items)
+    rendered = INDEX_TEMPLATE.render(index=s_items, tag=tag)
     assert rendered is not None
     fpath = Path('blog/html/tags/%s/index.html' % tag)
     fpath.parent.mkdir(parents=True, exist_ok=True)
