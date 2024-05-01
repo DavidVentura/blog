@@ -18,11 +18,10 @@
     "url": "https://github.com/DavidVentura/blog/issues"
   },
   "homepage": "https://github.com/DavidVentura/blog#readme",
-  "dependencies": {
+  "dependencies": {},
+  "devDependencies": {
+    "npx": "^10.2.2",
     "pnpm": "^8.6.12",
     "tailwindcss": "^3.1.5"
-  },
-  "devDependencies": {
-    "npx": "^10.2.2"
   }
 }
