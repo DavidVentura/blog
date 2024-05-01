@@ -238,7 +238,8 @@ Doing it this way, the arenas are as compact as possible and there's no need to 
 
 Keeping each complex type in an arena (a big array) also allows for:
 
-- References to be an index into the array (handle/descriptor), which saves 2 bytes when compared to using a pointer (on a 32bit platform).
+- References to be an index into the array (handle/descriptor), which saves 2 bytes when compared to using a pointer (on a 32bit platform)
+	- In turn, this allows `realloc`ing the entire array onto another base address, while keeping all references valid
 - Re-using the same objects over and over instead of freeing and re-allocating
 - The comparison operator for complex values to be reduced to comparing the indexes
 
