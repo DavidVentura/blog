@@ -19,6 +19,9 @@
   a.tag {
     @apply transition-all underline underline-offset-2 decoration-dotted decoration-gray-300 text-gray-600 text-sm hover:decoration-gray-400 hover:text-gray-700;
   }
+  .tag-holder * {
+	padding: 1px 2px;
+  }
 
   /* Post Styles */
   #blogpost-content h2,
@@ -113,6 +116,10 @@
     max-width: 500px;
     text-align: center;
 	box-shadow: 3px 3px 0px 0px rgba(0,0,0,0.5);
+  }
+
+  .compare div {
+	  @apply flex-1;
   }
 }
 
