@@ -28,20 +28,20 @@
             </nav>
             <main id="indexlist">
                 {% for post in index %}
-                <article class="my-4 md:my-6">
+                <article class="my-4 md:my-4">
                     <span class="font-semibold text-xl md:text-2xl">
                         <a href="{{post['path']}}">
                             {{ post.get_title() }}
                         </a>
                     </span>
-                    <ul class="flex flex-row gap-2 tag-holder">
+                    <div class="flex flex-row gap-2 tag-holder mt-1">
                         <span class="text-sm text-gray-500">{{post['date']}}</span>
                         {%-if post['tags']-%}
                            {%- for tag in post['tags'] -%}
                                <a href="/tags/{{tag}}/" class="tag">{{tag}}</a>
                            {%-endfor-%}
                         {%-endif-%}
-                    </ul>
+                    </div>
                 </article>
                 {%-endfor-%}
             </main>
