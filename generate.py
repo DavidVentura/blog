@@ -258,8 +258,8 @@ def generate_index():
     feed.updated(last_update)
     feed.rss_file('blog/html/rss.xml', pretty=True)
 
-def get_all_tags():
-    tags = set()
+def get_all_tags() -> set[str]:
+    tags: set[str] = set()
     for f in glob.glob("blog/raw/*/POST.md"):
         item = PostMetadata.from_path(f)
         tags = tags.union(set(item.tags))
@@ -282,12 +282,20 @@ def generate_tag_index(tag):
     fpath.parent.mkdir(parents=True, exist_ok=True)
     open(str(fpath), 'w', encoding='utf-8').write(rendered)
 
+def generate_sitemap(tags: set[str]):
+    with Path('blog/html/sitemap.txt').open('w') as fd:
+        fd.write(f'{BLOG_URL}\n')
+        for t in sorted(tags):
+            fd.write(f'{BLOG_URL}tags/{t}\n')
+
 if __name__ == '__main__':
     DEVMODE = False
     if len(sys.argv) > 1 and sys.argv[1].lower() == 'dev':
         DEVMODE = True
-    for tag in get_all_tags():
+    tags = get_all_tags()
+    for tag in tags:
         generate_tag_index(tag)
+    generate_sitemap(tags)
     filter_name = sys.argv[2] if len(sys.argv) > 2 else None
     main(filter_name)
     generate_index()
