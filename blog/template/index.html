@@ -2,17 +2,31 @@
 <html lang="en">
     <head>
         <link rel="shortcut icon" type="image/svg" href="/images/logo.svg">
-        <link href="/css/style-2024-05-01.css" rel="stylesheet" type="text/css">
-        <link rel="alternate" type="application/atom+xml" href="/rss.xml">
-        <meta charset="UTF-8">
+        <link rel="canonical" href="{{ full_url }}">
+
+        <meta property="og:title" content='Mumbling about computers{% if tag is defined %} - {{tag}}{% endif %}'>
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="{{ full_url }}" />
+        <meta property="og:image" content="{{ base_url}}images/logo.svg" />
+        <meta property="og:site_name" content="Mumbling about computers{% if tag is defined %} - {{tag}}{% endif %}" />
+
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta charset="UTF-8">
         <meta name="referrer" content="no-referrer">
         <meta name="description" content="Blog where I ramble about computer stuff">
+
+        <link href="/css/style-2024-05-01.css" rel="stylesheet" type="text/css">
+
+
         <title>Mumbling about computers{% if tag is defined %} - {{tag}}{% endif %}</title>
+        <link rel="alternate" type="application/atom+xml" href="/rss.xml">
+
         <div itemscope itemtype="https://schema.org/WebSite">
           <meta itemprop="url" content="https://blog.davidv.dev/"/>
           <meta itemprop="name" content="David's computing blog"/>
         </div>
+
+
     </head>
     <body>
         <div class="layout">

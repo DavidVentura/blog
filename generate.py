@@ -144,6 +144,7 @@ def generate_post(header: str, body: str, meta: PostMetadata):
             date=meta.date,
             description=meta.description,
             full_url=meta.full_url,
+            base_url=BLOG_URL,
             structured_metadata=json.dumps(meta.as_schema_posting.as_dict()),
             devmode=DEVMODE)
     assert rendered is not None
@@ -252,7 +253,7 @@ def generate_index():
             last_update = tstamp
         last_update = max(last_update, tstamp)
 
-    rendered = INDEX_TEMPLATE.render(index=reversed(s_items))
+    rendered = INDEX_TEMPLATE.render(index=reversed(s_items), base_url=BLOG_URL, full_url=BLOG_URL)
     assert rendered is not None
     open('blog/html/index.html', 'w', encoding='utf-8').write(rendered)
     feed.updated(last_update)
@@ -276,7 +277,7 @@ def generate_tag_index(tag):
         items.append(item)
 
     s_items = sorted(items, key=lambda k: k.date, reverse=True)
-    rendered = INDEX_TEMPLATE.render(index=s_items, tag=tag)
+    rendered = INDEX_TEMPLATE.render(index=s_items, tag=tag, base_url=BLOG_URL, full_url=f'{BLOG_URL}tags/{tag}/')
     assert rendered is not None
     fpath = Path('blog/html/tags/%s/index.html' % tag)
     fpath.parent.mkdir(parents=True, exist_ok=True)
