@@ -8,3 +8,4 @@ venv
 node_modules
 .pnpm-debug.log
 blog/html/images/bookworm-architecture.png
+blog/html/sitemap.txt
