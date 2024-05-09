@@ -3,8 +3,7 @@ title: Learning about PCI-e: Emulating a custom device
 date: 2024-05-06
 tags: pci-e, qemu, c
 slug: learning-pcie
-incomplete: true
-description: Creating a PCI-e device in QEMU that Linux can enumerate
+description: Creating a very simple PCI-e device in QEMU
 ---
 
 Ever since reading about the [FuryGpu](https://www.furygpu.com/), I've been curious about how PCI-e works and what it would take to build a simple display adapter.
@@ -60,7 +59,7 @@ To validate that the binary works, I copied my laptop's kernel `cp -t . /boot/vm
 $ ./build/qemu-system-x86_64 -kernel vmlinuz \
 	-display none -m 256 \
 	-chardev stdio,id=char0 -serial chardev:char0 \
-	-append 'console=ttyS0 quiet panic=-1' 
+	-append 'console=ttyS0 quiet panic=-1'
 [    3.232653] Initramfs unpacking failed: write error
 [    3.882868] Failed to execute /init (error -2)
 [    3.885107] Kernel panic - not syncing: No working init found.  Try passing init= option to kernel. See Linux Documentation/admin-guide/init.rst for guidance.
@@ -114,7 +113,7 @@ To create a PCI-e device in QEMU, we only need to provide a few things:
 * A function to register our device
 * Init/realize functions
 
-We can create a `gpu.c` file in `hw/misc` (slightly abbreviated, find the file [here](https://github.com/DavidVentura/blog/blog/raw/learning-pcie/minimal-listing.c)):
+We can create a `gpu.c` file in `hw/misc` (slightly abbreviated, find the file [here](https://github.com/DavidVentura/blog/tree/master/blog/raw/learning-pcie/minimal-listing.c)):
 ```c
 #define TYPE_PCI_GPU_DEVICE "gpu"
 #define GPU_DEVICE_ID 		0x1337
@@ -158,7 +157,7 @@ index 1e08785..a2e533e 100644
 @@ -25,6 +25,11 @@ config PCI_TESTDEV
      default y if TEST_DEVICES
      depends on PCI
- 
+
 +config GPU
 +    bool
 +    default y if TEST_DEVICES
@@ -179,9 +178,9 @@ index 86596a3..ca704f4 100644
  system_ss.add(when: 'CONFIG_ISA_DEBUG', if_true: files('debugexit.c'))
 ```
 
-We can then rebuild QEMU with `make` (this time it's super quick) and run 
+We can then rebuild QEMU with `make` (this time it's super quick) and run
 ```bash
-$ ./build/qemu-system-x86_64 $OPTS -device gpu 
+$ ./build/qemu-system-x86_64 $OPTS -device gpu
 00:01.0 Class 0601: 8086:7000
 00:04.0 Class 00ff: 1234:1337 # <<<< our device
 00:00.0 Class 0600: 8086:1237
@@ -205,66 +204,63 @@ At this point, I also built [lspci](https://github.com/pciutils/pciutils/tree/ma
 
 At this point, the 'GPU' does absolutely nothing, other than showing up on the bus.
 
-We can add a memory region, by providing only `read`, `write` and calling `init`/`register`.
+To advertise a memory region to the CPU, it needs to be visible in the card's [configuration space](https://en.wikipedia.org/wiki/PCI_configuration_space), we can do this by 
+configuring a {^BAR|base address register}, which will contain a base address and size for the memory region.
 
-TODO explain what is BAR
-
-Find the entire file [here](https://github.com/DavidVentura/blog/blog/raw/learning-pcie/02-with-memory-region.c).
-
+First, define the memory region and create some memory to operate on
 ```diff
   struct GpuState {
       PCIDevice pdev;
 +     MemoryRegion mem;
 +     unsigned char data[0x100000];
   };
-  
-+ static uint64_t gpu_mem_read(void *opaque, hwaddr addr, unsigned size) {
-+ 	GpuState *gpu = opaque;
-+ 	uint64_t got = gpu->data[addr] & ((size <<3)-1);
-+   printf("Tried to read 0x%x bytes at 0x%lx = 0x%lx\n", size, addr, got);
-+   return got;
-+ }
-+ static void gpu_mem_write(void *opaque, hwaddr addr, uint64_t val, unsigned size) {
-+ 	GpuState *gpu = opaque;
-+ 	uint64_t sizedval = val & ((size<<3)-1);
-+ 	gpu->data[addr] = sizedval;
-+   printf("Tried to write 0x%lx [0x%lx] (0x%x bytes) at 0x%lx\n", val, sizedval, size, addr);
-+ }
-+ static const MemoryRegionOps gpu_mem_ops = {
-+     .read = gpu_mem_read,
-+     .write = gpu_mem_write,
-+ };
-  static void pci_gpu_realize(PCIDevice *pdev, Error **errp)
-  {
-      printf("GPU Realize\n");
-+     GpuState *gpu = GPU(pdev);
-+     memory_region_init_io(&gpu->mem, OBJECT(gpu), &gpu_mem_ops, gpu, "gpu-mem", 1 * MiB);
-+     pci_register_bar(pdev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &gpu->mem);
-  }
-  
-  static void pci_gpu_uninit(PCIDevice *pdev)
 ```
 
-The new memory region shows up in `lspci`
+Then when the device is instantiated (realized), we need to register the memory region & tell QEMU what to do with read/write operations (find the file [here](https://github.com/DavidVentura/blog/tree/master/blog/raw/learning-pcie/02-with-memory-region.c)):
+
+```c
+static uint64_t gpu_mem_read(void *opaque, hwaddr addr, unsigned size) {
+  GpuState *gpu = opaque;
+  uint64_t got = gpu->data[addr] & ((size <<3)-1);
+  printf("Tried to read 0x%x bytes at 0x%lx = 0x%lx\n", size, addr, got);
+  return got;
+}
+static void gpu_mem_write(void *opaque, hwaddr addr, uint64_t val, unsigned size) {
+  GpuState *gpu = opaque;
+  uint64_t sizedval = val & ((size<<3)-1);
+  gpu->data[addr] = sizedval;
+  printf("Tried to write 0x%lx [0x%lx] (0x%x bytes) at 0x%lx\n", val, sizedval, size, addr);
+}
+static const MemoryRegionOps gpu_mem_ops = {
+  .read = gpu_mem_read,
+  .write = gpu_mem_write,
+};
+static void pci_gpu_realize(PCIDevice *pdev, Error **errp)
+{
+  GpuState *gpu = GPU(pdev);
+  memory_region_init_io(&gpu->mem, OBJECT(gpu), &gpu_mem_ops, gpu, "gpu-mem", 1 * MiB);
+  pci_register_bar(pdev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &gpu->mem);
+}
+```
+
+The new memory region shows up in `lspci`!
 ```bash
 00:02.0 Class [00ff]: Device [1234:1337]
         Subsystem: Device [1af4:1100]
         Physical Slot: 2
         Control: I/O+ Mem+ BusMaster- SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR+ FastB2B- DisINTx-
         Status: Cap- 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
-        Region 0: Memory at feb00000 (32-bit, non-prefetchable) [size=1M]
+        Region 0: Memory at feb00000 (32-bit, non-prefetchable) [size=1M] <<<<< here
 ```
 
-Now we have 1 memory region, which is 32-bit-addressable and 1MB large
+Now we have 1 memory region, which is 32-bit-addressable and 1MB large, and it can be interacted by reading/writing to it
 
-
-Poking
 ```bash
-/ # /busybox mknod /dev/mem c 1 1
-/ #  /busybox devmem 0xfeb00000 16 
+$ /busybox mknod /dev/mem c 1 1     # create /dev/mem to be able read/write arbitrary memory
+$ /busybox devmem 0xfeb00000 16 	# read 4 bytes
 0x0000
-/ #  /busybox devmem 0xfeb00000 16 4
-/ #  /busybox devmem 0xfeb00000 16 
+$ /busybox devmem 0xfeb00000 16 4 	# write a '4', as a 4 byte type
+$ /busybox devmem 0xfeb00000 16 	# read 4 bytes
 0x0004
 ```
 And QEMU logged
@@ -274,6 +270,10 @@ Tried to write 0x4 [0x4] (0x2 bytes) at 0x0
 Tried to read 0x2 bytes at 0x0 = 0x4
 ```
 
+If we wanted to have multiple memory regions, we'd need to duplicate: `gpu_mem_read`, `gpu_mem_write`, `gpu_mem_ops`, then call `memory_region_init` and `pci_register_bar` with those parameters.
+
+
+That's it for now, next time we are tackling DMA & a simple kernel driver.
 
 ## References
 
@@ -285,3 +285,4 @@ Tried to read 0x2 bytes at 0x0 = 0x4
 6. [QEMU PCI slave devices](https://airbus-seclab.github.io/qemu_blog/pci_slave.html)
 7. [QEMU: How to Design a Prototype Device](https://milokim.gitbooks.io/lbb/content/qemu-how-to-design-a-prototype-device.html)
 8. [Writing a custom device for QEMU](https://sebastienbourdelin.com/2021/06/16/writing-a-custom-device-for-qemu/)
+9. [QEMU internal PCI device](https://dangokyo.me/2018/03/28/qemu-internal-pci-device/)
