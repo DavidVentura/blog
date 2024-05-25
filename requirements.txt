@@ -10,7 +10,7 @@ markdown2==2.4.13
 Pygments==2.17.2
 python-dateutil==2.8.1
 pytz==2021.1
-requests==2.25.1
+requests==2.32.0
 six==1.15.0
 soupsieve==2.2.1
 tinys3==0.1.12
