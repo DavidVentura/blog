@@ -242,11 +242,14 @@ static ssize_t gpu_fb_write(struct file *file, const char __user *buf, size_t co
 
 Which now is fast enough to report as ~300us on my system. We may revisit later to go for a zero-copy implementation.
 
+## Blocking writes
+
 There's a problem though; the DMA execution is asynchronous, and it would be a lot nicer if `write` would block until the write has finished.
 
-## Interrupts
 
-Interrupts are a way for devices to signal to the CPU that some event has happened; we can use one to signify that the DMA transfer has completed.
+For this, we can use interrupts, which are a way for devices to signal to the CPU that some event has happened -- we can use one to signify that the DMA transfer has completed.
+
+We are only focusing on MSI (Message Signalled Interrupt) here which, as the name implies, they communicate the interrupt by sending a normal message (packet) on the PCI bus, this is in contrast with classic interrupts, which had a dedicated electrical connection to send out-of-band signals.
 
 First, we define some shared constants
 
@@ -255,7 +258,7 @@ First, we define some shared constants
 #define IRQ_DMA_DONE_NR 	0
 ```
 
-In qemu, in `pci_gpu_realize` we need to add
+In QEMU, in `pci_gpu_realize` we need to add
 ```c
 msix_init(pdev, IRQ_COUNT, &gpu->mem, 0 /* table_bar_nr  = bar id */, 0x1000 /* table_offset */,
 		  &gpu->mem, 0 /* pba_bar_nr  = bar id */, 0x3000 /* pba_offset */, 0x0 /* capabilities */, errp);
@@ -302,49 +305,103 @@ Capabilities: [40] MSI-X: Enable- Count=1 Masked-
         Vector table: BAR=0 offset=00001000
         PBA: BAR=0 offset=00003000
 ...
-/ # cat /proc/interrupts 
-           CPU0       
-  ...
- 24:          0  PCI-MSI-0000:00:02.0   0-edge      GPU
+/ # grep Dma /proc/interrupts 
+  			 CPU 0
+  24:          0          PCI-MSIX-0000:00:02.0   0-edge      GPU-Dma0
+```
+
+Even with this no-op handler, we never see the interrupt firing in the kernel; this is because the card is not allowed to send messages on its own; to do so, it has to be granted 'bus master' capabilities.
+
+We can grant the card bus master capabilities by calling `pci_set_master(pdev);` in the kernel's `gpu_probe` function, after which, if we call `write` twice we can see:
+
+```bash
+[    7.086591] IRQ 24 received
+[   11.540884] IRQ 24 received
 ```
 
 
-kernel request_irq
+### Actually blocking writes
 
-the interrupt does not work -> requires DMA & bus mastering, makes sense, an MSI is a Message-Signaled-Interrupt AKA a normal packet sent by the card via DMA
+With the interrupt machinery in place we can use a [wait queue](https://stackoverflow.com/a/20065881/3530257) to convert `write` to blocking.
 
-irq threading
-```
-   98 0         0:00 [irq/24-GPU-Dma0]
-   99 0         0:00 [irq/25-GPU-Test]
-```
-
-- DMA
-	-> no completion notif
-	-> interrupt for completion
-
-after read/write is done:
-- display fb in qemu
-
-later:
-- locking the dma engine(s)?
-- how to have multiple writes in flight?
-
-enabling MSI (lspci adds)
-
-```
-Capabilities: [40] MSI: Enable- Count=1/4 Maskable- 64bit+                                             
-		Address: 0000000000000000  Data: 0000
+```c
+wait_queue_head_t wq;
+volatile int irq_fired = 0;
+static irqreturn_t irq_handler(int irq, void *data) {
+	irq_fired = 1;
+	wake_up_interruptible(&wq);
+	return IRQ_HANDLED;
+}
 ```
 
-on qemu, init msi:
-`msi_init`
+add `init_waitqueue_head(&wq)` to `setup_msi`, and add the blocking condition in `write`:
 
-1- handle request DMA
-2- raise IRQ when done
-	a- this never goes back on its own
-3- handle "ACK-irq"
-	a- lower IRQ when received
+
+```diff
+ static ssize_t gpu_fb_write(struct file *file, const char __user *buf, size_t count, loff_t *offset) {
+ 	...
+ 	execute_dma(gpu, DIR_HOST_TO_GPU, dma_addr, *offset, count);
++	if (wait_event_interruptible(wq, irq_fired != 0)) {
++		pr_info("interrupted");
++		return -ERESTARTSYS;
++	}
+ 	kfree(kbuf);
+ 	return count;
+ }
+```
+
+## Displaying something
+
+We now have a 'framebuffer' that can receive `write(2)` from userspace, and will forward the data as-is to a PCI-e device using DMA; we can cheat a little bit and hook that buffer to QEMU's console output:
+
+In QEMU's source:
+
+```diff
+ struct GpuState {
+    PCIDevice pdev;
+    MemoryRegion mem;
++ 	QemuConsole* con;
+ 	uint32_t registers[0x100000 / 32]; // 1 MiB = 32k, 32 bit registers
+ 	uint32_t framebuffer[0x200000]; // barely enough for 1920x1080 at 32bpp
+ };
+```
+
+```diff
+ static void pci_gpu_realize(PCIDevice *pdev, Error **errp) {
+ 	...
++    gpu->con = graphic_console_init(DEVICE(pdev), 0, &ghwops, gpu);
++    DisplaySurface *surface = qemu_console_surface(gpu->con);
++ 	// Display a test pattern
++	for(int i = 0; i<640*480; i++) {
++		((uint32_t*)surface_data(surface))[i] = i;
++	}
+}
+```
+
+and add a "passthrough" implementation for the display surface
+
+```c
+static void vga_update_display(void *opaque) {
+	GpuState* gpu = opaque;
+    DisplaySurface *surface = qemu_console_surface(gpu->con);
+	for(int i = 0; i<640*480; i++) {
+		((uint32_t*)surface_data(surface))[i] = gpu->framebuffer[i % 0x200000 ];
+	}
+
+	dpy_gfx_update(gpu->con, 0, 0, 640, 480);
+}
+static const GraphicHwOps ghwops = {
+   .gfx_update  = vga_update_display,
+};
+```
+
+when launching QEMU, we can now see the test pattern:
+<center>![](/images/pcie-device/qemu_test_pattern.png)</center>
+
+And whenever writing patterns to the underlying device, we can see the display change!
+
+<center><video controls><source  src="/videos/pcie-device/qemu_test_pattern_writes.mp4"></source></video></center>
+That's it for now, next time, we _may_ look at multiple DMA engines, zero-copy DMA and/or becoming a _real_ GPU.
 
 
 ## References:
