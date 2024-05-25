@@ -221,13 +221,17 @@ Then when the device is instantiated (realized), we need to register the memory 
 ```c
 static uint64_t gpu_mem_read(void *opaque, hwaddr addr, unsigned size) {
   GpuState *gpu = opaque;
-  uint64_t got = gpu->data[addr] & ((size <<3)-1);
+  uint64_t bitcount = ((uint64_t)size)<<3;
+  uint64_t mask = (1ULL << bitcount)-1;
+  uint64_t got = gpu->data[addr] & mask;
   printf("Tried to read 0x%x bytes at 0x%lx = 0x%lx\n", size, addr, got);
   return got;
 }
 static void gpu_mem_write(void *opaque, hwaddr addr, uint64_t val, unsigned size) {
   GpuState *gpu = opaque;
-  uint64_t sizedval = val & ((size<<3)-1);
+  uint64_t bitcount = ((uint64_t)size)<<3;
+  uint64_t mask = (1ULL << bitcount)-1;
+  uint64_t sizedval = val & mask;
   gpu->data[addr] = sizedval;
   printf("Tried to write 0x%lx [0x%lx] (0x%x bytes) at 0x%lx\n", val, sizedval, size, addr);
 }
@@ -273,7 +277,7 @@ Tried to read 0x2 bytes at 0x0 = 0x4
 If we wanted to have multiple memory regions, we'd need to duplicate: `gpu_mem_read`, `gpu_mem_write`, `gpu_mem_ops`, then call `memory_region_init` and `pci_register_bar` with those parameters.
 
 
-That's it for now, next time we are tackling DMA & a simple kernel driver.
+That's it for now, [next time](/pcie-driver.html) we are tackling DMA & a simple kernel driver.
 
 ## References
 
