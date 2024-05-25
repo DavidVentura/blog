@@ -196,17 +196,120 @@ void execute_dma(GpuState* gpu, u8 dir, u32 src, u32 dst, u32 len) {
 }
 ```
 
-after msi_init in QEMU
-        Capabilities: [40] MSI: Enable- Count=1/1 Maskable- 64bit+
-                Address: 0000000000000000  Data: 0000
-
-kernel request_irq
+We also need to implement the MMIO side in the adapter:
+```c
+static void gpu_control_write(void *opaque, hwaddr addr, uint64_t val, unsigned size) {
+	GpuState *gpu = opaque;
+	val = lower_n_bytes(val, size);
+	uint32_t reg = addr / 4;
+	switch (reg) {
+		case REG_DMA_DIR:
+		case REG_DMA_ADDR_SRC:
+		case REG_DMA_ADDR_DST:
+		case REG_DMA_LEN:
+			gpu->registers[reg] = (uint32_t)val;
+			break;
+		case REG_DMA_START:
+			if (gpu->registers[REG_DMA_DIR] == DIR_HOST_TO_GPU) {
+				pci_dma_read(&gpu->pdev,
+							 gpu->registers[REG_DMA_ADDR_SRC], // host addr
+							 (gpu->framebuffer + gpu->registers[REG_DMA_ADDR_DST]), // dev addr
+							 gpu->registers[REG_DMA_LEN]);
+			} else {
+				printf("Unimplemented DMA direction\n");
+			}
+			break;
+	}
+}
 ```
+in which we only store the 'arguments' to the DMA 'function call', and execute it when a token value is written.
+
+Then, we can go back to the kernel driver and implement `write`:
+
+```c
+static ssize_t gpu_fb_write(struct file *file, const char __user *buf, size_t count, loff_t *offset) {
+	GpuState *gpu = (GpuState*) file->private_data;
+	dma_addr_t dma_addr;
+	u8* kbuf = kmalloc(count, GFP_KERNEL);
+	copy_from_user(kbuf, buf, count);
+
+	dma_addr = dma_map_single(&gpu->pdev->dev, kbuf, count, DMA_TO_DEVICE);
+	execute_dma(gpu, DIR_HOST_TO_GPU, dma_addr, *offset, count);
+	kfree(kbuf);
+	return count;
+}
+```
+
+Which now is fast enough to report as ~300us on my system. We may revisit later to go for a zero-copy implementation.
+
+There's a problem though; the DMA execution is asynchronous, and it would be a lot nicer if `write` would block until the write has finished.
+
+## Interrupts
+
+Interrupts are a way for devices to signal to the CPU that some event has happened; we can use one to signify that the DMA transfer has completed.
+
+First, we define some shared constants
+
+```c
+#define IRQ_COUNT 			1
+#define IRQ_DMA_DONE_NR 	0
+```
+
+In qemu, in `pci_gpu_realize` we need to add
+```c
+msix_init(pdev, IRQ_COUNT, &gpu->mem, 0 /* table_bar_nr  = bar id */, 0x1000 /* table_offset */,
+		  &gpu->mem, 0 /* pba_bar_nr  = bar id */, 0x3000 /* pba_offset */, 0x0 /* capabilities */, errp);
+for(int i = 0; i < IRQ_COUNT; i++)
+	msix_vector_use(pdev, i);
+```
+
+which will reserve an 8KiB space for MSIs (at the 4K offset) and another 8KiB space for PBAs at the 12KiB offset.
+
+Then to send an interrupt when `pci_dma_read` finishes, we can call
+
+```c
+msix_notify(&gpu->pdev, IRQ_DMA_DONE_NR);
+```
+
+The kernel needs to hook a handler for the interrupt, which can be done with
+
+```c
+static irqreturn_t irq_handler(int irq, void *data) {
+	pr_info("IRQ %d received\n", irq);
+	return IRQ_HANDLED;
+}
+static int setup_msi(GpuState* gpu) {
+	int msi_vecs;
+	int irq_num;
+
+	msi_vecs = pci_alloc_irq_vectors(gpu->pdev, IRQ_COUNT, IRQ_COUNT, PCI_IRQ_MSIX | PCI_IRQ_MSI);
+	irq_num = pci_irq_vector(gpu->pdev, IRQ_DMA_DONE_NR);
+	pr_info("Got MSI vec %d, IRQ num %d", msi_vecs, irq_num);
+	request_threaded_irq(irq_num, irq_handler, NULL, 0, "GPU-Dma0", gpu);
+	return 0;
+}
+```
+
+and we can call `setup_msi` in the `gpu_probe` (PCI probe) function.
+
+On boot, we can see these changes reflected in the device:
+
+```bash
+/ # lspci -vv
+...
+Region 0: Memory at fc000000 (32-bit, non-prefetchable) [size=16M]
+Capabilities: [40] MSI-X: Enable- Count=1 Masked-
+        Vector table: BAR=0 offset=00001000
+        PBA: BAR=0 offset=00003000
+...
 / # cat /proc/interrupts 
            CPU0       
   ...
  24:          0  PCI-MSI-0000:00:02.0   0-edge      GPU
 ```
+
+
+kernel request_irq
 
 the interrupt does not work -> requires DMA & bus mastering, makes sense, an MSI is a Message-Signaled-Interrupt AKA a normal packet sent by the card via DMA
 
