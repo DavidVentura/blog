@@ -68,13 +68,17 @@ static void gpu_class_init(ObjectClass *class, void *data)
 
 static uint64_t gpu_mem_read(void *opaque, hwaddr addr, unsigned size) {
 	GpuState *gpu = opaque;
-	uint64_t got = gpu->data[addr] & ((size <<3)-1);
+	uint64_t bitcount = ((uint64_t)size)<<3;
+	uint64_t mask = (1ULL << bitcount)-1;
+	uint64_t got = gpu->data[addr] & mask;
     printf("Tried to read 0x%x bytes at 0x%lx = 0x%lx\n", size, addr, got);
     return got;
 }
 static void gpu_mem_write(void *opaque, hwaddr addr, uint64_t val, unsigned size) {
 	GpuState *gpu = opaque;
-	uint64_t sizedval = val & ((size<<3)-1);
+	uint64_t bitcount = ((uint64_t)size)<<3;
+	uint64_t mask = (1ULL << bitcount)-1;
+	uint64_t sizedval = val & mask;
 	gpu->data[addr] = sizedval;
     printf("Tried to write 0x%lx [0x%lx] (0x%x bytes) at 0x%lx\n", val, sizedval, size, addr);
 
