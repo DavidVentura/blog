@@ -1,31 +1,21 @@
 ---
-title: Learning about PCI-e: Writing a kernel driver
-date: 2024-05-11
+title: Learning about PCI-e: Driver & DMA
+date: 2024-05-25
 tags: pci-e, qemu, c
-slug: pcie-driver
-ddeviceescription: Creating a very simple driver for a simple PCI-e device (in QEMU)
+slug: pcie-driver-dma
+description: Creating a simple driver for a simple PCI-e device (in QEMU)
+incomplete: yes
 ---
 
 
-In the [previous entry](/learning-pcie.html) we covered the implementation of a trivial PCI-e device, which allowed us to read and write to it, 32 bits at a time.
+In the [previous entry](/learning-pcie.html) we covered the implementation of a trivial PCI-e device, which allowed us to read and write to it, 32 bits at a time, 
+by relying on manual peek/poke with a hardcoded address (`0xfe000000`) which came from copy-pasting the address of BAR0 from `lspci`.
 
-Instead of relying on manual peek/poke, we should work on talking to the device in a more structured way, through a [character device]().
+To get this address programmatically, we need to ask the PCI subsystem for the details of the memory mapping for this device.
 
-Before, we were running `devmem 0xfeb00000` and `0xfeb00000` came from copy-pasting the address of BAR0, which we got from running `lspci`.
+First, we need to make a [struct pci_driver](https://elixir.bootlin.com/linux/v6.9/source/include/linux/pci.h#L887), which only requires two fields: a table of supported devices, and a `probe` function.
 
-Now, we need to get this address in a programmatic fashion:
-
-- Register a PCI driver
-- Probe
-	- get available BAR ids
-	- get BAR addr + len
-
-
-## Initializing the adapter
-
-make a [pci_driver](https://elixir.bootlin.com/linux/v6.9/source/include/linux/pci.h#L887) struct, which requires two fields:
-
-A table of supported devices, by device/vendor ID:
+The table of supported devices is an array of the pairs of device/vendor IDs which this driver supports:
 
 ```c
 static struct pci_device_id gpu_id_tbl[] = {
@@ -34,7 +24,16 @@ static struct pci_device_id gpu_id_tbl[] = {
 };
 ```
 
-and a `probe` function (which is only called if the device/vendor IDs match), that needs to return `0` if it takes ownership of the device.
+The `probe` function (which is only called if the device/vendor IDs match), needs to return `0` if it takes ownership of the device.
+
+We need to update the driver's state to hold a reference to the device's memory region
+
+```diff
+ typedef struct GpuState {
+ 	struct pci_dev *pdev;
++	u8 __iomem *hwmem;
+ } GpuState;
+```
 
 Within the `probe` function, we can enable the device and store a reference to the `pci_dev`:
 
@@ -49,7 +48,7 @@ static int gpu_probe(struct pci_dev *pdev, const struct pci_device_id *id) {
 
 	pci_enable_device_mem(pdev);
 
-	// create a bitfield of the available BARs
+	// create a bitfield of the available BARs, eg: 0b1 for 'BAR #0'
 	bars = pci_select_bars(pdev, IORESOURCE_MEM);
 
 	// claim ownership of the address space for each BAR in the bitfield
@@ -65,8 +64,10 @@ static int gpu_probe(struct pci_dev *pdev, const struct pci_device_id *id) {
 }
 ```
 
-Now, if we call [pci_register_driver]() during `module_init`, we can see it's being called:
-```
+
+Now, if we call `pci_register_driver` during `module_init`, we can see the card is initialized and we get back the BAR0 address:
+
+```bash
 [    0.488699] called probe
 [    0.488705] mmio starts at 0xfe000000; hwmem 0xffffbf5200600000
 [    0.488817] gpu_module_init done
@@ -74,33 +75,126 @@ Now, if we call [pci_register_driver]() during `module_init`, we can see it's be
 
 ## Accessing the adapter via a character device
 
-what is chardev:
+Now that we have mapped the BAR0 address space in our kernel driver, we can expose a nicer interface for users: a character device, which allows direct, unbuffered access to the device they represent.
 
-char dev: exposes open/read/write (and more)
+For this driver, we only need to implement `open`, `read` and `write`, which have these signatures:
 
-smuggle BAR idx via MINOR device nr
+```c
+static int gpu_open(struct inode *inode, struct file *file);
+static ssize_t gpu_read(struct file *file, char __user *buf, size_t count, loff_t *offset);
+static ssize_t gpu_write(struct file *file, const char __user *buf, size_t count, loff_t *offset);
+```
 
-smuggling via container_of
-https://linux-kernel-labs.github.io/refs/heads/master/labs/device_drivers.html#implementation-of-operations
+First, add a reference to the cdev in the driver's state
+```diff
+ typedef struct GpuState {
+ 	struct pci_dev *pdev;
+ 	u8 __iomem *hwmem;
++	struct cdev cdev;
+ } GpuState;
+```
 
+Then we define a set of file operations and a `setup` function:
 
-## Multiple memory regions
-- add second buffer
-        Region 0: Memory at fe000000 (32-bit, non-prefetchable) [size=1M]
-        Region 1: Memory at fd000000 (32-bit, non-prefetchable) [size=16M]
+```c
+static const struct file_operations fileops = {
+	.owner 		= THIS_MODULE,
+	.open 		= NULL,
+	.read 		= NULL,
+	.write 		= NULL
+};
 
+int setup_chardev(GpuState* gpu, struct class* class, struct pci_dev *pdev) {
+	dev_t dev_num, major;
+	alloc_chrdev_region(&dev_num, 0, MAX_CHAR_DEVICES, "gpu-chardev");
+	major = MAJOR(dev_num);
 
-- second chardev for fb with forwarding read/write in a loop
+	cdev_init(&gpu->cdev, &fileops);
+	cdev_add(&gpu->cdev, MKDEV(major, 0), 1);
+	device_create(class, NULL, MKDEV(major, 0), NULL, "gpu-io");
+	return 0;
+}
+```
+
+At this point, the character device will be visible in the filesystem:
+
+```bash
+/ # ls -l /dev/gpu-io 
+crw-rw----    1 0        0         241,   0 May 25 15:58 /dev/gpu-io
+```
+
+At this point, I tried to `write` and got a bit stuck, as `write` receives a `void* private_data` via the `struct file*` but it must be populated during `open`, which does _not_ receive a `private_data`/`user_data` argument.
+
+When reading the definition of [struct inode](https://elixir.bootlin.com/linux/latest/source/include/linux/fs.h#L721), I saw a pointer back to the character device (`struct cdev *i_cdev`), which gave me an idea:
+
+As `struct GpuState` _embeds_ `struct cdev`, having a pointer to `struct cdev` allows us to get a reference back to `GpuState` with `offset_of`:
+
+<img src="/images/pcie-device/container_of.svg" style="margin: 0px auto; width: 100%; max-width: 40rem" />
+
+The kernel provides a `container_of` macro which is built for this specific purpose, so we can now implement open/read/write:
+
+```c
+static int gpu_open(struct inode *inode, struct file *file) {
+	GpuState *gpu = container_of(inode->i_cdev, struct GpuState, cdev);
+	file->private_data = gpu;
+	return 0;
+}
+```
+
+and read/write are simple "one dword at a time" implementations:
+```c
+static ssize_t gpu_read(struct file *file, char __user *buf, size_t count, loff_t *offset) {
+	GpuState *gpu = (GpuState*) file->private_data;
+	uint32_t read_val = ioread32(gpu->hwmem + *offset);
+	copy_to_user(buf, &read_val, 4);
+	*offset += 4;
+	return 4;
+}
+static ssize_t gpu_write(struct file *file, const char __user *buf, size_t count, loff_t *offset) {
+	GpuState *gpu = (GpuState*) file->private_data;
+	u32 n;
+	copy_from_user(&n, buf + *offset + written, 4);
+	*offset += 4;
+	return 4;
+}
+```
+
+This works great! Sadly, it's not a practical implementation for large data transfers - sending 1 packet a time will keep the CPU busy and take a long time: it took ~800ms to transfer 1.2MiB (640x480x32bpp)!
 
 ## DMA
 
-This is great, but it's not very practical for large data transfers - sending 1 packet a time will keep the CPU busy.
+Instead of copying one dword at a time, we can ask the card to take care of copying the data itself, by using {^DMA|Direct Memory Access}, for which:
 
-Instead, we ask the card to take care of copying the data itself, by using {^DMA|Direct Memory Access}, for which:
-2. The CPU has to tell the card what data to copy (source address, length) and to where (destination address)
-3. The CPU has to tell the card when it is ready for the copy to start
-4. The adapter has to tell the CPU when it has finished the transfer
+1. The CPU has to tell the card what data to copy (source address, length) and to where (destination address)
+2. The CPU has to tell the card when it is ready for the copy to start
+3. The card has to tell the CPU when it has finished the transfer
 	1. IRQ = The adapter needs to be granted the [Bus Master](https://en.wikipedia.org/wiki/Bus_mastering) capability
+
+To send commands to the card, we can use [memory-mapped IO](https://en.wikipedia.org/wiki/Memory-mapped_I/O_and_port-mapped_I/O): we treat certain memory addresses as registers: some registers will be the 'parameters' to our 'function call', and writing to a specific register will trigger the execution of the 'function call'.
+
+As an example, we can map these addresses as registers:
+
+```c
+#define REG_DMA_DIR 		0
+#define REG_DMA_ADDR_SRC 	1
+#define REG_DMA_ADDR_DST 	2
+#define REG_DMA_LEN 		3
+#define REG_DMA_START 		4
+```
+
+and implement a function to execute DMA:
+```c
+static void write_reg(GpuState* gpu, u32 val, u32 reg) {
+	iowrite32(val, 	gpu->hwmem + (reg * sizeof(u32)));
+}
+void execute_dma(GpuState* gpu, u8 dir, u32 src, u32 dst, u32 len) {
+	write_reg(gpu, dir, REG_DMA_DIR);
+	write_reg(gpu, src,	REG_DMA_ADDR_SRC);
+	write_reg(gpu, dst,	REG_DMA_ADDR_DST);
+	write_reg(gpu, len,	REG_DMA_LEN);
+	write_reg(gpu, 1, 	REG_DMA_START);
+}
+```
 
 after msi_init in QEMU
         Capabilities: [40] MSI: Enable- Count=1/1 Maskable- 64bit+
