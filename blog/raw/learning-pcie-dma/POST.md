@@ -73,9 +73,9 @@ Now, if we call `pci_register_driver` during `module_init`, we can see the card 
 [    0.488817] gpu_module_init done
 ```
 
-## Accessing the adapter via a character device
+## Exposing the card to userspace
 
-Now that we have mapped the BAR0 address space in our kernel driver, we can expose a nicer interface for users: a character device, which allows direct, unbuffered access to the device they represent.
+Now that we have mapped the BAR0 address space in our kernel driver, we can create a character device to allow user-space applications to interact with the PCIe device through file operations: `read(2)` and `write(2)`.
 
 For this driver, we only need to implement `open`, `read` and `write`, which have these signatures:
 
@@ -127,7 +127,7 @@ At this point, I tried to `write` and got a bit stuck, as `write` receives a `vo
 
 When reading the definition of [struct inode](https://elixir.bootlin.com/linux/latest/source/include/linux/fs.h#L721), I saw a pointer back to the character device (`struct cdev *i_cdev`), which gave me an idea:
 
-As `struct GpuState` _embeds_ `struct cdev`, having a pointer to `struct cdev` allows us to get a reference back to `GpuState` with `offset_of`:
+As `struct GpuState` _embeds_ `struct cdev`, having a pointer to `struct cdev` allows us to get a reference back to `GpuState` with `offsetof`:
 
 <img src="/images/pcie-device/container_of.svg" style="margin: 0px auto; width: 100%; max-width: 40rem" />
 
@@ -141,7 +141,7 @@ static int gpu_open(struct inode *inode, struct file *file) {
 }
 ```
 
-and read/write are simple "one dword at a time" implementations:
+and read/write are simple "one {^DWORD|32 bits} at a time" implementations:
 ```c
 static ssize_t gpu_read(struct file *file, char __user *buf, size_t count, loff_t *offset) {
 	GpuState *gpu = (GpuState*) file->private_data;
@@ -161,16 +161,21 @@ static ssize_t gpu_write(struct file *file, const char __user *buf, size_t count
 
 This works great! Sadly, it's not a practical implementation for large data transfers - sending 1 packet a time will keep the CPU busy and take a long time: it took ~800ms to transfer 1.2MiB (640x480x32bpp)!
 
-## DMA
+## Letting the "hardware" do the hard work
 
-Instead of copying one dword at a time, we can ask the card to take care of copying the data itself, by using {^DMA|Direct Memory Access}, for which:
+Instead of having the CPU copy one {^DWORD|32 bits} worth of data at a time, we can ask the card to take care of copying the data itself, by using {^DMA|Direct Memory Access}.
 
-1. The CPU has to tell the card what data to copy (source address, length) and to where (destination address)
+To send work requests to the card, we can use [memory-mapped IO](https://en.wikipedia.org/wiki/Memory-mapped_I/O_and_port-mapped_I/O): we treat certain memory addresses as registers, which will be the 'parameters' to our 'function call', and we treat other memory addresses as the execution of a 'function call'.
+
+When defining the interface for this DMA "function call":
+
+1. The CPU has to tell the card:
+	* What data to copy (source address, length)
+	* The destination address
+	* Whether the data flows _towards_ main memory or _from_ main memory (read or write)
 2. The CPU has to tell the card when it is ready for the copy to start
 3. The card has to tell the CPU when it has finished the transfer
-	1. IRQ = The adapter needs to be granted the [Bus Master](https://en.wikipedia.org/wiki/Bus_mastering) capability
 
-To send commands to the card, we can use [memory-mapped IO](https://en.wikipedia.org/wiki/Memory-mapped_I/O_and_port-mapped_I/O): we treat certain memory addresses as registers: some registers will be the 'parameters' to our 'function call', and writing to a specific register will trigger the execution of the 'function call'.
 
 As an example, we can map these addresses as registers:
 
@@ -179,7 +184,12 @@ As an example, we can map these addresses as registers:
 #define REG_DMA_ADDR_SRC 	1
 #define REG_DMA_ADDR_DST 	2
 #define REG_DMA_LEN 		3
-#define REG_DMA_START 		4
+```
+
+and we can define a set of "commands" to imply a call, as being different from just filling in some registers
+```c
+#define CMD_ADDR_BASE 		0xf00
+#define CMD_DMA_START 		(CMD_ADDR_BASE + 0)
 ```
 
 and implement a function to execute DMA:
@@ -192,23 +202,22 @@ void execute_dma(GpuState* gpu, u8 dir, u32 src, u32 dst, u32 len) {
 	write_reg(gpu, src,	REG_DMA_ADDR_SRC);
 	write_reg(gpu, dst,	REG_DMA_ADDR_DST);
 	write_reg(gpu, len,	REG_DMA_LEN);
-	write_reg(gpu, 1, 	REG_DMA_START);
+	write_reg(gpu, 1, 	CMD_DMA_START);
 }
 ```
 
-We also need to implement the MMIO side in the adapter:
+We also need to implement the MMIO side in the adapter, by replacing the previous `gpu_write` function:
+
 ```c
-static void gpu_control_write(void *opaque, hwaddr addr, uint64_t val, unsigned size) {
+static void gpu_write(void *opaque, hwaddr addr, uint64_t val, unsigned size) {
 	GpuState *gpu = opaque;
 	val = lower_n_bytes(val, size);
 	uint32_t reg = addr / 4;
+	if (reg < CMD_ADDR_BASE) { // register
+		gpu->registers[reg] = (uint32_t)val;
+		return;
+	}
 	switch (reg) {
-		case REG_DMA_DIR:
-		case REG_DMA_ADDR_SRC:
-		case REG_DMA_ADDR_DST:
-		case REG_DMA_LEN:
-			gpu->registers[reg] = (uint32_t)val;
-			break;
 		case REG_DMA_START:
 			if (gpu->registers[REG_DMA_DIR] == DIR_HOST_TO_GPU) {
 				pci_dma_read(&gpu->pdev,
@@ -240,33 +249,50 @@ static ssize_t gpu_fb_write(struct file *file, const char __user *buf, size_t co
 }
 ```
 
-Which now is fast enough to report as ~300us on my system. We may revisit later to go for a zero-copy implementation.
+Which now is fast enough to report as ~300us on my system.
 
 ## Blocking writes
 
 There's a problem though; the DMA execution is asynchronous, and it would be a lot nicer if `write` would block until the write has finished.
 
+_Conveniently_, PCI-e cards can arbitrarily send signals to the CPU as {^Message Signalled Interrupts|MSI} -- we can send an MSI to notify the CPU that the DMA transfer has completed.
 
-For this, we can use interrupts, which are a way for devices to signal to the CPU that some event has happened -- we can use one to signify that the DMA transfer has completed.
+We are only focusing on MSIs here which, as the name implies, they communicate the interrupt by sending a normal message (packet) on the bus, this is in contrast with classic interrupts which had a dedicated electrical connection to send out-of-band signals.
 
-We are only focusing on MSI (Message Signalled Interrupt) here which, as the name implies, they communicate the interrupt by sending a normal message (packet) on the PCI bus, this is in contrast with classic interrupts, which had a dedicated electrical connection to send out-of-band signals.
+To configure MSI-X, we need to set aside some space to store some configuration for each interrupt (the MSI-X table) and some extra space for a bitmap of pending interrupts (the {^PBA|Pending Bit Array}, but we won't use it).
 
-First, we define some shared constants
-
+First, we define some shared constants:
 ```c
 #define IRQ_COUNT 			1
 #define IRQ_DMA_DONE_NR 	0
+#define MSIX_ADDR_BASE 		0x1000
+#define PBA_ADDR_BASE 		0x3000
 ```
 
 In QEMU, in `pci_gpu_realize` we need to add
 ```c
-msix_init(pdev, IRQ_COUNT, &gpu->mem, 0 /* table_bar_nr  = bar id */, 0x1000 /* table_offset */,
-		  &gpu->mem, 0 /* pba_bar_nr  = bar id */, 0x3000 /* pba_offset */, 0x0 /* capabilities */, errp);
+msix_init(pdev, IRQ_COUNT,
+		  &gpu->mem, 0 /* table_bar_nr = bar id */, MSIX_ADDR_BASE,
+		  &gpu->mem, 0 /* pba_bar_nr = bar id */, PBA_ADDR_BASE,
+		  0x0 /* capabilities */, errp);
 for(int i = 0; i < IRQ_COUNT; i++)
 	msix_vector_use(pdev, i);
 ```
 
-which will reserve an 8KiB space for MSIs (at the 4K offset) and another 8KiB space for PBAs at the 12KiB offset.
+which will reserve an 8KiB space for MSIs (at the 4K offset) and another 8KiB space for PBAs at the 12KiB offset, or, in stack form:
+
+<img src="/images/pcie-device/ioregion.svg" style="margin: 0px auto; width: 100%; max-width: 40rem" />
+
+At this point, we can see that MSI-X are enabled, and the offsets of the vector table & PBA:
+
+```bash
+/ # lspci -vv
+...
+Region 0: Memory at fc000000 (32-bit, non-prefetchable) [size=16M]
+Capabilities: [40] MSI-X: Enable- Count=1 Masked-
+        Vector table: BAR=0 offset=00001000
+        PBA: BAR=0 offset=00003000
+```
 
 Then to send an interrupt when `pci_dma_read` finishes, we can call
 
@@ -295,22 +321,17 @@ static int setup_msi(GpuState* gpu) {
 
 and we can call `setup_msi` in the `gpu_probe` (PCI probe) function.
 
-On boot, we can see these changes reflected in the device:
+On boot, we can see that the kernel assigned an IRQ number for us:
 
 ```bash
-/ # lspci -vv
-...
-Region 0: Memory at fc000000 (32-bit, non-prefetchable) [size=16M]
-Capabilities: [40] MSI-X: Enable- Count=1 Masked-
-        Vector table: BAR=0 offset=00001000
-        PBA: BAR=0 offset=00003000
-...
 / # grep Dma /proc/interrupts 
   			 CPU 0
   24:          0          PCI-MSIX-0000:00:02.0   0-edge      GPU-Dma0
 ```
 
-Even with this no-op handler, we never see the interrupt firing in the kernel; this is because the card is not allowed to send messages on its own; to do so, it has to be granted 'bus master' capabilities.
+However, this does not work, because the card does not yet have permissions to independently send messages to the CPU. To be able to do this, the card has to be granted the 'bus master' capability.
+
+Bus mastering is a feature which allows devices to directly manipulate system memory without involving the CPU.
 
 We can grant the card bus master capabilities by calling `pci_set_master(pdev);` in the kernel's `gpu_probe` function, after which, if we call `write` twice we can see:
 
@@ -352,7 +373,7 @@ add `init_waitqueue_head(&wq)` to `setup_msi`, and add the blocking condition in
 
 ## Displaying something
 
-We now have a 'framebuffer' that can receive `write(2)` from userspace, and will forward the data as-is to a PCI-e device using DMA; we can cheat a little bit and hook that buffer to QEMU's console output:
+We now have a 'framebuffer' that can receive `write(2)` from userspace, and will forward the data as-is to a PCI-e device using DMA; we can cheat a little bit to pretend we have a working GPU, by hooking the card's buffer to QEMU's console output:
 
 In QEMU's source:
 
@@ -401,7 +422,12 @@ when launching QEMU, we can now see the test pattern:
 And whenever writing patterns to the underlying device, we can see the display change!
 
 <center><video controls><source  src="/videos/pcie-device/qemu_test_pattern_writes.mp4"></source></video></center>
+
+---
+
 That's it for now, next time, we _may_ look at multiple DMA engines, zero-copy DMA and/or becoming a _real_ GPU.
+
+You can find the source [here](https://github.com/DavidVentura/pci-device).
 
 
 ## References:
