@@ -4,7 +4,6 @@ date: 2024-05-25
 tags: pci-e, qemu, c
 slug: pcie-driver-dma
 description: Creating a simple driver for a simple PCI-e device (in QEMU)
-incomplete: yes
 ---
 
 
@@ -159,7 +158,7 @@ static ssize_t gpu_write(struct file *file, const char __user *buf, size_t count
 }
 ```
 
-This works great! Sadly, it's not a practical implementation for large data transfers - sending 1 packet a time will keep the CPU busy and take a long time: it took ~800ms to transfer 1.2MiB (640x480x32bpp)!
+This method works well for small data transfers, but it's not practical for larger ones. Sending 1 packet a time keeps the CPU busy and is quite slow; for example, transferring 1.2MiB (640x480 at 32bpp) took ~800ms!
 
 ## Letting the "hardware" do the hard work
 
@@ -438,3 +437,4 @@ You can find the source [here](https://github.com/DavidVentura/pci-device).
 1. [Writing a PCI device driver for Linux](https://olegkutkov.me/2021/01/07/writing-a-pci-device-driver-for-linux/)
 1. [Simple character device driver for Linux](https://olegkutkov.me/2018/03/14/simple-linux-character-device-driver/)
 1. [pciemu](https://github.com/luizinhosuraty/pciemu)
+1. [MSI-X Capability structure](https://www.intel.com/content/www/us/en/docs/programmable/683686/20-4/msi-x-capability-structure.html)
