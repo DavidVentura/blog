@@ -17,7 +17,10 @@ An option rom is quite small, just 64 bytes of headers, followed by a few KiB of
 
 <img src="/images/optionrom/headers.svg" style="margin: 0px auto; width: 100%; max-width: 40rem" />
 
-We are going to implement the UEFI driver with EDK2, by following [their instructions](https://github.com/tianocore/tianocore.github.io/wiki/Common-instructions):
+We are going to implement the UEFI driver with [EDK2](https://github.com/tianocore/edk2).
+
+## Hello world
+To set up the repo, we follow the [official instructions](https://github.com/tianocore/tianocore.github.io/wiki/Common-instructions):
 
 ```bash
 git clone 
@@ -57,13 +60,14 @@ $ file ./Build/OvmfX64/DEBUG_GCC5/X64/OptionRom.efi
 ./Build/OvmfX64/DEBUG_GCC5/X64/OptionRom.efi: PE32+ executable (EFI boot service driver) x86-64, for MS Windows, 3 sections
 ```
 
-which we can build into the appropriate Option Rom structure with `EfiRom`:
+We can take the `efi` file and build it into an Option Rom with `EfiRom`:
 
 ```bash
 ./BaseTools/Source/C/bin/EfiRom -f 0x1337 -i 0x1234 -o ./Build/OptionRom.efirom -e ./Build/OvmfX64/DEBUG_GCC5/X64/OptionRom.efi
 ```
 
-confirm:
+Let's dump the Option Rom metadata to confirm:
+
 ```bash
 ./BaseTools/Source/C/bin/EfiRom -d a.rom 
 Image 1 -- Offset 0x0
@@ -93,25 +97,43 @@ Image 1 -- Offset 0x0
 ```
 
 
-And now we can boot it with qemu
+Let's put the driver in a FAT filesystem:
 
 ```bash
-$ qemu-system-x86_64 ....
+truncate -s 32M disk.raw
+mkfs.fat disk.raw
+mcopy -o -i disk.raw Build/OptionRom.efirom ::OptionRom.efirom
+```
+
+Now we can load it manually with QEMU:
+
+
+```bash
+$ qemu-system-x86_64 -hda disk.raw -bios /usr/share/ovmf/OVMF.fd
 UEFI Interactive Shell v2.2
 EDK II
 UEFI v2.70 (EDK II, 0x00010000)
-Mapping table
-      FS0: Alias(s):F0a:;BLK0:
-          PciRoot(0x0)/Pci(0x1,0x1)/Ata(0x0)
-     BLK1: Alias(s):
-          PciRoot(0x0)/Pci(0x1,0x1)/Ata(0x0)
-Press ESC in 3 seconds to skip startup.nsh or any other key to continue.
 Shell> fs0:
 FS0:\> loadpcirom OptionRom.efirom
 MyOptionRom loaded
 Image 'FS0:\OptionRom.efirom' load result: Success
 FS0:\> 
 ```
+
+This confirms that the toolchain is working, and we can now start the real implementation of the driver
+
+## Driver model
+
+UEFI drivers are expected[^1] to follow the driver model which provides a {^[standardized](https://uefi.org/sites/default/files/resources/UEFI_Spec_2_1.pdf)|Section 2.5} way to initialize hardware during the boot process.
+These drivers are only really _required_ to implement the Driver Binding protocol, which handles the attachment and detachment of drivers to devices by implementing `Supported()`, `Start()`, and `Stop()`.
+
+The goal of drivers is to produce a protocol on the device handle that abstracts the operations that the device supports. In our case, we want to get a handle to our Pci device with the `PciIoProtocol`, and then install the `GraphicsOutputProtocol`.
+
+{embed-mermaid driver.mmd}
+
+- PciIoProtocol def
+- GraphicsOutputProtocol defjkk
+
 set PcdDebugPrintErrorLevel 
 - doing something, maybe blit, maybe just show up somewhere??
 
@@ -142,8 +164,36 @@ other example, consume Graphics Output, provide TextOutput
 
 a shell can be built with TextInput + TextOutput
 
+In Blit, we can implement a naive write to framebuffer memory, by sending 1 DWORD at a time
+
+```c
+```
+
+_be patient_
 <center><video controls><source  src="/videos/optionrom/no-dma.mp4"></source></video></center>
+
+which is _amazing_ as it shows the option ROM works with an otherwise unmodified UEFI.
+at this spoint i spent about 45 min figuring out how to implement a dma transfer, as we did in [the last episode](),
+
+```c
+- for (..
+- for (..
++ CopyBufferDMA()
+```
+
+which is _so much faster_
 <center><video controls><source  src="/videos/optionrom/with_dma.mp4"></source></video></center>
+
+However. 
+
+at this point I realized that:
+- Gop is a Boot Service
+- ExitBootServices is a thing
+
+BootServices vs Run Services
+
+
+explanation of kernel/efifb using just the framebuffer, video on framebuffer usage from uefi
 
 
 1. https://tianocore-docs.github.io/edk2-UefiDriverWritersGuide/draft/
@@ -152,3 +202,6 @@ a shell can be built with TextInput + TextOutput
 1. https://www.intel.co.uk/content/dam/doc/guide/uefi-driver-graphics-controller-guide.pdf
 1. https://github.com/artem-nefedov/uefi-gdb
 1. https://uefi.org/sites/default/files/resources/UEFI_Spec_2_1.pdf
+
+
+[^1]: but you can also completely ignore the driver model and just install a protocol during your entrypoint ¯\\\_(ツ)\_/¯
