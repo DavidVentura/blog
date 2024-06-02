@@ -308,18 +308,20 @@ And now, _be patient_ for the grand reveal:
 
 which is _amazing_ as it shows the option ROM works with an otherwise unmodified UEFI.
 
-It also _may_ be a _tad_ slow, so at this point I spent about 45 min figuring out how to implement a DMA transfer, as we did in [the last entry](), which looked something like this
+It also _may_ be a _tad_ slow, so at this point I spent about 45 min researching and implementing DMA transfers, as we did in [the last entry](/pcie-driver-dma.html), which ended up looking something like this:
 
 ```diff
-- for (..
-- for (..
-+ CopyBufferDMA()
+-    for(int y=0; y<Private->Info.VerticalResolution;y++){
+-    	for(int x=0; x<Private->Info.HorizontalResolution;x++){
+-       }
+-    }
++    CopyBufferDMA()
 ```
 
-and was _so much faster_
+and it was _so much faster_
 <center><video controls><source  src="/videos/optionrom/with_dma.mp4"></source></video></center>
 
-However. 
+**However**
 
 at this point I realized that:
 - Gop is a Boot Service
@@ -327,10 +329,36 @@ at this point I realized that:
 
 BootServices vs Run Services
 
+Services = Functions
 
+Runtime Services are the functions that remain available after the operating system has taken control, such as `GetTime`, `SetTime`, `GetVariable`.
 
-set PcdDebugPrintErrorLevel 
-- doing something, maybe blit, maybe just show up somewhere??
+Boot Services are the functions which are _only_ available before the operating system takes control.
+
+The operating system "taking control" is defined as the point in time on which `ExitBootServices` is called.
+
+So, whenever Linux starts booting, it'll call `ExitBootServices()`, and our GOP's `Blit` function will no longer be callable :(
+
+Gop->Mode:
+```c
+typedef struct {
+	UINT32 MaxMode;
+	UINT32 Mode;
+	EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *Info;
+	UINTN SizeOfInfo;
+	EFI_PHYSICAL_ADDRESS FrameBufferBase;
+	UINTN FrameBufferSize;
+} EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE```
+
+`FrameBufferBase`
+
+While the GOP can't be accessed, the underlying framebuffer remains valid (unless we actively free/close it), so what Linux will do (in `efifb`) is directly write to the framebuffer.
+
+As direct writes (no DMA) are what linux will do, TODO: pending if FBCON loads with my driver, we should do the same.
+
+- Get BAR#1 address
+- Store it
+- Call `FrameBufferBlt`
 
 https://github.com/tianocore-docs/edk2-UefiDriverWritersGuide/tree/master/18_pci_driver_design_guidelines
 pci proto -> gop proto
