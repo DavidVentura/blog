@@ -18,7 +18,9 @@
     "url": "https://github.com/DavidVentura/blog/issues"
   },
   "homepage": "https://github.com/DavidVentura/blog#readme",
-  "dependencies": {},
+  "dependencies": {
+    "@mermaid-js/mermaid-cli": "^10.9.1"
+  },
   "devDependencies": {
     "npx": "^10.2.2",
     "pnpm": "^8.6.12",
