@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import subprocess
 import glob
 import os
 import re
@@ -25,6 +26,7 @@ INDEX_TEMPLATE = Template(open('blog/template/index.html', 'r').read())
 DEBUG = True
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
 EMBED_FILE_RE = re.compile(r'{embed-file (?P<fname>[^}]+)}')
+EMBED_MERMAID_RE = re.compile(r'{embed-mermaid (?P<fname>[^}]+)}')
 TOOLTIP_RE = re.compile(r'{\^(?P<hint>[^|]+)[|](?P<content>[^}]+)}')
 md = Markdown(extras=["fenced-code-blocks", "cuddled-lists", "footnotes", "metadata", "tables", "header-ids"])
 
@@ -82,6 +84,10 @@ class PostMetadata:
         return slug
 
     @staticmethod
+    def from_text(text: str) -> 'PostMetadata':
+        return PostMetadata.from_dict(md.convert(text).metadata)
+
+    @staticmethod
     @lru_cache
     def from_path(fname) -> 'PostMetadata':
         with open(fname, 'r') as fd:
@@ -119,6 +125,25 @@ def files_to_embed(relpath, text):
         fname = match.group('fname')
         ret.append(os.path.join(relpath, fname))
     return ret
+
+def embed_mermaid(relpath, text, r: PostMetadata):
+    match_substr = None
+    for match in EMBED_MERMAID_RE.finditer(text):
+        fname = match.group('fname')
+        full_fname = os.path.join(relpath, fname)
+        bdir = f'blog/html/images/mermaid/{r.get_slug()}'
+        os.makedirs(bdir, exist_ok=True)
+        new_fname = f'{bdir}/{fname}.svg'
+        if os.path.isfile(new_fname) and newer(new_fname, [full_fname]):
+            print('skipping', new_fname, 'nwer', full_fname)
+            # do not regenerate the same files if the sources were 
+            # not modified
+            continue
+        print('out=', new_fname)
+        subprocess.run(['./node_modules/.bin/mmdc', '-i', full_fname, '-o', new_fname, '-b', 'white'])
+        match_substr = match.group(0)
+        text = text.replace(match_substr, f'![](/images/mermaid/{r.get_slug()}/{fname}.svg)')
+    return text
 
 def embed_files(relpath, text):
     match_substr = None
@@ -169,16 +194,17 @@ def main(filter_name: Optional[str]):
         debug(target)
 
         md_str = open(post_file, encoding='utf-8').read()
-        md_str = embed_files(target, md_str)
-        md_str = populate_tooltips(md_str)
-        _files_to_embed = files_to_embed(target, md_str)
-        body = convert(md_str)
-
-        r = PostMetadata.from_dict(body.metadata)
+        r = PostMetadata.from_text(md_str)
 
         if r.incomplete and not DEVMODE:
             debug('Incomplete - skipping')
             continue
+
+        md_str = embed_files(target, md_str)
+        md_str = embed_mermaid(target, md_str, r)
+        md_str = populate_tooltips(md_str)
+        _files_to_embed = files_to_embed(target, md_str)
+        body = convert(md_str)
 
         header = generate_header(r)
         html_fname = 'blog/html/%s.html' % r.get_slug()
