@@ -20,7 +20,7 @@ The format for an option rom is just 64 bytes of headers (split in two), followe
 
 ## A 'Hello world' driver
 
-For this post, we are going to implement the UEFI driver with [EDK2](https://github.com/tianocore/edk2), to set up the repo,
+For this post, we are going to implement the UEFI driver with [EDK2](https://github.com/tianocore/edk2), to set up the dev environment,
 we follow the [official instructions](https://github.com/tianocore/tianocore.github.io/wiki/Common-instructions):
 
 ```bash
@@ -43,9 +43,43 @@ and following the [skeleton example](https://github.com/tianocore-docs/edk2-Uefi
 INF file
 
 ```ini
+[Defines]
+  INF_VERSION    = 0x00010005
+  BASE_NAME      = OptionRom
+  FILE_GUID      = f1f6026b-aa59-4e68-9fbe-6be92e37a225
+  MODULE_TYPE    = UEFI_DRIVER
+  VERSION_STRING = 1.0
+  ENTRY_POINT    = OptionRomEntry
+
+[Sources]
+  rom.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+
+[LibraryClasses]
+  DebugLib
+  PrintLib
+  UefiDriverEntryPoint
+  UefiLib
 ```
+
 driver.c
 ```c
+#include <Uefi.h>
+#include <Library/UefiLib.h>
+#include <Library/DebugLib.h>
+
+EFI_STATUS EFIAPI OptionRomEntry (
+  IN  EFI_HANDLE        ImageHandle,
+  IN  EFI_SYSTEM_TABLE  *SystemTable) {
+    DEBUG((EFI_D_INFO, "MyOptionRom loaded\n"));
+    return EFI_SUCCESS;
+}
+
+EFI_STATUS EFIAPI MyOptionRomUnload (IN  EFI_HANDLE  ImageHandle) {
+    return EFI_SUCCESS;
+}
 ```
 
 and build the driver with `build -m OptionRom/Rom.inf` (yes, they named their build command `build`), which will generate the driver, as a PE file at `./Build/OvmfX64/DEBUG_GCC5/X64/OptionRom.efi`
@@ -126,9 +160,21 @@ The goal of drivers is to produce a protocol on the device handle that abstracts
 
 Define driver state:
 ```c
+typedef struct {
+  // Driver's own handle
+  EFI_HANDLE Handle;
+  // PCI device
+  EFI_PCI_IO_PROTOCOL *PciIo;
+
+  // Our installed GOP
+  EFI_GRAPHICS_OUTPUT_PROTOCOL Gop;
+
+  // Graphics mode (resolution)
+  EFI_GRAPHICS_OUTPUT_MODE_INFORMATION Info;
+} MY_GPU_PRIVATE_DATA;
 ```
 
-_As UEFI code is quite verbose, all code samples are abbreviated, find sources [here]()_
+_As UEFI code is quite verbose, all code samples are abbreviated, find sources [here](https://github.com/DavidVentura/pci-device/tree/master/OptionRom)_
 
 Implementing support:
 
@@ -198,14 +244,10 @@ EFI_STATUS EFIAPI OptionRomEntry(...) {
 }
 ```
 
-at this point we have a driver that registers itself as a Graphics Output (GOP) and does nothing else.
+at this point we have a driver that registers itself as a Graphics Output (GOP) and does _nothing_.
 
-Implementing GOP
 
-```diff
-+ GopSetup(Private)
-  gBS->InstallMultipleProtocolInterfaces(&Private->Handle, &gEfiGraphicsOutputProtocolGuid, Private->Gop, NULL);
-```
+First, we need to set up the information for the output itself in the GOP structure
 
 ```c
 EFI_STATUS EFIAPI GopSetup(IN OUT MY_GPU_PRIVATE_DATA *Private) {
@@ -215,7 +257,7 @@ EFI_STATUS EFIAPI GopSetup(IN OUT MY_GPU_PRIVATE_DATA *Private) {
   Private->Gop.SetMode = MyGpuSetMode;
   Private->Gop.Blt = MyGpuBlt;
 
-  // Fill in the available modes, for now, this is static
+  // Fill in the available modes, for now, this is single, static entry
   Private->Info.Version = 0;
   Private->Info.HorizontalResolution = 640; // hardcoded on the adapter
   Private->Info.VerticalResolution = 480;
@@ -227,17 +269,32 @@ EFI_STATUS EFIAPI GopSetup(IN OUT MY_GPU_PRIVATE_DATA *Private) {
   Private->Gop.Mode->Mode = 0;
   Private->Gop.Mode->Info = &Private->Info;
   Private->Gop.Mode->SizeOfInfo = sizeof(EFI_GRAPHICS_OUTPUT_MODE_INFORMATION);
+
   UINT32 FbSize = Private->Info.HorizontalResolution * Private->Info.VerticalResolution * sizeof(EFI_GRAPHICS_OUTPUT_BLT_PIXEL);
   Private->Gop.Mode->FrameBufferBase = AllocateZeroPool(FbSize);
   Private->Gop.Mode->FrameBufferSize = FbSize;
 }
 ```
 
-and then we need to implement the 3 callbacks for the protocol:
+and making sure the GOP is set up before we install the protocol
 
-QueryMode: stumped me bc it needs to return a freshly-allocated pool
+```diff
+@@ GpuVideoControllerDriverStart (
+  Private->PciIo->Attributes (Private->PciIo, EfiPciIoAttributeOperationEnable, SupportedAttrs, NULL);
+ 
++ GopSetup(Private)
 
-QueryMode needs to return a newly-allocated Info which specifies the current graphics resolution, as we only support 1 resolution, we copy it from the driver state
+  // Install Graphics Output Protocol on this driver
+  gBS->InstallMultipleProtocolInterfaces(&Private->Handle, &gEfiGraphicsOutputProtocolGuid, Private->Gop, NULL);
+```
+
+
+With the GOP structure populated, we need to implement the 3 callbacks for the protocol:
+
+### QueryMode
+
+Returns a _newly-allocated_ `EFI_GRAPHICS_OUTPUT_MODE_INFORMATION**` which specifies the supported graphics resolutions, as we only support 1 resolution, we copy it from the driver state
+
 ```c
 EFI_STATUS EFIAPI MyGpuQueryMode(..., OUT UINTN *SizeOfInfo, OUT EFI_GRAPHICS_OUTPUT_MODE_INFORMATION **Info) {
   MY_GPU_PRIVATE_DATA *Private = MY_GPU_PRIVATE_DATA_FROM_THIS(This);
@@ -248,16 +305,23 @@ EFI_STATUS EFIAPI MyGpuQueryMode(..., OUT UINTN *SizeOfInfo, OUT EFI_GRAPHICS_OU
 }
 ```
 
-the emphasis in copy/newly allocated is because i spent hours trying to figure out why i was getting this assertion error
+the emphasis in _newly-allocated_ is because I spent _hours_ trying to figure out why the return from the `QueryMode` call was tripping this assertion
 
+```text
+ASSERT edk2/MdeModulePkg/Core/Dxe/Mem/Pool.c(721): Head->Signature == ((('p') | ('h' << 8)) | ((('d') | ('0' << 8)) << 16)) ||
+												   Head->Signature == ((('p') | ('h' << 8)) | ((('d') | ('1' << 8)) << 16))
 ```
-ASSERT edk2/MdeModulePkg/Core/Dxe/Mem/Pool.c(721): Head->Signature == ((('p') | ('h' << 8)) | ((('d') | ('0' << 8)) << 16)) || Head->Signature == ((('p') | ('h' << 8)) | ((('d') | ('1' << 8)) << 16))
-```
 
-when not using the `AllocatePool` family for the output buffer - the docs state that it's a callee-allocated pool LINK
+when not using the `AllocatePool`  family for the output buffer (eg: `*Info = &Private->Info`); the [docs](https://uefi.org/specs/UEFI/2.10/12_Protocols_Console_Support.html#efi-graphics-output-protocol-querymode) _do_ state:
+
+> `Info\*` is a pointer to a callee allocated buffer that returns information about ModeNumber.
+
+which seems to imply `FreePool()` will be called on the pointer after the return of the function.
 
 
-SetMode asks us to reconfigure the output to one of thesupported formats, but we don't really support other resolutions right now, so it's a no-op:
+### SetMode
+
+Re-configure the output to one of the supported modes -- but as we don't really support other resolutions, it's a no-op:
 
 ```c
 EFI_STATUS EFIAPI MyGpuSetMode(...) {
@@ -265,22 +329,18 @@ EFI_STATUS EFIAPI MyGpuSetMode(...) {
 }
 ```
 
-and the interesting function, Blt, which takes a lot of parameters and supports multiple modes. You can find the documentation [here](https://uefi.org/specs/UEFI/2.10/12_Protocols_Console_Support.html#efi-graphics-output-protocol-blt) -- let's start with support for full screen blits only:
+### Blt
 
-The most naive implementation: set the value of each pixel, one at a time, via a PCI write
+{^Blt|BLock Transfer} a rectangle of pixels, through [multiple](https://uefi.org/specs/UEFI/2.10/12_Protocols_Console_Support.html#efi-graphics-output-protocol-blt) seemingly-unnecessary modes.
+
+Let's start by only supporting full blits, with the most naive implementation: setting the value of each pixel, one at a time, via raw PCI writes
+
 ```c
 EFI_STATUS EFIAPI MyGpuBlt(
     IN  EFI_GRAPHICS_OUTPUT_PROTOCOL       *This,
     IN  EFI_GRAPHICS_OUTPUT_BLT_PIXEL      *BltBuffer  OPTIONAL,
     IN  EFI_GRAPHICS_OUTPUT_BLT_OPERATION  BltOperation,
-    IN  UINTN                              SourceX,
-    IN  UINTN                              SourceY,
-    IN  UINTN                              DestinationX,
-    IN  UINTN                              DestinationY,
-    IN  UINTN                              Width,
-    IN  UINTN                              Height,
-    IN  UINTN                              Delta
-	) {
+	...) {
 	MY_GPU_PRIVATE_DATA *Private = MY_GPU_PRIVATE_DATA_FROM_THIS(This);
 	for(int y=0; y<Private->Info.VerticalResolution;y++){
 		for(int x=0; x<Private->Info.HorizontalResolution;x++){
@@ -302,44 +362,50 @@ EFI_STATUS EFIAPI MyGpuBlt(
 }
 ```
 
-And now, _be patient_ for the grand reveal:
+And now, for the grand reveal (_be patient_):
 
 <center><video controls><source  src="/videos/optionrom/no-dma.mp4"></source></video></center>
 
-which is _amazing_ as it shows the option ROM works with an otherwise unmodified UEFI.
+which is _amazing_ as it shows the option ROM works with a completely unmodified UEFI.
 
-It also _may_ be a _tad_ slow, so at this point I spent about 45 min researching and implementing DMA transfers, as we did in [the last entry](/pcie-driver-dma.html), which ended up looking something like this:
+It also _may_ be a _tad_ slow, so I spent about 45 min researching and implementing DMA transfers, as we did in [the last entry](/pcie-driver-dma.html), which ended up looking something like this:
 
 ```diff
+@@ MyGpuBlt (
 -    for(int y=0; y<Private->Info.VerticalResolution;y++){
 -    	for(int x=0; x<Private->Info.HorizontalResolution;x++){
+-           ...
 -       }
 -    }
 +    CopyBufferDMA()
 ```
 
 and it was _so much faster_
+
 <center><video controls><source  src="/videos/optionrom/with_dma.mp4"></source></video></center>
 
 **However**
 
 at this point I realized that:
-- Gop is a Boot Service
-- ExitBootServices is a thing
+- GOP is a **Boot** Service
+- `ExitBootServices` is a thing
 
-BootServices vs Run Services
+### A sidetrack on UEFI services & framebuffers
 
-Services = Functions
+UEFI provides a bunch of "services", which are just functions. These services are split into two categories: Boot services and Runtime services.
 
-Runtime Services are the functions that remain available after the operating system has taken control, such as `GetTime`, `SetTime`, `GetVariable`.
+[Boot Services](https://uefi.org/specs/UEFI/2.10/07_Services_Boot_Services.html) are the functions which are _only_ available **before** the operating system takes control, and these are the functions for interacting with hardware, registering drivers, protocols, allocating memory, etc.
 
-Boot Services are the functions which are _only_ available before the operating system takes control.
+[Runtime Services](https://uefi.org/specs/UEFI/2.10/08_Services_Runtime_Services.html) are the functions that remain available **after** the operating system has taken control, but these are simple management functions to deal with UEFI variables, system time, etc.
 
 The operating system "taking control" is defined as the point in time on which `ExitBootServices` is called.
 
-So, whenever Linux starts booting, it'll call `ExitBootServices()`, and our GOP's `Blit` function will no longer be callable :(
+So, whenever Linux starts booting, it'll call `ExitBootServices()`, and our GOP's `Blt` function will no longer be callable :(
 
-Gop->Mode:
+There's light at the end of the tunnel though, as the resources which were allocated during Boot Services do not get automatically cleaned up, so, the operating system is free to find 
+the framebuffer's hardware address and keep writing to it (which assumes memory-mapped IO)
+
+If we look at how `Gop->Mode` is defined:
 ```c
 typedef struct {
 	UINT32 MaxMode;
@@ -350,16 +416,58 @@ typedef struct {
 	UINTN FrameBufferSize;
 } EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE```
 
-`FrameBufferBase`
+we can see that there's a physical address (`FrameBufferBase`) and len (`FrameBufferSize`), if we can map our PCI device's framebuffer memory here, we no longer need to call `Blt` (and we lose DMA, so it'll be less efficient)
 
-While the GOP can't be accessed, the underlying framebuffer remains valid (unless we actively free/close it), so what Linux will do (in `efifb`) is directly write to the framebuffer.
+### Memory mapped framebuffer
 
-As direct writes (no DMA) are what linux will do, TODO: pending if FBCON loads with my driver, we should do the same.
+in QEMU, we need to allow the framebuffer to be allocated from dynamic memory as it needs to be 4k-aligned
 
-- Get BAR#1 address
-- Store it
-- Call `FrameBufferBlt`
+```diff
+ struct GpuState {
+    PCIDevice pdev;
+    MemoryRegion mem;
+    QemuConsole* con;
+    uint32_t registers[0x100000 / 32]; // 1 MiB = 32k, 32 bit registers
+-   uint32_t framebuffer[0x200000]; // barely enough for 1920x1080 at 32bpp
++   uint32_t* framebuffer;
+ };
+```
 
+then we can map the framebuffer to a new memory region, and assign it BAR#1
+```diff
+ static void pci_gpu_realize(PCIDevice *pdev, Error **errp) {
++    void* ptr = NULL
++    posix_memalign(&ptr, 4096, 16 * MiB);
++    gpu->framebuffer = ptr;
++    memory_region_init_ram_ptr(&gpu->fbmem, OBJECT(gpu), "gpu-fb-mem", 16 * MiB, (void*)ptr);
++    pci_register_bar(pdev, 1, PCI_BASE_ADDRESS_SPACE_MEMORY, &gpu->fbmem);
+```
+
+Now the driver can map the base of the framebuffer to the address referenced by BAR#1
+
+```diff
+@@ GpuVideoControllerDriverStart (
+   Private->PciIo->Attributes (Private->PciIo, EfiPciIoAttributeOperationEnable, SupportedAttrs, NULL);
+ 
++  UINTN FbBarIdx = 1;
++  EFI_ACPI_ADDRESS_SPACE_DESCRIPTOR *Resources;
++  Private->PciIo->GetBarAttributes(Private->PciIo, FbBarIdx, NULL, (VOID **)&Resources);
++  Private->PciFbMemBase = Resources->AddrRangeMin;
+
+   GopSetup(Private)
+```
+
+and the only thing that's left is to render into the buffer directly, without using DMA or single pixel writes -- conveniently EDK2 provides a function that can deal with a `Blt` call if given a framebuffer -- [FrameBufferBlt]():
+```diff
+@@ MyGpuBlt (
+-  CopyBufferDMA()
++  // This Configure points to PciFbMemBase
++  // so FrameBufferBlt is writing to the PCI FB directly,
++  // which is what efifb will do later
++  FrameBufferBlt(Private->FrameBufferBltConfigure, ...)
+```
+
+---------
 https://github.com/tianocore-docs/edk2-UefiDriverWritersGuide/tree/master/18_pci_driver_design_guidelines
 pci proto -> gop proto
 
@@ -387,14 +495,7 @@ other example, consume Graphics Output, provide TextOutput
 
 a shell can be built with TextInput + TextOutput
 
-In Blit, we can implement a naive write to framebuffer memory, by sending 1 DWORD at a time
-
-```c
-```
-
-
-
-explanation of kernel/efifb using just the framebuffer, video on framebuffer usage from uefi
+TODO: pending if FBCON loads with my driver, we should do the same.
 
 
 1. https://tianocore-docs.github.io/edk2-UefiDriverWritersGuide/draft/
