@@ -467,6 +467,34 @@ and the only thing that's left is to render into the buffer directly, without us
 +  FrameBufferBlt(Private->FrameBufferBltConfigure, ...)
 ```
 
+with that, we should be done!
+
+## Results
+
+This is an **UEFI** system, booting an unmodified kernel (no custom drivers), with the PCI option rom:
+
+<center><video controls><source  src="/videos/optionrom/cdrom-boot.mp4"></source></video></center>
+
+### A detour into a framebuffer driver
+
+The kernel has a [framebuffer API](https://docs.kernel.org/driver-api/frame-buffer.html), which allows implementing custom
+framebuffer drivers [very easily](https://github.com/DavidVentura/pci-device/commit/f2ed4fdb956eb41029d684ee61c1f85abf0323d0)
+
+We don't need to do almost anything, as there are existing functions for the actual blitting (`cfb_fillrect`, `cfb_copyarea`, `cfb_imageblit`) -- the main thing that we need to do is populating a `struct fb_info`
+with the physical and virtual addresses for the PCI-e BAR address, but we already had those:
+
+```c
+    // virtual
+	gpu->info->screen_base = gpu->fbmem;
+    // physical
+	gpu->info->fix.smem_start = gpu->fb_phys;
+```
+
+then, calling `register_framebuffer` with this `struct fb_info`.
+
+With that adjustment to the driver, now we can also boot a **BIOS** system, with the driver module
+<center><video controls><source  src="/videos/optionrom/framebuffer-boot.mp4"></source></video></center>
+
 ---------
 https://github.com/tianocore-docs/edk2-UefiDriverWritersGuide/tree/master/18_pci_driver_design_guidelines
 pci proto -> gop proto
