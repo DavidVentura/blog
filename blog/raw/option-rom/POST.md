@@ -15,7 +15,7 @@ UEFI does not have built-in drivers for our custom GPU, but it allows for PCI de
 
 The format for an option rom is just 64 bytes of headers (split in two), followed by the driver's executable, in {^PE|Portable Executable} format:
 
-<img src="/images/optionrom/headers.svg" style="margin: 0px auto; width: 100%; max-width: 40rem" />
+<img src="/images/optionrom/headers.svg" style="margin: 0px auto; width: 100%; max-width: 30rem" />
 
 
 ## A 'Hello world' driver
@@ -145,20 +145,23 @@ This confirms that the toolchain is working, and we can now start the real imple
 
 ## Driver model
 
-UEFI drivers are expected[^1] to follow the driver model which provides a {^[standardized](https://uefi.org/sites/default/files/resources/UEFI_Spec_2_1.pdf)|Section 2.5} way to initialize hardware during the boot process.
+UEFI drivers are expected[^1] to follow the driver model which provides a [standardized](https://uefi.org/specs/UEFI/2.10/11_Protocols_UEFI_Driver_Model.html) way to initialize hardware during the boot process.
 These drivers are only really _required_ to implement the Driver Binding protocol, which handles the attachment and detachment of drivers to devices by implementing `Supported()`, `Start()`, and `Stop()`.
 
-First, UEFI will scan the PCI bus for all present devices, registering every Option ROM as a driver.
+First, UEFI scans the PCI bus for all present devices, registering each Option ROM as a driver.
 
-For each driver, UEFI will call `Supported` with _every_ PCI device
+Once all Option ROMs are registered, UEFI calls the `Supported` function on each driver, _for every PCI device_. This function checks whether the driver supports the specific device, if so, UEFI proceeds with initializing the device by calling the driver's `Start` function, to initialize the hardware, allocate resources & setting up [protocols](https://uefi.org/specs/UEFI/2.10/02_Overview.html#protocols).
 
-TODO THIS PART
-The goal of drivers is to produce a protocol on the device handle that abstracts the operations that the device supports. In our case, we want to get a handle to our Pci device with the `PciIoProtocol`, and then install the `GraphicsOutputProtocol`.
+In a diagram, something like this:
 
-- PciIoProtocol def
-- GraphicsOutputProtocol defjkk
+<img src="/images/optionrom/boot-process.svg" style="margin: 0px auto; width: 100%; max-width: 17rem" />
 
-Define driver state:
+The goal of drivers is to install [protocols](https://uefi.org/specs/UEFI/2.10/02_Overview.html#protocols) on their respective device's handle. These protocols abstract away the hardware, into higher level operations that the device supports.
+
+In our case, we want to get a handle to our device via the [Pci I/O protocol](https://uefi.org/specs/UEFI/2.10/14_Protocols_PCI_Bus_Support.html#efi-pci-io-protocol) on top of which we want to install [Graphics Output Protocol](https://uefi.org/specs/UEFI/2.10/12_Protocols_Console_Support.html#efi-graphics-output-protocol).
+
+To build a driver that follows the UEFI model, first we want to define the driver's state:
+
 ```c
 typedef struct {
   // Driver's own handle
@@ -174,9 +177,22 @@ typedef struct {
 } MY_GPU_PRIVATE_DATA;
 ```
 
+along with the type to hold our Driver Binding definition:
+
+```c
+EFI_DRIVER_BINDING_PROTOCOL gGpuVideoDriverBinding = {
+  GpuVideoControllerDriverSupported,
+  GpuVideoControllerDriverStart,
+  GpuVideoControllerDriverStop,
+  0x10, // version
+  NULL,
+  NULL
+};
+```
+
 _As UEFI code is quite verbose, all code samples are abbreviated, find sources [here](https://github.com/DavidVentura/pci-device/tree/master/OptionRom)_
 
-Implementing support:
+Then imlpement the `Supported()` function to determine which PCI devices work with this driver:
 
 ```c
 EFI_STATUS EFIAPI GpuVideoControllerDriverSupported(...) {
@@ -197,6 +213,8 @@ EFI_STATUS EFIAPI GpuVideoControllerDriverSupported(...) {
   return EFI_UNSUPPORTED;
 }
 ```
+
+and we get to the meat of the driver &emdash; configuring the device:
 
 ```c
 EFI_STATUS EFIAPI GpuVideoControllerDriverStart (...) {
@@ -222,17 +240,9 @@ EFI_STATUS EFIAPI GpuVideoControllerDriverStart (...) {
 }
 ```
 
-and the entrypoint of the EFI only configures itself as a driver:
-```c
-EFI_DRIVER_BINDING_PROTOCOL gGpuVideoDriverBinding = {
-  GpuVideoControllerDriverSupported,
-  GpuVideoControllerDriverStart,
-  GpuVideoControllerDriverStop,
-  0x10, // version
-  NULL,
-  NULL
-};
+Now we only need to connect our Driver to the EFI application's entrypoint:
 
+```c
 EFI_STATUS EFIAPI OptionRomEntry(...) {
   EFI_STATUS Status = EfiLibInstallDriverBindingComponentName2 (
 	  ...,
@@ -246,8 +256,9 @@ EFI_STATUS EFIAPI OptionRomEntry(...) {
 
 at this point we have a driver that registers itself as a Graphics Output (GOP) and does _nothing_.
 
+## Configuring the output adapter
 
-First, we need to set up the information for the output itself in the GOP structure
+To do _something_, we need to set up the information for the output adapter (the QEMU device we implemented in [part 1](/learning-pcie.html)) in the GOP structure
 
 ```c
 EFI_STATUS EFIAPI GopSetup(IN OUT MY_GPU_PRIVATE_DATA *Private) {
@@ -384,7 +395,8 @@ and it was _so much faster_
 
 <center><video controls><source  src="/videos/optionrom/with_dma.mp4"></source></video></center>
 
-**However**
+
+**However.**
 
 at this point I realized that:
 - GOP is a **Boot** Service
@@ -400,7 +412,7 @@ UEFI provides a bunch of "services", which are just functions. These services ar
 
 The operating system "taking control" is defined as the point in time on which `ExitBootServices` is called.
 
-So, whenever Linux starts booting, it'll call `ExitBootServices()`, and our GOP's `Blt` function will no longer be callable :(
+So, whenever Linux starts booting, it'll call `ExitBootServices()`, and our GOP's `Blt` function will no longer be callable.
 
 There's light at the end of the tunnel though, as the resources which were allocated during Boot Services do not get automatically cleaned up, so, the operating system is free to find 
 the framebuffer's hardware address and keep writing to it (which assumes memory-mapped IO)
@@ -420,30 +432,15 @@ we can see that there's a physical address (`FrameBufferBase`) and len (`FrameBu
 
 ### Memory mapped framebuffer
 
-in QEMU, we need to allow the framebuffer to be allocated from dynamic memory as it needs to be 4k-aligned
+On the PCI device which we implemented in QEMU, we can now map the framebuffer (`GpuState->framebuffer`[^2]) as a new memory region, and assign it BAR#1
 
 ```diff
- struct GpuState {
-    PCIDevice pdev;
-    MemoryRegion mem;
-    QemuConsole* con;
-    uint32_t registers[0x100000 / 32]; // 1 MiB = 32k, 32 bit registers
--   uint32_t framebuffer[0x200000]; // barely enough for 1920x1080 at 32bpp
-+   uint32_t* framebuffer;
- };
-```
-
-then we can map the framebuffer to a new memory region, and assign it BAR#1
-```diff
- static void pci_gpu_realize(PCIDevice *pdev, Error **errp) {
-+    void* ptr = NULL
-+    posix_memalign(&ptr, 4096, 16 * MiB);
-+    gpu->framebuffer = ptr;
+@@ pci_gpu_realize(
 +    memory_region_init_ram_ptr(&gpu->fbmem, OBJECT(gpu), "gpu-fb-mem", 16 * MiB, (void*)ptr);
 +    pci_register_bar(pdev, 1, PCI_BASE_ADDRESS_SPACE_MEMORY, &gpu->fbmem);
 ```
 
-Now the driver can map the base of the framebuffer to the address referenced by BAR#1
+Now the UEFI driver can map GOP's framebuffer to the address referenced by BAR#1
 
 ```diff
 @@ GpuVideoControllerDriverStart (
@@ -457,7 +454,8 @@ Now the driver can map the base of the framebuffer to the address referenced by 
    GopSetup(Private)
 ```
 
-and the only thing that's left is to render into the buffer directly, without using DMA or single pixel writes -- conveniently EDK2 provides a function that can deal with a `Blt` call if given a framebuffer -- [FrameBufferBlt]():
+and the only thing that's left is to render into the buffer directly, without using DMA or single pixel writes &emdash; conveniently EDK2 provides the function [FrameBufferBlt](https://bsdio.com/edk2/docs/master/_frame_buffer_blt_lib_8h.html#a8e08215de98d96d17c7de64864d59d8a), which is succintly documented to "Perform a UEFI Graphics Output Protocol Blt operation".
+
 ```diff
 @@ MyGpuBlt (
 -  CopyBufferDMA()
@@ -495,43 +493,15 @@ then, calling `register_framebuffer` with this `struct fb_info`.
 With that adjustment to the driver, now we can also boot a **BIOS** system, with the driver module
 <center><video controls><source  src="/videos/optionrom/framebuffer-boot.mp4"></source></video></center>
 
----------
-https://github.com/tianocore-docs/edk2-UefiDriverWritersGuide/tree/master/18_pci_driver_design_guidelines
-pci proto -> gop proto
+## References
 
-
-discovery:
-- (internal to uefi) PCI bus discovery [wiki link]
-- pci rom, look at offset X for magic signature AA 55
-- if match, look at subtype UEFI
-- register drivers internally via EfiLibInstallDriverBindingComponentName2 
-
-after all drivers are installed,
-- per discovered PCI or USB (?) device, run the Supported function in the driver model
-
-Supported decides for a given PCI device (Controller?) whether to take ownership or not (is it true? what if conflict?)
-
-after all drivers are bound, call Start() on them?? maybe
-
-Then Start + Stop
-
-UEFI drivers in bad nutshell
-
-Consume 'lower level' protocols (pci), provide higher level ones (Graphics Output)
-
-other example, consume Graphics Output, provide TextOutput
-
-a shell can be built with TextInput + TextOutput
-
-TODO: pending if FBCON loads with my driver, we should do the same.
-
-
-1. https://tianocore-docs.github.io/edk2-UefiDriverWritersGuide/draft/
-1. https://casualhacking.io/blog/2019/12/3/using-optionrom-to-overwrite-smmsmi-handlers-in-qemu
-1. https://x86sec.com/posts/2022/09/26/uefi-oprom-bootkit/
-1. https://www.intel.co.uk/content/dam/doc/guide/uefi-driver-graphics-controller-guide.pdf
-1. https://github.com/artem-nefedov/uefi-gdb
-1. https://uefi.org/sites/default/files/resources/UEFI_Spec_2_1.pdf
+1. [UEFI Specification](https://uefi.org/sites/default/files/resources/UEFI_Spec_2_1.pdf)
+1. [Uefi Driver Writer's Guide](https://tianocore-docs.github.io/edk2-UefiDriverWritersGuide/draft/)
+1. [Using an Option ROM to overwrite SMM/SMI handlers in QEMU](https://casualhacking.io/blog/2019/12/3/using-optionrom-to-overwrite-smmsmi-handlers-in-qemu)
+1. [UEFI Option ROM Bootkit](https://x86sec.com/posts/2022/09/26/uefi-oprom-bootkit/)
+1. [UEFI Driver Development Guide for Graphics Controller Device Classe](https://www.intel.co.uk/content/dam/doc/guide/uefi-driver-graphics-controller-guide.pdf)
+1. [UEFI GDB](https://github.com/artem-nefedov/uefi-gdb)
 
 
 [^1]: but you can also completely ignore the driver model and just install a protocol during your entrypoint ¯\\\_(ツ)\_/¯
+[^2]: the framebuffer should be 4k aligned, as a QEMU requirement

@@ -20,7 +20,7 @@
     @apply transition-all underline underline-offset-2 decoration-dotted decoration-gray-300 text-gray-600 text-sm hover:decoration-gray-400 hover:text-gray-700;
   }
   .tag-holder * {
-	padding: 1px 2px;
+    padding: 1px 2px;
   }
 
   /* Post Styles */
@@ -76,7 +76,7 @@
   }
 
   .codehilite {
- 	  @apply leading-3;
+       @apply leading-3;
   }
   
 
@@ -97,9 +97,9 @@
   }
 
   [data-tooltip] {
-  	position: relative;
-  	text-decoration: underline dotted gray;
-    	cursor: help;
+      position: relative;
+      text-decoration: underline dotted gray;
+        cursor: help;
   }
   [data-tooltip]:hover::after {
     display: block;
@@ -115,12 +115,30 @@
     font-size: 0.925rem;
     max-width: 500px;
     text-align: center;
-	box-shadow: 3px 3px 0px 0px rgba(0,0,0,0.5);
+    box-shadow: 3px 3px 0px 0px rgba(0,0,0,0.5);
   }
 
   .compare div {
-	  @apply flex-1;
+      @apply flex-1;
   }
+
+  h2:hover a[data-header="1"],
+  h3:hover a[data-header="1"],
+  h4:hover a[data-header="1"],
+  h5:hover a[data-header="1"] {
+      opacity: 1;
+  }
+  
+  
+  h2 a[data-header="1"],
+  h3 a[data-header="1"],
+  h4 a[data-header="1"],
+  h5 a[data-header="1"] {
+      padding-left: 0.5rem;
+      transition: opacity 0.5s;
+      opacity: 0;
+  }
+
 }
 
 @tailwind components;
