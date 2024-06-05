@@ -1,10 +1,10 @@
 ---
 title: Learning about PCI-e: Implementing an option ROM
-date: 2024-05-27
-tags: c, qemu, uefi
+started: 2024-05-24
+date: 2024-06-04
+tags: c, qemu, uefi, pci-gpu
 slug: pcie-option-rom
-incomplete: true
-description: 
+description: Getting the PCI adapter all the way to Linux
 ---
 
 In this series, we've been implementing a PCI-e GPU and so far we were able to put some pixels on the (emulated) screen via purpose-built userspace programs.
@@ -13,7 +13,7 @@ Now it's time to make the GPU available to the system, and we'll start by making
 
 UEFI does not have built-in drivers for our custom GPU, but it allows for PCI devices to bring their own driver packaged in something called an [Option ROM](https://en.wikipedia.org/wiki/Option_ROM).
 
-The format for an option rom is just 64 bytes of headers (split in two), followed by the driver's executable, in {^PE|Portable Executable} format:
+The format for an option rom is defined by two data structures, a 28-byte-long PCI Option ROM and a 24-byte-long PCI Data Structure ("PCIR"), followed by the driver's executable which must be in {^PE|Portable Executable} format:
 
 <img src="/images/optionrom/headers.svg" style="margin: 0px auto; width: 100%; max-width: 30rem" />
 
@@ -24,7 +24,7 @@ For this post, we are going to implement the UEFI driver with [EDK2](https://git
 we follow the [official instructions](https://github.com/tianocore/tianocore.github.io/wiki/Common-instructions):
 
 ```bash
-git clone 
+git clone git@github.com:tianocore/edk2.git
 git submodule update --init --recursive
 make -C BaseTools
 source edksetup.sh
@@ -33,7 +33,7 @@ source edksetup.sh
 To build the driver, we need to specify in `Conf/target.txt` our platform's target:
 
 ```ini
-ACTIVE_PLATFORM =OvmfPkg/OvmfPkgX64.dsc
+ACTIVE_PLATFORM=OvmfPkg/OvmfPkgX64.dsc
 TARGET_ARCH=X64
 TOOL_CHAIN_TAG=GCC5
 ```
@@ -120,6 +120,7 @@ Image 1 -- Offset 0x0
     EFI image offset       0x0100 (@0x100)
 ```
 
+### Testing the 'Hello World' driver
 
 Let's put the driver in a FAT filesystem:
 
@@ -141,22 +142,30 @@ MyOptionRom loaded
 Image 'FS0:\OptionRom.rom' load result: Success
 ```
 
-This confirms that the toolchain is working, and we can now start the real implementation of the driver
+This confirms that the toolchain is working, and we can now start the real implementation of the driver, let's jump into how UEFI drivers interact with the system.
 
 ## Driver model
 
 UEFI drivers are expected[^1] to follow the driver model which provides a [standardized](https://uefi.org/specs/UEFI/2.10/11_Protocols_UEFI_Driver_Model.html) way to initialize hardware during the boot process.
-These drivers are only really _required_ to implement the Driver Binding protocol, which handles the attachment and detachment of drivers to devices by implementing `Supported()`, `Start()`, and `Stop()`.
+These drivers are only really _required_ to implement the Driver Binding protocol, which handles the attachment and detachment of drivers to devices by requiring three functions:
+
+* `Supported()`: Check whether the driver supports a particular device, usually by checking Vendor/Device IDs and/or device class. Must undo any changes it applies to the device before returning.
+* `Start()`: Initialize the device, allocate resources, install [protocols](https://uefi.org/specs/UEFI/2.10/02_Overview.html#protocols), etc. Must store the original state of the device.
+* `Stop()`: Free all allocated resources & restore the device to its original state.
 
 First, UEFI scans the PCI bus for all present devices, registering each Option ROM as a driver.
 
-Once all Option ROMs are registered, UEFI calls the `Supported` function on each driver, _for every PCI device_. This function checks whether the driver supports the specific device, if so, UEFI proceeds with initializing the device by calling the driver's `Start` function, to initialize the hardware, allocate resources & setting up [protocols](https://uefi.org/specs/UEFI/2.10/02_Overview.html#protocols).
+Once all Option ROMs are registered, UEFI calls the `Supported` function on each driver, _for every PCI device_. When `Supported` returns `true`, UEFI proceeds with initializing the device by calling the driver's `Start` function.
 
 In a diagram, something like this:
 
 <img src="/images/optionrom/boot-process.svg" style="margin: 0px auto; width: 100%; max-width: 17rem" />
 
 The goal of drivers is to install [protocols](https://uefi.org/specs/UEFI/2.10/02_Overview.html#protocols) on their respective device's handle. These protocols abstract away the hardware, into higher level operations that the device supports.
+
+## A real driver
+
+The goal of a graphics driver is to abstract away the specific PCI commands needed to interact with the device, and provide a more convenient interface, such as a linear framebuffer.
 
 In our case, we want to get a handle to our device via the [Pci I/O protocol](https://uefi.org/specs/UEFI/2.10/14_Protocols_PCI_Bus_Support.html#efi-pci-io-protocol) on top of which we want to install [Graphics Output Protocol](https://uefi.org/specs/UEFI/2.10/12_Protocols_Console_Support.html#efi-graphics-output-protocol).
 
@@ -214,7 +223,7 @@ EFI_STATUS EFIAPI GpuVideoControllerDriverSupported(...) {
 }
 ```
 
-and we get to the meat of the driver &emdash; configuring the device:
+and we get to the meat of the driver &mdash; configuring the device:
 
 ```c
 EFI_STATUS EFIAPI GpuVideoControllerDriverStart (...) {
@@ -454,7 +463,7 @@ Now the UEFI driver can map GOP's framebuffer to the address referenced by BAR#1
    GopSetup(Private)
 ```
 
-and the only thing that's left is to render into the buffer directly, without using DMA or single pixel writes &emdash; conveniently EDK2 provides the function [FrameBufferBlt](https://bsdio.com/edk2/docs/master/_frame_buffer_blt_lib_8h.html#a8e08215de98d96d17c7de64864d59d8a), which is succintly documented to "Perform a UEFI Graphics Output Protocol Blt operation".
+and the only thing that's left is to render into the buffer directly, without using DMA or single pixel writes &mdash; conveniently EDK2 provides the function [FrameBufferBlt](https://bsdio.com/edk2/docs/master/_frame_buffer_blt_lib_8h.html#a8e08215de98d96d17c7de64864d59d8a), which is succintly documented to "Perform a UEFI Graphics Output Protocol Blt operation".
 
 ```diff
 @@ MyGpuBlt (
@@ -473,9 +482,16 @@ This is an **UEFI** system, booting an unmodified kernel (no custom drivers), wi
 
 <center><video controls><source  src="/videos/optionrom/cdrom-boot.mp4"></source></video></center>
 
+and _even Windows_
+
+<center><video controls><source  src="/videos/optionrom/win-boot.mp4"></source></video></center>
+
 ### A detour into a framebuffer driver
 
-The kernel has a [framebuffer API](https://docs.kernel.org/driver-api/frame-buffer.html), which allows implementing custom
+The above video shows that any system booting with `efifb` or able to use the `efi` framebuffer will be able to use the adapter, but what about other systems?
+Those may either be systems which were booted via BIOS, but also systems that are not using [EFISTUB](https://wiki.archlinux.org/title/EFISTUB) to boot.
+
+In these cases, it'd still be nice to be able to use the adapter after the system has booted &mdash; luckily, the kernel has a [framebuffer API](https://docs.kernel.org/driver-api/frame-buffer.html), which allows implementing custom
 framebuffer drivers [very easily](https://github.com/DavidVentura/pci-device/commit/f2ed4fdb956eb41029d684ee61c1f85abf0323d0)
 
 We don't need to do almost anything, as there are existing functions for the actual blitting (`cfb_fillrect`, `cfb_copyarea`, `cfb_imageblit`) -- the main thing that we need to do is populating a `struct fb_info`
@@ -492,6 +508,9 @@ then, calling `register_framebuffer` with this `struct fb_info`.
 
 With that adjustment to the driver, now we can also boot a **BIOS** system, with the driver module
 <center><video controls><source  src="/videos/optionrom/framebuffer-boot.mp4"></source></video></center>
+
+
+That's it for now, next time, we go _physical_.
 
 ## References
 
