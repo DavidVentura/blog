@@ -218,11 +218,10 @@ def main(filter_name: Optional[str]):
         debug('generating text post')
         html_str = generate_post(header, body, r)
         html = BeautifulSoup(html_str, features='html5lib')
-        for header in html.find('article').find_all(["h2", "h3", "h4", "h5", "h6"]):
+        for header in html.find('article').find_all(["h2", "h3", "h4"]):
             header.attrs["id"] = header.text.lower().replace(' ', '-').replace("'", "")
             anchor = html.new_tag("a", href=f'#{header.attrs["id"]}', **{"data-header":"1"})
-            anchor.string = "#"
-            header.append(anchor)
+            header.wrap(anchor)
 
         if html.find('asciinema-player'):
             body = html.find('body')
