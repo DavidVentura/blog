@@ -40,7 +40,7 @@ TOOL_CHAIN_TAG=GCC5
 
 and following the [skeleton example](https://github.com/tianocore-docs/edk2-UefiDriverWritersGuide/blob/master/7_driver_entry_point/README.md#example-87-uefi-driver-inf-file) we can create
 
-INF file
+in `OptionRom/Rom.inf`
 
 ```ini
 [Defines]
@@ -64,7 +64,8 @@ INF file
   UefiLib
 ```
 
-driver.c
+in `OptionRom/rom.c`
+
 ```c
 #include <Uefi.h>
 #include <Library/UefiLib.h>
