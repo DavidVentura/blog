@@ -122,23 +122,24 @@
       @apply flex-1;
   }
 
-  h2:hover a[data-header="1"],
-  h3:hover a[data-header="1"],
-  h4:hover a[data-header="1"],
-  h5:hover a[data-header="1"] {
-      opacity: 1;
+  a[data-header="1"] h2::before {
+	  content: "#";
+	  padding-right: 0.5rem;
   }
-  
-  
-  h2 a[data-header="1"],
-  h3 a[data-header="1"],
-  h4 a[data-header="1"],
-  h5 a[data-header="1"] {
-      padding-left: 0.5rem;
-      transition: opacity 0.5s;
-      opacity: 0;
+  a[data-header="1"] h3::before {
+	  content: "##";
+	  padding-right: 0.5rem;
+  }
+  a[data-header="1"] h4::before {
+	  content: "###";
+	  padding-right: 0.5rem;
   }
 
+  #blogpost-content a[data-header="1"] {
+	  text-decoration-line: none;
+      color: black;
+  }
+  
 }
 
 @tailwind components;
