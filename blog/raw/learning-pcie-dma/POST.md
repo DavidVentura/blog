@@ -1,7 +1,7 @@
 ---
 title: Learning about PCI-e: Driver & DMA
 date: 2024-05-25
-tags: pci-e, qemu, c
+tags: pci-gpu, qemu, c
 slug: pcie-driver-dma
 description: Creating a simple driver for a simple PCI-e device (in QEMU)
 ---

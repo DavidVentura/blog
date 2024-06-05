@@ -1,7 +1,7 @@
 ---
 title: Learning about PCI-e: Emulating a custom device
 date: 2024-05-06
-tags: pci-e, qemu, c
+tags: qemu, c, pci-gpu
 slug: learning-pcie
 description: Creating a very simple PCI-e device in QEMU
 ---
