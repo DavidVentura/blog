@@ -98,6 +98,7 @@ class PostMetadata:
         date = datetime.strptime(d['date'], "%Y-%m-%d").date()
         tags = [t.strip() for t in d['tags'].split(',') if t]
         data = {**d, 'date': date, 'tags': tags} 
+        data.pop('started', None)
         return PostMetadata(**data)
 
     @property
@@ -316,7 +317,7 @@ def generate_sitemap(tags: set[str]):
     with Path('blog/html/sitemap.txt').open('w') as fd:
         fd.write(f'{BLOG_URL}\n')
         for t in sorted(tags):
-            fd.write(f'{BLOG_URL}tags/{t}\n')
+            fd.write(f'{BLOG_URL}tags/{t}/\n')
 
 if __name__ == '__main__':
     DEVMODE = False
