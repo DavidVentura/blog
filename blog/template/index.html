@@ -44,7 +44,7 @@
                 {% for post in index %}
                 <article class="my-4 md:my-4">
                     <span class="font-semibold text-xl md:text-2xl">
-                        <a href="{{post['path']}}">
+                        <a href="{{post['relative_url']}}">
                             {{ post.get_title() }}
                         </a>
                     </span>
