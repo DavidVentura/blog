@@ -52,4 +52,4 @@ $ ffmpeg -i valkyries.m4a -ac 1 -ar 16000 valkyries.ogg
 
 I then [built](https://github.com/DavidVentura/GalacticVacuum) a very simple OGG player in Rust, which lets me start and sto the music track dynamically, and this is the result:
 
-<video controls="true"><source src="videos/valkyries.mp4"></video>
+<video controls="true"><source src="/videos/valkyries.mp4"></video>

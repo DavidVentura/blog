@@ -95,10 +95,10 @@ warned, it is very bad.
 First time I got it working -- the black spots are an artifact my phone's
 recording..
 
-<video controls="true"><source src="videos/old-tv/tv-first-working-day.mp4"></video>
+<video controls="true"><source src="/videos/old-tv/tv-first-working-day.mp4"></video>
 
 Final version
-<video controls="true"><source src="videos/old-tv/tv-finished.mp4"></video>
+<video controls="true"><source src="/videos/old-tv/tv-finished.mp4"></video>
 
 # Extra
 

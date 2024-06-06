@@ -215,12 +215,12 @@ The results really, really surprised me. The input files are ~19k lines for the 
 fragment bench.
 
 
-[![](images/benchmarks-fragment.png)](images/benchmarks-fragment.png)
+[![](/images/benchmarks-fragment.png)](/images/benchmarks-fragment.png)
 <p class="center">URL fragment benches</p>
 All methods are relatively similar at ~450us, except Aho-Corasick at 180ns (!!), clear winner.
 
 
-[![blabla](images/benchmarks-domain.png)](images/benchmarks-domain.png)
+[![blabla](/images/benchmarks-domain.png)](/images/benchmarks-domain.png)
 <p class="center">Subdomain benches</p>
 I'd expected the trie implementation to be fast (and I was quite happy when I saw the ~30us).. but the Aho-Corasick
 algorithm is again at 140ns which is mind-blowing.

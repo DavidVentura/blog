@@ -389,5 +389,5 @@ fn main() {
 
 # Final result
 
-<video controls="true"><source src="videos/kindle_light.mp4"></video>
+<video controls="true"><source src="/videos/kindle_light.mp4"></video>
 

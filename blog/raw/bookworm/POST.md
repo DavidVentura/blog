@@ -109,7 +109,7 @@ If there's a need to store a blob, it will be stored in a local S3 instance
 The metadata for each job is stored with a TTL of 5 days in redis. Every time a job
 progresses through the pipeline, its metadata is updated to reflect the current state.
 
-![](images/bookworm-architecture.png)
+![](/images/bookworm-architecture.png)
 
 * API
   * Input: Fetch request

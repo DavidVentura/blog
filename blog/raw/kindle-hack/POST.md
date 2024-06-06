@@ -197,5 +197,5 @@ Don't forget to set it back to `rec` later, or your battery will drain quite qui
 
 # Result
 
-<video controls="true"><source src="videos/kindle_light.mp4"></video>
+<video controls="true"><source src="/videos/kindle_light.mp4"></video>
 

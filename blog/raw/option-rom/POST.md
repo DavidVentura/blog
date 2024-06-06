@@ -15,7 +15,7 @@ UEFI does not have built-in drivers for our custom GPU, but it allows for PCI de
 
 The format for an option rom is defined by two data structures, a 28-byte-long PCI Option ROM and a 24-byte-long PCI Data Structure ("PCIR"), followed by the driver's executable which must be in {^PE|Portable Executable} format:
 
-<img src="/images/optionrom/headers.svg" style="margin: 0px auto; width: 100%; max-width: 30rem" />
+<img src="assets/headers.svg" style="margin: 0px auto; width: 100%; max-width: 30rem" />
 
 
 ## A 'Hello world' driver
@@ -385,7 +385,7 @@ EFI_STATUS EFIAPI MyGpuBlt(
 
 And now, for the grand reveal (_be patient_):
 
-<center><video controls><source  src="/videos/optionrom/no-dma.mp4"></source></video></center>
+<center><video controls><source  src="assets/no-dma.mp4"></source></video></center>
 
 which is _amazing_ as it shows the option ROM works with a completely unmodified UEFI.
 
