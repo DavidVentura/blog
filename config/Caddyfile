@@ -1,0 +1,22 @@
+blog.davidv.dev {
+        log {
+                output file /var/caddylogs/access.log {
+                        roll_size 1gb
+                }
+        }
+        root * /var/www/blog-devops/
+        @static {
+                file
+                path *.ico *.css *.js *.gif *.webp *.avif *.jpg *.jpeg *.png *.svg *.mp4
+        }
+        header @static Cache-Control max-age=86400
+        encode zstd gzip
+
+        @oldBlogPosts {
+                path_regexp post /(.*).html
+                not file
+        }
+        redir @oldBlogPosts http://blog.davidv.dev/posts/{re.post.1}
+
+        file_server
+}

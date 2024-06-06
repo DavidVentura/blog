@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import shutil
 import subprocess
 import glob
 import os
@@ -69,8 +70,9 @@ class PostMetadata:
         return title
 
     @property
-    def path(self) -> str:
-        return "/%s.html" % self.get_slug()
+    def relative_url(self) -> str:
+        # Used in template only
+        return "/posts/%s" % self.get_slug()
 
     def get_slug(self) -> str:
         if self.slug:
@@ -107,7 +109,7 @@ class PostMetadata:
 
     @property
     def full_url(self) -> str:
-        return f'{BLOG_URL}{self.get_slug()}.html'
+        return f'{BLOG_URL}posts/{self.get_slug()}'
 
 def debug(*msg):
     if DEBUG:
@@ -182,33 +184,63 @@ def newer(f1, files):
     return all([mtime(f1) > mtime(x) for x in files])
 
 
+def copy_relative_assets(html, assets_dir, post_dir):
+    for img in html.find_all('img'):
+        src = img.attrs['src']
+        if src.startswith('/') or src.startswith('http'):
+            continue
+        og_file = post_dir / src
+        if og_file.exists():
+            shutil.copyfile(og_file, assets_dir / og_file.name)
+        else:
+            print(f"Relative-referenced file {src} does not exist")
+
+    for source in html.find_all('source'):
+        src = source.attrs['src']
+        if src.startswith('/') or src.startswith('http'):
+            continue
+        og_file = post_dir / src
+        if og_file.exists():
+            shutil.copyfile(og_file, assets_dir / og_file.name)
+        else:
+            print(f"Relative-referenced file {src} does not exist")
+
 def main(filter_name: Optional[str]):
     this_script = __file__
-    for target in glob.glob("blog/raw/*"):
-        post_file = os.path.join(target, 'POST.md')
-        if not os.path.exists(post_file):
+    for post_dir in Path("blog/raw/").iterdir():
+        if not post_dir.is_dir():
+            continue
+        post_file = post_dir / 'POST.md'
+        if not post_file.exists():
             print("Target post file (%s) does not exist" % post_file)
             continue
-        if filter_name and filter_name.lower() not in post_file.lower():
+
+        if filter_name and filter_name.lower() not in post_dir.name.lower():
             continue
 
-        debug(target)
+        debug(post_dir)
 
-        md_str = open(post_file, encoding='utf-8').read()
+        md_str = post_file.open(encoding='utf-8').read()
         r = PostMetadata.from_text(md_str)
 
         if r.incomplete and not DEVMODE:
             debug('Incomplete - skipping')
             continue
 
-        md_str = embed_files(target, md_str)
-        md_str = embed_mermaid(target, md_str, r)
+        md_str = embed_files(post_dir, md_str)
+        md_str = embed_mermaid(post_dir, md_str, r)
         md_str = populate_tooltips(md_str)
-        _files_to_embed = files_to_embed(target, md_str)
+        _files_to_embed = files_to_embed(post_dir, md_str)
         body = convert(md_str)
 
         header = generate_header(r)
-        html_fname = 'blog/html/%s.html' % r.get_slug()
+
+        html_dir = Path(f'blog/html/posts/{r.get_slug()}')
+        assets_dir = html_dir / 'assets'
+        html_fname = html_dir / 'index.html'
+
+        html_dir.mkdir(parents=True, exist_ok=True)
+        assets_dir.mkdir(exist_ok=True)
 
         if os.path.isfile(html_fname):
             if newer(html_fname, [post_file, this_script, BODY_TEMPLATE_FILE] + _files_to_embed):
@@ -222,6 +254,9 @@ def main(filter_name: Optional[str]):
             header.attrs["id"] = header.text.lower().replace(' ', '-').replace("'", "")
             anchor = html.new_tag("a", href=f'#{header.attrs["id"]}', **{"data-header":"1"})
             header.wrap(anchor)
+
+        copy_relative_assets(html, assets_dir, post_dir)
+
 
         if html.find('asciinema-player'):
             body = html.find('body')
