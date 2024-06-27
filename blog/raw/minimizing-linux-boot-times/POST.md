@@ -160,6 +160,7 @@ right before the IP auto-configuration. I [made a patch](https://github.com/Davi
 ### On core counts
 
 It seems like boot time goes up by roughly 2.5ms per existing core:
+
 <center>![](/images/minimizing-linux-boot-times/boot_time_vs_vcpu_count_smp.svg)</center>
 
 What if we remove the handling of multiple cores altogether? By disabling SMP, the usable cores on a system is capped to 1, but that doesn't
@@ -180,6 +181,7 @@ I don't really know where the other ~12ms come from, but I'm not complaining abo
 ### On memory sizes
 
 The boot time goes up significantly when assigning more memory to the VM: 
+
 <center>![](/images/minimizing-linux-boot-times/boot_time_vs_memory_size_4k.svg)</center>
 
 As the only difference between these was the memory size, the time _must_ be getting spent setting up the kernel's page structures, which didn't make any sense to me.
@@ -251,7 +253,7 @@ $ cat /sys/kernel/mm/hugepages/hugepages-2048kB/free_hugepages
 1013
 ```
 
-This would've been _at most_ 5632 (2MB / 4KB * 11 pages) page faults, which explains the ~3ms.
+This would've been _at most_ 5632 (2MB / 4KB \* 11 pages) page faults, which explains the ~3ms.
 
 As a cherry on top, the time spent in the VMM went down, though I'm not sure why
 
@@ -269,6 +271,7 @@ Firecracker spends most of its time on the call to `kvm.create_vm()`, which weir
 `kvm.create_vm()` is effectively just calling `ioctl(18, KVM_CREATE_VM, 0)` and `strace` confirms that this ioctl randomly takes 20~40ms 
 
 The distribution of the duration of these calls is just _weird_:
+
 <center>![](/images/minimizing-linux-boot-times/vmm_creation_variance.svg)</center>
 
 When looking up `KVM_CREATE_VM slow`, I found [this](https://github.com/firecracker-microvm/firecracker/issues/2129) Firecracker issue, which led me to [this](https://github.com/firecracker-microvm/firecracker/blob/main/docs/prod-host-setup.md#linux-61-boot-time-regressions) documentation page; which suggests mounting cgroups with the `favordynmods` flags.

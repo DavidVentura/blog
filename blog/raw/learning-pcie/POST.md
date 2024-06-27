@@ -46,7 +46,7 @@ Building a real device at my current level of understanding would be _slightly i
 
 Adding a new device to QEMU's source requires us to be able to build it, which is straightforward:
 
-``` bash
+```bash
 $ ./configure --target-list="x86_64-softmmu" --enable-debug
 $ make -j8
 ```
@@ -284,7 +284,7 @@ That's it for now, [next time](/pcie-driver.html) we are tackling DMA & a simple
 1. [Down to the TLP: How PCI express devices talk (Part I)](https://xillybus.com/tutorials/pci-express-tlp-pcie-primer-tutorial-guide-1)
 2. [pciemu](https://github.com/luizinhosuraty/pciemu)
 3. [implementation of a custom QEMU PCI device](https://www.linkedin.com/pulse/implementing-custom-qemu-pci-device-nikos-mouzakitis)
-4. [How the PCI Express Protocol works [Video]](https://www.youtube.com/watch?v=sRx2YLzBIqk)
+4. [How the PCI Express Protocol works (Video)](https://www.youtube.com/watch?v=sRx2YLzBIqk)
 5. [QEMU's EDU device](https://www.qemu.org/docs/master/specs/edu.html)
 6. [QEMU PCI slave devices](https://airbus-seclab.github.io/qemu_blog/pci_slave.html)
 7. [QEMU: How to Design a Prototype Device](https://milokim.gitbooks.io/lbb/content/qemu-how-to-design-a-prototype-device.html)

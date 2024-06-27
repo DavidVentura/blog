@@ -23,8 +23,7 @@ I will not go into detail on how these channels work as there's plenty of
 information online already, but a quick summary is:
 
 1. Join an e-book channel
-2. Ask the indexer bot which bots have the book you want (`@search <whatever you
-   want>`)
+2. Ask the indexer bot which bots have the book you want (`@search <whatever you want>`)
 3. From the results, pick a bot and ask it for the book.
 
 This is less cumbersome than using Amazon's method for syncing books, but still

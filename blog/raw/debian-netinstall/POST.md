@@ -139,8 +139,8 @@ d-i finish-install/reboot_in_progress note
 
 ### Booting the autoinstall
 
-The easiest way to boot this automated setup is to simply go to *Advanced ->
-Automated setup* in the wizard, then typing in the path to a webserver that
+The easiest way to boot this automated setup is to simply go to *Advanced -> Automated setup*
+in the wizard, then typing in the path to a webserver that
 can provide this file.. but this defeats the point of automating the setup,
 I will forget about the procedure in some time, and the webserver might stop
 existing in the meantime.

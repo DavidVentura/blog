@@ -12,6 +12,7 @@ A friend challenged me to make this thing play [Ride of the Valkyries](https://w
 These robots pack a surprisingly large amount of computing power; 512MB of ram and a 4-core, 1.4GHz, Cortex A53 processor (aarch64), running a 4.9 kernel.
 
 The first thing I did, was to validate whether this was possible at all with a super high-tech approach, pressing this button:
+
 <center>![](/images/vacuum/test_volume.png)</center>
 
 while looking at the output of `htop`, which, for a brief second, displayed:
@@ -52,4 +53,4 @@ $ ffmpeg -i valkyries.m4a -ac 1 -ar 16000 valkyries.ogg
 
 I then [built](https://github.com/DavidVentura/GalacticVacuum) a very simple OGG player in Rust, which lets me start and sto the music track dynamically, and this is the result:
 
-<video controls="true"><source src="/videos/valkyries.mp4"></video>
+<video controls="true"><source src="/videos/valkyries.mp4"/></video>

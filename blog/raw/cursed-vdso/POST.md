@@ -87,7 +87,7 @@ do { \
 
 Turns out, our CPython was not built with `HAVE_SEM_CLOCKWAIT` because we use glibc2.17 (from ~2012, yay CentOS).
 
-The solution to the _actual_ problem we are facing is to either use [glibc >2.30 (2019)](https://github.com/python/cpython/issues/85876#issuecomment-1093882569) or not use `Event.wait()` with a timeout, and instead use a different waiting mechanism.
+The solution to the _actual_ problem we are facing is to either use [glibc \>2.30 (2019)](https://github.com/python/cpython/issues/85876#issuecomment-1093882569) or not use `Event.wait()` with a timeout, and instead use a different waiting mechanism.
 
 We opted to go with using a different mechanism, which is pretty crude but sufficient for now:
 ```python

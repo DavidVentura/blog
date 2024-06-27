@@ -102,7 +102,7 @@ I cloned the drivers, compiled the Pico port and got something on the display:
 
 <center>
   <video controls>
-    <source src="/videos/pico8/first_day_pico.mp4">
+    <source src="/videos/pico8/first_day_pico.mp4"/>
   </video>
 </center>
 
@@ -122,7 +122,7 @@ While I was poking in the driver, I also changed the expected color format from 
 
 <center>
   <video controls>
-    <source src="/videos/pico8/pico-hello-world.mp4">
+    <source src="/videos/pico8/pico-hello-world.mp4"/>
   </video>
 </center>
 

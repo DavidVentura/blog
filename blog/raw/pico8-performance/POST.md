@@ -64,8 +64,8 @@ this brought the average ms/frame on [Celeste](https://www.lexaloffle.com/bbs/?t
 [Rockets!](https://www.lexaloffle.com/bbs/?tid=47633) is a very basic, yet entertaining game where you play as a small plane that has to dodge rockets. Here's a short video:
 
 <center>
-  <video controls=true>
-    <source src="/videos/pico8/rockets.webm">
+  <video controls="true">
+    <source src="/videos/pico8/rockets.webm"/>
   </video>
 </center>
 
@@ -151,7 +151,7 @@ local b = 1
 The time taken on these two cases is significantly different - the global access requires many more memory lookups and a hash calculation
 
 If I manually convert the first lines of the codeblock to use local variables (literally prepending `local` to the first few lines of the block), the time 
-per frame goes from **71ms/frame &rarr; 29ms/frame** (budget is <16ms/frame). However, as I said before, manual code changes to games is a no-go for this project.
+per frame goes from **71ms/frame -> 29ms/frame** (budget is \<16ms/frame). However, as I said before, manual code changes to games is a no-go for this project.
 
 ### Floating point on embedded
 

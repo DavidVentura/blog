@@ -26,7 +26,7 @@ As this device (Odroid) has a very limited linux runtime, I setteld on sending U
 
 ## Results
 
-<video controls="true"><source src="/videos/tv_switching.mp4"></video>
+<video controls="true"><source src="/videos/tv_switching.mp4"/></video>
 
 
 ## Why not CEC?
@@ -42,4 +42,5 @@ with wifi integration. The software is the same as before and you can see it
 
 
 ## Results
-<video controls="true"><source src="/videos/curtains.mp4"></video>
+
+<video controls="true"><source src="/videos/curtains.mp4"/></video>

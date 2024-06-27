@@ -9,9 +9,7 @@ description: Getting the PCI adapter all the way to Linux
 
 In this series, we've been implementing a PCI-e GPU and so far we were able to put some pixels on the (emulated) screen via purpose-built userspace programs.
 
-Now it's time to make the GPU available to the system, and we'll start by making it available to {^UEFI|Unified Extensible Firmware Interface}, which is the system firmware that initializes hardware and loads the operating system.
-
-UEFI does not have built-in drivers for our custom GPU, but it allows for PCI devices to bring their own driver packaged in something called an [Option ROM](https://en.wikipedia.org/wiki/Option_ROM).
+Now it's time to make the GPU available to the system, and we'll start by making it available to {^UEFI|Unified Extensible Firmware Interface}, which is the system firmware that initializes hardware and loads the operating system. UEFI does not have built-in drivers for our custom GPU, but it allows for PCI devices to bring their own driver packaged in something called an [Option ROM](https://en.wikipedia.org/wiki/Option_ROM).
 
 The format for an option rom is defined by two data structures, a 28-byte-long PCI Option ROM and a 24-byte-long PCI Data Structure ("PCIR"), followed by the driver's executable which must be in {^PE|Portable Executable} format:
 
@@ -508,6 +506,7 @@ with the physical and virtual addresses for the PCI-e BAR address, but we alread
 then, calling `register_framebuffer` with this `struct fb_info`.
 
 With that adjustment to the driver, now we can also boot a **BIOS** system, with the driver module
+
 <center><video controls><source  src="/videos/optionrom/framebuffer-boot.mp4"></source></video></center>
 
 

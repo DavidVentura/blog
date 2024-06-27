@@ -4,6 +4,7 @@ date: 2020-12-30
 tags: openwrt, rust, cross-compiling, homelab
 description: 
 ---
+
 I own a TP-Link X which is an [ath79](https://openwrt.org/docs/techref/targets/ath79) based wireless router, which runs OpenWrt.
 
 I've been trying to get some specific software running on the router to do wifi-based presence detection to enable some automation, and I thought it'd be nice to get some experience doing this in rust.
@@ -204,4 +205,4 @@ Ha! Turns out this crate is a bit broken. There's [an open PR](https://github.co
 
 I guess I'll take a look at other crates or see if I can build my own crate with the patch.
 
-[^1]: maybe I could've just scp'd it from the router?</span>
+[^1]: maybe I could've just scp'd it from the router?

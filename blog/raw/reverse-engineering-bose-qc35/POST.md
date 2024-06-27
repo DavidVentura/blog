@@ -66,8 +66,7 @@ NOISE_LEVEL_HIGH((0x01, 0x06, 0x02, 0x01, 0x01)),
 NOISE_LEVEL_OFF( (0x01, 0x06, 0x02, 0x01, 0x00)),
 ```
 
-**Messages consist of a 3 byte header and 1 byte indicating how many bytes of
-data will follow**:
+**Messages consist of a 3 byte header and 1 byte indicating how many bytes of data will follow**:
 
 Types of messages **sent** from the device:
 ```kotlin

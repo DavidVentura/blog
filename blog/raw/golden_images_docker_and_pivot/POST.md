@@ -74,6 +74,7 @@ dd if=core.img of=$DISK bs=512 seek=1 conv=notrunc
 ```
 
 Now, for each partition we have to mount it and write the image data to it.
+
 ```bash
 $ parted -s $DISK unit B print all | grep -A 2 Number
 Number  Start        End          Size         Type     File system  Flags
@@ -206,6 +207,7 @@ kexec -e
 That's it! you are now rebooting into another kernel.
 
 Small demo:
+
 <asciinema-player poster="/images/kexec-demo.svg" src="/casts/kexec-demo.cast" cols="118" rows="31" preload=""></asciinema-player>
 
-[^1]: flattened; you can get every layer individually with `docker save`</span>
+[^1]: flattened; you can get every layer individually with `docker save`

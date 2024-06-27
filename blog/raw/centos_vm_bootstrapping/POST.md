@@ -162,8 +162,7 @@ first sector of the partition, and 512 comes from the disk sector size.
 The partition now exist, but it has no filesystem on it, that's an easy thing to
 solve: `mkfs.xfs /dev/loop0`
 
-We can now `mount /dev/loop0 disk_image/` and then `rsync -ar $CHROOT/*
-disk_image/`.
+We can now `mount /dev/loop0 disk_image/` and then `rsync -ar $CHROOT/* disk_image/`.
 
 Let's unmount the disk and try to boot it with `kvm -hda disk.img`:
 
@@ -196,7 +195,7 @@ dd if=core.img of=disk.img bs=512 seek=1 conv=notrunc
 ```
 
 We only build this 3 modules as the space for `core.img` is reasonably limited
-(1023.5KB, which is 1024*512-512 bytes for the MBR), but grub still needs to
+(1023.5KB, which is 1024\*512-512 bytes for the MBR), but grub still needs to
 load a few more modules, like the ones used for text rendering and keyboard
 input, so we have to put those in the filesystem.
 

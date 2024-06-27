@@ -12,7 +12,7 @@ by relying on manual peek/poke with a hardcoded address (`0xfe000000`) which cam
 
 To get this address programmatically, we need to ask the PCI subsystem for the details of the memory mapping for this device.
 
-First, we need to make a [struct pci_driver](https://elixir.bootlin.com/linux/v6.9/source/include/linux/pci.h#L887), which only requires two fields: a table of supported devices, and a `probe` function.
+First, we need to make a [struct pci\_driver](https://elixir.bootlin.com/linux/v6.9/source/include/linux/pci.h#L887), which only requires two fields: a table of supported devices, and a `probe` function.
 
 The table of supported devices is an array of the pairs of device/vendor IDs which this driver supports:
 
@@ -85,6 +85,7 @@ static ssize_t gpu_write(struct file *file, const char __user *buf, size_t count
 ```
 
 First, add a reference to the cdev in the driver's state
+
 ```diff
  typedef struct GpuState {
  	struct pci_dev *pdev;
@@ -141,6 +142,7 @@ static int gpu_open(struct inode *inode, struct file *file) {
 ```
 
 and read/write are simple "one {^DWORD|32 bits} at a time" implementations:
+
 ```c
 static ssize_t gpu_read(struct file *file, char __user *buf, size_t count, loff_t *offset) {
 	GpuState *gpu = (GpuState*) file->private_data;
@@ -186,12 +188,14 @@ As an example, we can map these addresses as registers:
 ```
 
 and we can define a set of "commands" to imply a call, as being different from just filling in some registers
+
 ```c
 #define CMD_ADDR_BASE 		0xf00
 #define CMD_DMA_START 		(CMD_ADDR_BASE + 0)
 ```
 
 and implement a function to execute DMA:
+
 ```c
 static void write_reg(GpuState* gpu, u32 val, u32 reg) {
 	iowrite32(val, 	gpu->hwmem + (reg * sizeof(u32)));
@@ -261,6 +265,7 @@ We are only focusing on MSIs here which, as the name implies, they communicate t
 To configure MSI-X, we need to set aside some space to store some configuration for each interrupt (the MSI-X table) and some extra space for a bitmap of pending interrupts (the {^PBA|Pending Bit Array}, but we won't use it).
 
 First, we define some shared constants:
+
 ```c
 #define IRQ_COUNT 			1
 #define IRQ_DMA_DONE_NR 	0
@@ -269,6 +274,7 @@ First, we define some shared constants:
 ```
 
 In QEMU, in `pci_gpu_realize` we need to add
+
 ```c
 msix_init(pdev, IRQ_COUNT,
 		  &gpu->mem, 0 /* table_bar_nr = bar id */, MSIX_ADDR_BASE,
@@ -416,6 +422,7 @@ static const GraphicHwOps ghwops = {
 ```
 
 when launching QEMU, we can now see the test pattern:
+
 <center>![](/images/pcie-device/qemu_test_pattern.png)</center>
 
 And whenever writing patterns to the underlying device, we can see the display change!

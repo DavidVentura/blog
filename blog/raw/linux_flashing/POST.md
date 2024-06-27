@@ -19,6 +19,7 @@ everyone is using docker/kubernetes or something similar, which behaves
 similarly to what I want.
 
 ## Contents
+
 - [Figuring out what I need](#figuring-out-what-i-need)
 - [Generating an initial filesystem](#generating-an-initial-filesystem)
   * [Generating a slightly more useful initial filesystem](#generating-a-slightly-more-useful-initial-filesystem)
@@ -49,8 +50,8 @@ have now in `/boot/vmlinuz-$(uname -r)`.
 # Generating an initial filesystem
 
 Generating the initial filesystem (initramfs) is not hard, if you are aware that:
-* it must be in `cpio` format (apparently some format and utility for tape
-backups standardized in '88)
+
+* it must be in `cpio` format (apparently some format and utility for tape backups standardized in '88)
 * the kernel will execute whatever it finds in `/init`
 
 First, we need to write an executable that can be kicked off by the kernel.
@@ -304,7 +305,7 @@ so by appending  `-drive file=test-disk.img,format=raw` to the kvm invocation.
 Creating the `test-disk.img` file is easy: just write a lot of zeroes to it: `dd
 if=/dev/zero of=test-disk.img bs=1M count=1000`
 
-*Keep in mind that this is an initial***ram***filesystem*, your virtual machine
+Keep in mind that this is an initial **ram** filesystem, your virtual machine
 must have enought **ram** assigned to it to keep the entire filesystem image in
 memory.
 

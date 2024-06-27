@@ -24,7 +24,7 @@ The problem arises when you try to cache a response with `X-Accel-Redirect` head
 
 There are some ugly hacks that are supposed to 'fix' this.
 
-The idea behind these hacks is to have 2 'levels', one ignores the `X-Accel-Redirect` header and caches the data while proxying to the next level, the other one actually processes the request (In the example, `/v/uri-example-1` => `/nfs/file-1` )
+The idea behind these hacks is to have 2 'levels', one ignores the `X-Accel-Redirect` header and caches the data while proxying to the next level, the other one actually processes the request (In the example, `/v/uri-example-1` -> `/nfs/file-1` )
 
 Hack #1 (advised [here](http://mailman.nginx.org/pipermail/nginx/2017-January/052732.html))
 

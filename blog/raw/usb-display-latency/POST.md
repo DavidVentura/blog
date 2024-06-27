@@ -12,7 +12,7 @@ The approach is as basic and end-to-end as I could think of: emulate a USB keybo
 
 <center>
   <video controls="true">
-    <source src="/videos/delay-measure.webm" type="video/webm">
+    <source src="/videos/delay-measure.webm" type="video/webm"/>
   </video>
 </center>
 

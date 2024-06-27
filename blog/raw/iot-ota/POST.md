@@ -52,7 +52,7 @@ On the ESP:
 * Compare the received hash and the locally calculated one, if they match, rename the temporary file-buffer to the file specified previously
 * Reboot
 
-Doing the download this way the maximum amount of file-data I keep in memory is the socket buffer size (536 bytes by default). The whole OTA update for a 3.8KB file takes <100ms (The reboot, AP association and obtaining a DHCP lease can take up to 5 seconds though).
+Doing the download this way the maximum amount of file-data I keep in memory is the socket buffer size (536 bytes by default). The whole OTA update for a 3.8KB file takes \<100ms (The reboot, AP association and obtaining a DHCP lease can take up to 5 seconds though).
 
 # Transparent updates
 

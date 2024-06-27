@@ -125,7 +125,7 @@ Error getting property! 8
 ```
 
 GetStringProperty: Pass a service, a filter property and a `char**` to get the current value
-written to that address. This is exactly the same as `get_int_prop` but we pass a string handle (handle_ptr):
+written to that address. This is exactly the same as `get_int_prop` but we pass a string handle (handle\_ptr):
 ```rust
 let mut handle: *mut c_char = std::ptr::null_mut();
 let handle_ptr: *mut *mut c_char = &mut handle;
@@ -219,9 +219,8 @@ let _service = CString::new(service).unwrap().as_ptr();
 ```
 
 In regular rust, `_service` would hold a reference to the CString, which would make it not go out
-of scope immediately -- with pointers this is not the case. There is a [big fat
-warning](https://doc.rust-lang.org/std/ffi/struct.CString.html#method.as_ptr) on the docs, which I
-managed to glance over.
+of scope immediately -- with pointers this is not the case. There is a [big fat warning](https://doc.rust-lang.org/std/ffi/struct.CString.html#method.as_ptr)
+on the docs, which I managed to glance over.
 
 #### Hitting a regular wall
 
@@ -239,8 +238,8 @@ LipcSubscribeExt(..., |...| { callback_from_outer_scope(..) });
 However, [a closure is not a function](https://doc.rust-lang.org/book/ch19-05-advanced-functions-and-closures.html),
  which means we can't just call a closure!
 
-The way people deal with this in C is by providing an opaque pointer (void* data) to the function that will call
-you back, the function will then pass the opaque pointer (void* data) to you when executing the callback, in pseudocode:
+The way people deal with this in C is by providing an opaque pointer (void\* data) to the function that will call
+you back, the function will then pass the opaque pointer (void\* data) to you when executing the callback, in pseudocode:
 
 ```c
 fn_that_calls_back(to_call_back, *data);
@@ -250,7 +249,7 @@ void to_call_back(.., *data) {
 }
 ```
 
-I was stuck with this and asked for help on the rust discord, where @pie_flavor said
+I was stuck with this and asked for help on the rust discord, where @pie\_flavor said
 
 > The callback can't be passed directly - we have double box it; once to safely transport the type
 > data and once again to have a fixed-size object to reference.
@@ -389,5 +388,5 @@ fn main() {
 
 # Final result
 
-<video controls="true"><source src="/videos/kindle_light.mp4"></video>
+<video controls="true"><source src="/videos/kindle_light.mp4"/></video>
 

@@ -67,7 +67,7 @@ esptool.py --port /dev/ttyUSB0 write_flash -fs 1MB -fm dout 0x0 esp8266-20180511
 
 While you can use `screen`, `minicom`, `picocom` or other software for serial communication, you also will (most likely) want to push files into the [VFS](https://docs.micropython.org/en/latest/esp8266/esp8266/tutorial/filesystem.html).
 
-What I used for both getting a REPL and pushing files is [mpfshell](https://github.com/wendlers/mpfshell), which sometimes sadly fails, but >90% of the time works great.
+What I used for both getting a REPL and pushing files is [mpfshell](https://github.com/wendlers/mpfshell), which sometimes sadly fails, but \>90% of the time works great.
 
 My `rapid iterations` are done by running
 

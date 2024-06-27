@@ -4,6 +4,7 @@ date: 2021-04-17
 tags: gtk, python, rust
 description: Learning GTK to build a mobile hackernews app, with ad-blocker and reader mode
 ---
+
 <link href="/css/tabs.css" rel="stylesheet" type="text/css"/>
 
 I ordered a [pinephone](https://www.pine64.org/pinephone/) and while waiting for it I wanted to see how hard it'd be to write basic mobile apps for
@@ -39,9 +40,9 @@ You can find the source code [here](https://github.com/DavidVentura/blog/tree/ma
 The `resources.xml` file has to be compiled with `glib-compile-resources resources.xml --target resources`
 
 <div class="tabset">
-  <input type="radio" name="tabset" id="tab1" checked><label for="tab1">example.py</label>
-  <input type="radio" name="tabset" id="tab2"><label for="tab2">MainWindow.ui</label>
-  <input type="radio" name="tabset" id="tab3"><label for="tab3">resources.xml</label>
+  <input type="radio" name="tabset" id="tab1" checked /><label for="tab1">example.py</label>
+  <input type="radio" name="tabset" id="tab2"/><label for="tab2">MainWindow.ui</label>
+  <input type="radio" name="tabset" id="tab3"/><label for="tab3">resources.xml</label>
   
   <div class="tab-panels">
     <section class="tab-panel">
@@ -216,12 +217,15 @@ fragment bench.
 
 
 [![](/images/benchmarks-fragment.png)](/images/benchmarks-fragment.png)
+
 <p class="center">URL fragment benches</p>
 All methods are relatively similar at ~450us, except Aho-Corasick at 180ns (!!), clear winner.
 
 
 [![blabla](/images/benchmarks-domain.png)](/images/benchmarks-domain.png)
+
 <p class="center">Subdomain benches</p>
+
 I'd expected the trie implementation to be fast (and I was quite happy when I saw the ~30us).. but the Aho-Corasick
 algorithm is again at 140ns which is mind-blowing.
 
