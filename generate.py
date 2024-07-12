@@ -62,6 +62,8 @@ class PostMetadata:
     date: date
     slug: Optional[str] = None
     incomplete: bool = False
+    series: Optional[str] = None
+    series_idx: Optional[int] = None
 
     def get_title(self):
         title = self.title
@@ -101,6 +103,10 @@ class PostMetadata:
         tags = [t.strip() for t in d['tags'].split(',') if t]
         data = {**d, 'date': date, 'tags': tags} 
         data.pop('started', None)
+        if data.get('series') or data.get('series_idx'):
+            assert data.get('series_idx')
+            assert data.get('series')
+            data['series'] = data['series'].strip()
         return PostMetadata(**data)
 
     @property
@@ -323,6 +329,14 @@ def generate_index():
     feed.updated(last_update)
     feed.rss_file('blog/html/rss.xml', pretty=True)
 
+def get_all_series() -> set[str]:
+    series: set[str] = set()
+    for f in glob.glob("blog/raw/*/POST.md"):
+        item = PostMetadata.from_path(f)
+        if item.series:
+            series.add(item.series)
+    return series
+
 def get_all_tags() -> set[str]:
     tags: set[str] = set()
     for f in glob.glob("blog/raw/*/POST.md"):
@@ -347,6 +361,23 @@ def generate_tag_index(tag):
     fpath.parent.mkdir(parents=True, exist_ok=True)
     open(str(fpath), 'w', encoding='utf-8').write(rendered)
 
+def generate_series_index(series):
+    items: List[PostMetadata] = []
+    for f in glob.glob("blog/raw/*/POST.md"):
+        item = PostMetadata.from_path(f)
+        if series != item.series:
+            continue
+        if item.incomplete and not DEVMODE:
+            continue
+        items.append(item)
+
+    s_items = sorted(items, key=lambda k: k.date, reverse=True)
+    rendered = INDEX_TEMPLATE.render(index=s_items, series=series, base_url=BLOG_URL, full_url=f'{BLOG_URL}series/{series}/')
+    assert rendered is not None
+    fpath = Path(f'blog/html/series/{series}/index.html')
+    fpath.parent.mkdir(parents=True, exist_ok=True)
+    open(str(fpath), 'w', encoding='utf-8').write(rendered)
+
 def generate_sitemap(tags: set[str]):
     with Path('blog/html/sitemap.txt').open('w') as fd:
         fd.write(f'{BLOG_URL}\n')
@@ -360,6 +391,10 @@ if __name__ == '__main__':
     tags = get_all_tags()
     for tag in tags:
         generate_tag_index(tag)
+    series = get_all_series()
+    for series_name in series:
+        print(series_name)
+        generate_series_index(series_name)
     generate_sitemap(tags)
     filter_name = sys.argv[2] if len(sys.argv) > 2 else None
     main(filter_name)

@@ -5,6 +5,8 @@ date: 2024-06-04
 tags: c, qemu, uefi, pci-gpu
 slug: pcie-option-rom
 description: Getting the PCI adapter all the way to Linux
+series: PCIe-device
+series_idx: 3
 ---
 
 In this series, we've been implementing a PCI-e GPU and so far we were able to put some pixels on the (emulated) screen via purpose-built userspace programs.

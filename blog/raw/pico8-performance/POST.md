@@ -3,6 +3,8 @@ title: Pico8 console, part 2: performance
 date: 2022-07-25
 tags: rp2040, sdl, embedded, pico8, picopico, lua
 description: Improving the performance of my RP2040 based Pico-8 handheld console
+series: picopico
+series_idx: 2
 ---
 
 In [part 1](https://blog.davidv.dev/making-a-handheld-pico8-console-part-1.html) I got to a point where I had:

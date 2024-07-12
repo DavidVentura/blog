@@ -4,6 +4,8 @@ date: 2023-09-03
 tags: c, lua, pico8, picopico
 slug: picopico-compiler-runtime
 description: 
+series: picopico
+series_idx: 3
 ---
 
 In [part 2](https://blog.davidv.dev/pico8-console-part-2-performance.html) I was stuck trying to make `Rockets!` work with optimized bytecode; I pursued this for a bit and realized it was probably never going to be fast enough.

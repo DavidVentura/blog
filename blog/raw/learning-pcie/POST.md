@@ -4,6 +4,8 @@ date: 2024-05-06
 tags: qemu, c, pci-gpu
 slug: learning-pcie
 description: Creating a very simple PCI-e device in QEMU
+series: PCIe-device
+series_idx: 1
 ---
 
 Ever since reading about the [FuryGpu](https://www.furygpu.com/), I've been curious about how PCI-e works and what it would take to build a simple display adapter.

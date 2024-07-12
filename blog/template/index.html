@@ -32,7 +32,7 @@
         <div class="layout">
             <header class="my-2 flex flex-col md:gap-2 md:flex-row md:items-baseline">
                 <img src="/images/logo.svg" class="w-8 h-8 inline-block align-baseline" alt="Angry robot logo">
-                <h1 class="inline-block"><a href='/'>Mumbling about computers{% if tag is defined %} - {{tag}}{% endif %}</a></h1>
+                <h1 class="inline-block"><a href='/'>Mumbling about computers</a></h1>
             </header>
             <nav class="mb-4 pb-4 border-b border-gray-500">
                 <ul class="flex items-center gap-2">
@@ -41,6 +41,12 @@
                 </ul>
             </nav>
             <main id="indexlist">
+				{% if series is defined %}
+				<p>Posts belonging to the series <b>{{series}}</b></p>
+				{% endif %}
+				{% if tag is defined %}
+				<p>Posts tagged with <b>{{tag}}</b></p>
+				{% endif %}
                 {% for post in index %}
                 <article class="my-4 md:my-4">
                     <span class="font-semibold text-xl md:text-2xl">
