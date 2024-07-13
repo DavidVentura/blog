@@ -1,11 +1,17 @@
 ---
+date: 2024-07-13
 incomplete: yes
-title: A skeptic's first contact with kubernetes
+title: A skeptic's first contact with Kubernetes
+tags: kubernetes
+description:
+slug: first-contact-with-k8s
 ---
 
 I've been working on systems administration/engineering/infrastructure development for many years and
 somehow I've not had to interact with kubernetes in any way.
+
 I think this is lucky, as I've held a pretty low opinion of kubernetes all this time, without really having a solid basis for that.
+
 It's mostly an opinion formed in a reactionary way to "a new way of doing things" and "unnecessary complexity".
 I've found myself with some free time lately and decided to learn more about kubernetes, to see what all of this is about, and hopefully learn new concepts for infra mgmt.
 
@@ -13,9 +19,9 @@ There are a lot of tutorials covering installing and using kubernetes, along wit
 
 My goal for this post is to gather the concepts that I've learned about in the order/abstractions that I find most undestandable.
 
-a standard description of kubernetes would say something like:
+## A standard description
 
-kubernetes allows you to run arbitrary workloads\*, and provides you with the ability to:
+Kubernetes allows you to run arbitrary workloads\*, and provides you with the ability to:
 
 - specify requirements (cpu, disk, memory, instance count, ..)
 - dynamically scale instance count
@@ -28,13 +34,28 @@ but the more important part, is what it _does_ for you:
 
 and it only _requires_ you to package your workload as a Docker image [](), which seems like a reasonable price to pay.
 
-BUT
-the way i see it, the essence of kubernetes can be attributed to two properties:
+introducing basic concepts, to later highlight things that surprised me in good, bad and still-undecided ways:
+
+- [Pod](https://kubernetes.io/docs/concepts/workloads/pods/): a unit of work, consisting of a set of Docker images and their configuration
+- [Node](https://kubernetes.io/docs/concepts/architecture/nodes/): a computer running the kubernetes node agent (kubelet). executes Pods.
+- [Cluster](https://kubernetes.io/docs/concepts/architecture/); a logical collection of `Node`s along with the Control Plane.
+- [Service](https://kubernetes.io/docs/concepts/services-networking/service/): logical grouping of a set of pods
+- [Namespace](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/): a logical subdivision of the `Cluster`. provides scope for names (like dns search domain)
+
+
+<img src="assets/concepts.svg" style="margin: 0px auto; width: 100%; max-width: 40rem" />
+
+While this may be an OK{^-ish|Incomplete, mildly incorrect, etc} explanation, it wasn't really something that would've been useful for me &ndash; a lot of infrastructure platforms look _something_ like this diagram; there's nothing special here
+
+## How I understand it
+
+I think that the essence of Kubernetes can be attributed to two properties:
 
 ### Control loops
-First, "resources" are managed by a set of [control loops](https://en.wikipedia.org/wiki/Control_loop) (named [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/)).
 
-A control loop has the objective of achieving a desired state, and it will do this by observing specific variables (via a sensor) and performing actions (via a control element).
+[Workloads](https://kubernetes.io/docs/concepts/workloads/) are managed by a set of [control loops](https://en.wikipedia.org/wiki/Control_loop) (named [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/)).
+
+A control loop will continuously perform _actions_ (via a control element), if necessary, to achieve a _desired state_, and it will do this by observing specific variables (via a sensor).
 
 An interesting detail is that the control element does not necessarily _directly_ affect what the sensor observes.
 
@@ -43,32 +64,42 @@ This description is very generic, so here are some examples:
 - A workload that needs to process events from a queue
 	- Desired state: empty queue
 	- Sensor: depth of the queue
-	- Control Element: update the number of running servers to process events (which can also go _down_ if the queue is empty)
+	- Control Element: number of event processing servers
 - A workload that needs to horizontally scale to handle user load
-	- Desired state: Maintain average CPU utilization below 80%
-	- Sensor: CPU metrics from pods
-	- Control Element: Spin up new Nodes in the Cluster
+	- Desired state: Maintain P90 latency below X ms
+	- Sensor: Latency metrics from backend
+	- Control Element: Spin up new Pods to handle the demand
 - Generic Health monitoring
 	- Desired state: All Nodes are healthy
 	- Sensor: Health metrics from nodes
 	- Control Element: Remove Nodes from the cluster
 
+#### Controllers
+
+[should this be here?]
+
+There are some built-in [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/)
+statefulset, deployment
+
+
 ### Services
 
-introducing basic concepts, to later highlight things that surprised me in good, bad and still-undecided ways:
+A [Service](https://kubernetes.io/docs/concepts/services-networking/service/) is a networking-level concept, abstracts over a set of Pods and provides a **stable identity**: unchanging (virtual) IP address & a DNS record.
 
-Pod:
-	- a unit of work, consisting of a set of Docker images and their configuration
-Node: 
-	- a computer running the kubernetes node agent (kubelet). executes Pods.
-cluster
-	- a logical collection of `Node`s
-service:
-	- logical grouping of a set of pods
-Namespace:
-	- a logical subdivision of the `Cluster`. provides scope for names (like dns search domain)
+Compared to "classic" clusters, a Service provides a similar abstraction to the combination of N nodes running Keepalived + NGINX (with a dynamic set of backends).
 
-<diagram>
+I think the real value in Services is derived through the fact that _all_ Nodes act as load balancers for Service traffic.
+
+Whenever a new Service is created, a Virtual IP will be assigned to it.
+
+Every Node will update its networking configuration (`iptables`, `nftables`) to forward any packet destined to each Service's Virtual IP instead to the backing Pods.
+
+In parallel, there's a controller [which one??] that observes both the creation of Services and events that modify which Pods back the Service; whenever such an event is observed, the traffic forwarding rules are also updated.
+
+particular set of Nodes is the "load balancer" -- all Nodes the [Networking Model]() which  _every Node_ into a router.
+[more explanation]
+
+
 
 these have some fundamental characteristics that everything else builds on top of:
 
@@ -78,9 +109,6 @@ pods:
 
 services:
 - **are stable over time** -- they will have a stable DNS record `<service-name>.<namespace>.svc.cluster.local` _and_ a stable IP address
-
-## Controllers
-statefulset, deployment
 
 ## workload mgmt
 
