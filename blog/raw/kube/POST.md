@@ -1,55 +1,55 @@
 ---
 date: 2024-07-13
-incomplete: yes
 title: A skeptic's first contact with Kubernetes
 tags: kubernetes
-description:
+description: A journey into Kubernetes: key concepts from a systems engineer's perspective, with a detour to yaml-template-hell.
 slug: first-contact-with-k8s
 ---
 
-I've been working on systems administration/engineering/infrastructure development for many years and
-somehow I've not had to interact with kubernetes in any way.
+I've been working on systems administration / engineering / infrastructure development for many years and
+somehow I've managed to avoid any interaction with Kubernetes. This avoidance wasn't accidental; my work required very tight control of workload placement in physical locations.
 
-I think this is lucky, as I've held a pretty low opinion of kubernetes all this time, without really having a solid basis for that.
+Over time, I developed a skeptical view of Kubernetes without really having a solid basis for it, other than a vague notion of it being "a new way of doing things" and "unnecessary complexity".
 
-It's mostly an opinion formed in a reactionary way to "a new way of doing things" and "unnecessary complexity".
-I've found myself with some free time lately and decided to learn more about kubernetes, to see what all of this is about, and hopefully learn new concepts for infra mgmt.
+I decided it was time to base my opinions on facts rather than perception, so here I am, writing what I learned.
 
-There are a lot of tutorials covering installing and using kubernetes, along with fairly scattered/unconnected descriptions of what the underlying parts of the system do, and how.
+While there are a lot of tutorials covering the usage and operation of a Kubernetes cluster, along with basic descriptions of its components, they did not quite work for me. Many of these resources lightly cover _what_ the components do, but often miss the underlying reason or the tradeoffs.
 
-My goal for this post is to gather the concepts that I've learned about in the order/abstractions that I find most undestandable.
+This post aims to cover these concepts from a perspective I would've found useful, and it does not aim to be exhaustive.
 
-## A standard description
+## A "standard" description
 
-Kubernetes allows you to run arbitrary workloads\*, and provides you with the ability to:
+Kubernetes allows you to run arbitrary workloads, and provides you with the ability to:
 
 - specify requirements (cpu, disk, memory, instance count, ..)
 - dynamically scale instance count
 
 but the more important part, is what it _does_ for you:
 
-- bin packing of applications 
-- "self-healing" (crashed instances get restarted)
+- picking which host an application runs on
+- "self-healing" (crashed instances get restarted, instances automatically moved out of faulty hosts)
 - exposes services for DNS-based discovery
 
-and it only _requires_ you to package your workload as a Docker image [](), which seems like a reasonable price to pay.
+and it only _requires_ you to package your workload as a [Docker image](https://kubernetes.io/docs/concepts/containers/images/), which seems like a reasonable price to pay.
 
-introducing basic concepts, to later highlight things that surprised me in good, bad and still-undecided ways:
+The basic building blocks that compose a cluster can be defined as follows:
 
 - [Pod](https://kubernetes.io/docs/concepts/workloads/pods/): a unit of work, consisting of a set of Docker images and their configuration
 - [Node](https://kubernetes.io/docs/concepts/architecture/nodes/): a computer running the kubernetes node agent (kubelet). executes Pods.
 - [Cluster](https://kubernetes.io/docs/concepts/architecture/); a logical collection of `Node`s along with the Control Plane.
 - [Service](https://kubernetes.io/docs/concepts/services-networking/service/): logical grouping of a set of pods
-- [Namespace](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/): a logical subdivision of the `Cluster`. provides scope for names (like dns search domain)
+- [Namespace](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/): a logical subdivision of the `Cluster`. provides scope for names (like DNS search domain)
 
 
-<img src="assets/concepts.svg" style="margin: 0px auto; width: 100%; max-width: 40rem" />
+It's easier to observe the relationship between these concepts in diagram form:
+
+<img src="assets/concepts.svg" style="margin: 0px auto; width: 100%; max-width: 25rem" />
 
 While this may be an OK{^-ish|Incomplete, mildly incorrect, etc} explanation, it wasn't really something that would've been useful for me &ndash; a lot of infrastructure platforms look _something_ like this diagram; there's nothing special here
 
-## How I understand it
+## What I found important
 
-I think that the essence of Kubernetes can be attributed to two properties:
+My opinion is that a large part of Kubernetes' value is derived from just two concepts:
 
 ### Control loops
 
@@ -74,48 +74,54 @@ This description is very generic, so here are some examples:
 	- Sensor: Health metrics from nodes
 	- Control Element: Remove Nodes from the cluster
 
-#### Controllers
 
-[should this be here?]
-
-There are some built-in [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/)
-statefulset, deployment
-
+<img src="assets/controller-queue.svg" style="margin: 0px auto; width: 100%; max-width: 45rem" />
 
 ### Services
 
-A [Service](https://kubernetes.io/docs/concepts/services-networking/service/) is a networking-level concept, abstracts over a set of Pods and provides a **stable identity**: unchanging (virtual) IP address & a DNS record.
+A [Service](https://kubernetes.io/docs/concepts/services-networking/service/) is a networking-level concept which provides stable access to a set of backing Pods, it offers:
 
-Compared to "classic" clusters, a Service provides a similar abstraction to the combination of N nodes running Keepalived + NGINX (with a dynamic set of backends).
+- A **stable identity**: unchanging (virtual) IP address & a DNS record
+- Load balancing: distributes incoming traffic across the Pods
+- Service discovery: allows other components to find and communicate with the Service
 
-I think the real value in Services is derived through the fact that _all_ Nodes act as load balancers for Service traffic.
+Compared to "classic" clusters, a Service provides a similar abstraction to the combination of:
 
-Whenever a new Service is created, a Virtual IP will be assigned to it.
-
-Every Node will update its networking configuration (`iptables`, `nftables`) to forward any packet destined to each Service's Virtual IP instead to the backing Pods.
-
-In parallel, there's a controller [which one??] that observes both the creation of Services and events that modify which Pods back the Service; whenever such an event is observed, the traffic forwarding rules are also updated.
-
-particular set of Nodes is the "load balancer" -- all Nodes the [Networking Model]() which  _every Node_ into a router.
-[more explanation]
+- N nodes running [Keepalived](https://www.keepalived.org/) + NGINX (with a dynamic set of backends)
+- CNAME records for the virtual (Keepalived) IP
 
 
+Whenever a new Service is created:
 
-these have some fundamental characteristics that everything else builds on top of:
+1. A Virtual IP will be assigned to it
+2. Every Node will update its networking configuration (`netfilter`) to forward any packet destined to each Service's Virtual IP instead to the backing Pods.
 
-pods:
-- containers within a pod share networking & storage (same ip address, port space, local "scratch disk")
-- **are not stable** -- they may get shut down & recreated somewhere else, with a different IP address.
+The networking configuration is updated by a Controller that runs on every Node: [kube-proxy](https://kubernetes.io/docs/concepts/overview/components/#kube-proxy), whose primary responsibility is to watch the state of all `Service` objects and update the `netfilter` rules on every change.
 
-services:
-- **are stable over time** -- they will have a stable DNS record `<service-name>.<namespace>.svc.cluster.local` _and_ a stable IP address
+This design means that all Nodes act as load balancers for Service traffic, so there is no single point of failure in Service traffic forwarding, and that traffic forwarding capacity scales with Cluster size.
 
-## workload mgmt
+For me, an interesting property of this design is that every Node receives the rules for **every** Service, which has some implications:
+
+- Very simple implementation for `kube-proxy`
+- The number of rules may be large, which may be problematic for certain traffic forwarding implementations (`iptables` linearly evaluates every rule) 
+- Traffic is forwarded multiple times in some scenarios, providing higher availability at the cost of extra load on the cluster
+	- When a Pod is moved to another node, the traffic will be forwarded twice until the old DNS entry expires
+		- No need to deal with cache invalidation for DNS entries at the `kube-proxy` level
+	- Misbehaving clients (eg: ones that do not re-resolve DNS before reconnecting) will continue to work
+
+
+We can look at the life of a packet that travels from "Pod 1" to "Service 1":
+
+{embed-mermaid assets/packet.mermaid}
+
+
+## Workload management
 
 or "how, when and where things run"
 
-You can create a Pod manually, using some yaml like this:
-```yml
+You can create a Pod manually, using a YAML definition like this one:
+
+```yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -128,122 +134,157 @@ spec:
     - containerPort: 80
 ```
 
-but by doing that, you are _manually_ scheduling the execution of this pod _once_; what this means is that
-if the node dies, then your pod will die with it, and not get re-scheduled anywhere else. Pod termination can also happen if there's resource pressure on the Node, via [eviction](https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/).
+but by doing that, you are _manually_ scheduling the execution of this pod _once_; which is easy, but has some nasty limitations:
 
-Instead of creating a Pod directly, you can create a [ReplicaSet]() which is a Controller, and as part of it's control loop it will ensure that the right number of replicas are running for your specified Pod at all times.
-
-ReplicaSets solve the problem of Node failure/eviction deleting your Pod, but they are mostly immutable (you can only change the replicas count).
-deployments, pods, replicasets
+* If the Node that host the Pod dies, the Pod will not get re-scheduled
+* If the Pod is terminated due to resource pressure on the Node (via [eviction](https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/)) it also won't get re-scheduled
+* You can't go "now I want to have 2 of these"
 
 
-achieving desired state through a ReplicaSet (one-off, non-updatable) or a Deployment (continuous, updatable)
+Instead of creating a Pod directly, you can create a [ReplicaSet](https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/) which is a Controller, and as part of it's control loop it will ensure that the right number of Pod replicas are running at all times, which solves the problem of Node failure/eviction deleting your Pod.
 
-docker helped packaging any arbitrary app into a standardized unit
+```yaml
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: nginx-replicaset
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2
+```
 
-kube helps running arbitrary workloads with requirements (cpu disk etc).
-bin packing & control loop
+ReplicaSets allow you to update the desired number of replicas, _and nothing else_ (eg: updating `nginx` version, or exposing another port) &ndash; you would need to delete the resource and re-create it.
 
-Deployment is the desired end state for an "application", scheduler takes care of it via control loop
+To address these limitations, you can use a [Deployment](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/), which is a Controller that will ensure the right number of Pods _with the right image_ are running **eventually**.
 
-storage;
-- by default disk is ephemeral/not shared
-volumes allow sharing
-volumes can be ephemeral (deleted on pod stop) or persistent (..)
+The **eventual** part is very important, as Deployments allow you to update which image (or version) the Pod is running and to select the rate of change, covering the standard workflow of a "version upgrade".
 
+Said differently, when you update a Deployment, it creates a new ReplicaSet and gradually scales it up while scaling down the old one, enabling rolling updates.
 
+## Storage management
 
-ltaer:
-Namespaces separate workloads _by default_. pods can still talk to a Service in another namespace by explicitly
+or "how data persists and moves with your Pods"
 
-problem/solution:
-sharing files between containers in a pod -> volumes
+By default, containers within a Pod do not share storage/filesystem.
 
+If you want to share storage between containers in a Pod, you can use an [Ephemeral Volume](https://kubernetes.io/docs/concepts/storage/ephemeral-volumes/), whose lifecycle is tied to the Pod - when the Pod shuts down, the data is deleted.
 
+Ephemeral Volumes seemed useless[^1], but they do have some use-cases:
 
->> Your cluster could be changing at any point as work happens and control loops automatically fix failures. This means that, potentially, your cluster never reaches a stable state.
+1. Log shipping from a sidecar
+2. A sidecar populating caches for the main application
 
->> As long as the controllers for your cluster are running and able to make useful changes, it doesn't matter if the overall state is stable or not.
+[^1]: I'm only considering "standard storage" here &ndash; I wouldn't consider `ConfigMap`s storage.
 
+If you want to have _actually persistent_ storage, you could use a [Persistent Volume](https://kubernetes.io/docs/concepts/storage/persistent-volumes/), which has a lifecycle that is decoupled[^pv-lifecycle] from the Pod's.
 
-## networking
+[^pv-lifecycle]: Expected to be "permanent" but nobody stops the admin from `rm -rf` on the wrong server ¯\\\_(ツ)\_/¯.
 
-networking model:
+You'd define such a Volume with a [Claim](https://kubernetes.io/docs/concepts/storage/persistent-volumes/), like this:
 
-- All Pods in the cluster share a _flat_, cluster-private IP space
-- All Pods can (from a networking perspective) communicate with all other pods (unless specifically firewalled)
-	- so, no segmenting some pods/nodes in VLANs, you would use a different cluster for that
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nginx-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+```
 
+and you can then use it in a Pod like this:
 
-why this model?
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-with-pv
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    volumeMounts:
+    - name: html-volume
+      mountPath: /usr/share/nginx/html
+  volumes:
+  - name: html-volume
+    persistentVolumeClaim:
+      claimName: nginx-pvc
+```
 
-in my opinion, having services with **stable identities** over time (consistent DNS records & IP addresses) seem like the most important/fundamental part, as their design seems to have guided everything else
-this makes sense, as applications do not need to deal with service discovery actively, as long as they use the Service address to connect, they will be highly available [EXPLAIN WTF SERVICE DOES BEFORE, NODE DYING, etc]
+Some things seemed interesting:
 
-a service continuously evaluates which pods are still eligible/healthy, and if there's a change, it will reflect this
-routing rules
+- Multiple users (Pods) of the same Claim will share storage, as always this is fairly risky if there are multiple writers
+- A PersistentVolume is backed by different drivers (NFS, SMB, iSCSI, ..) but which one is being used is not clear to the Pod, so the Pod cannot rely on features (like atomic renames)
 
+If you want to haver per-instance persistent storage, you can use a [StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/) which defines in a single resource: a workload (Pod), replica count, mount configuration and volume claim _template_.
 
-pods run in private network (why, how? routing? )
-https://github.com/kubernetes/design-proposals-archive/blob/main/network/networking.md
-external to internal = garbage, double-bounced through generic "lb" node into correct lb node
-external to internal could go via ingress
-https://kubernetes.io/docs/concepts/services-networking/ingress/
+Some interesting things with `StatefulSet`s:
 
+1. Pods have stable hostnames (`nginx-0`, `nginx-1`, ..)
+2. Deployments are executed in order:
+	1. Creation of Pods in ascending order (0, 1, ..)
+	2. Deletion of Pods in descending order (3, 2, ..)
+	3. Updates Pods in descending order (3, 2, ..)
 
-services: headless (no ip) / normal
-	- headless do not use service name via dns, you need to talk to the pods directly
-		- querying the service name returns many A results, one per pod
-		- in a statefulset, SRV answers are there only for Running/Healthy pods
+This seemed _weird_, and the explanations that I found online say that apparently lower numbered instances are "core" or "more stable" &ndash; I don't get it, as a crashy Pod will not get renumbered. Maybe it'd be better to update in descending "uptime" order? Maybe this "seniority"/"stability" got retconned for Pods, and Kubernetes just needed _an_ order?
 
+Operationally, at this point it's still unclear to me how you'd manually investigate the contents of a Persistent Volume, other than attaching to the running container & executing commands there; what if my container does not bring a shell?
 
-on-node:
-kube-proxy forwards "service" flows to "pods"
- - how, why? bc the service static while the node lives?
- 	- every node has all rules for all services which dictate "incoming for service A -> outgoing to pod B"
-		- even if they do not host the corresponding service
-	=> all nodes route/forward traffic, all nodes have the same rules
-	=> if node A holds pod P for service S, and P is rescheduled to node B,
-	   then node A's kube-proxy will start forwarding traffic to B instead of localhost
-	=> also each node will load-balance the request across all _target_ nodes (hosting the service)
-	   
- - isn't pod identity supposed to make this static as well?
- 	- pod name is stable, which has a dns record for headless service and statefulsets
-		- is there a record just for the pod tho? no
-	- pod IP is not stable
+## The scorecard
 
- - does it ever forward traffic to another node?
- 	- maybe if the pod got moved, while the dns record lives?
+We've covered the main parts of Kubernetes - Control loops, Services, Workloads and Storage. Learning about this concepts has allowed me to form the less-baseless opinion I was looking for (though, I still have not operated or used a cluster).
 
+Overall, I think the **concepts** make a lot of sense, specifically I think Services (including the networking model, and kube-proxy) are fantastic, and that keeping the Controller pattern as an engine for resource management is the right way to operate.
 
----
+I'm left with some open-ended questions/rants, which I'll leave here for your enjoyment
 
-why not
+The [Controller docs](https://kubernetes.io/docs/concepts/architecture/controller/) say:
 
+> Your cluster could be changing at any point as work happens and control loops automatically fix failures. This means that, potentially, your cluster never reaches a stable state.
+>
+> As long as the controllers for your cluster are running and able to make useful changes, it doesn't matter if the overall state is stable or not.
 
+Why does it not matter if the state is unstable? If I'm operating a cluster that can't settle, I'd like to know immediately!
 
-good ideas:
-- controller
-- pods as units (lower ipc cost)
+* Given the Controller pattern, why isn't there support for "Cloud Native" architectures?
+	- I would like to have a ReplicaSet which scales the `replicas` based on some simple calculation for queue depth (eg: queue depth / 16 = # replicas)
+	- Defining interfaces for these types of events (queue depth, open connections, response latency) would be great
+	- Basically, [Horizontal Pod Autoscaler](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) but with sensors which are not just "CPU"
+* Why are the storage and networking implementations "out of tree" (CNI / CSI)?
+	- Assuming it's for "modularity" and "separation of concerns"
+* Given the above question, why is there explicit support for Cloud providers?
+	- eg: LoadBalancer supports AWS/GCP/Azure/..
 
-very interesting ideas:
-- stable identity (static ip for a service?)
+And for the largest open topic, even though this is not Kubernetes' fault, I have a rant I need to get out
 
-bad ideas/bailed too early:
-- plugins instead of implementing (networking)
-- example queue-based work, no integration, needs keda
-# end
-my hot take: services (and their stable identity) and the control loop (with everything necessary to support them) 
-are the only essential complexity; everything else is accidental
+### Stringy types
 
-helm? terrible, complex, stringy typed (example of mode=x, value=y, keda queue example)
-compatibility layer via env vars = ASS (ordering issues)
+The Kubernetes "community" seem to have absolutely hell-bent on making their lives harder by basing tools on **text interpolation** of all things. It's like they saw [Ansible](https://www.ansible.com/) and thought, "Hey, that looks terribly painful. Let's do that!".
 
-reliance on plugins (CNI)
+Check out this [RabbitMQ scaler](https://keda.sh/docs/2.14/scalers/rabbitmq-queue/) (KEDA, maintained by Microsoft) as an example:
 
-why is there no support for some protocols with built-in controllers?
-eg: observe an http endpoint for a measurement, this could be exported by queues, and we could have 
-autoscaling based on queue depth supported without KEDA
+> value: Message backlog or Publish/sec. rate to trigger on. (This value can be a float when mode: MessageRate)
 
-what's the point with abstracting cloud?? why is there built-in support for AWS/GCS/.. in LoadBalancer?
+What do you mean that the _type_ for `value` depends on the _value_ of `mode`?? And what do you mean `mode` is a string when it should be an enum??
 
+How did [Helm](https://github.com/helm/helm) manage to become popular?? How is it possible for a tool like this to do _text templating_ of all things that could be done?
+
+Take this [arbitrary NGINX](https://artifacthub.io/packages/helm/bitnami/nginx?modal=template&template=deployment.yaml) chart and check how most values are handled with _manual string indentation_:
+
+```
+{{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }} 14 {{- end }}
+```
+or
+```
+{{- toYaml { "rollingUpdate": {}, "type": "RollingUpdate" } .Values.updateStrategy | nindent 4 }}
+```
+
+Why are we generating a structured language (YAML), with a computer, by manually adding spaces to make the syntax valid? There should be no intermediate text-template representation like this one.

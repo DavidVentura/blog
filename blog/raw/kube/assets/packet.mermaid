@@ -1,0 +1,10 @@
+sequenceDiagram
+
+    Pod 1->>Node for Pod 1: Packet for Service 1
+    note right of Node for Pod 1: Rewrite Destination IP to Pod's
+    Node for Pod 1->>+Node for Pod 2: Packet
+    Node for Pod 2->>+Pod 2: Packet
+    Pod 2 ->>-Node for Pod 2: Answer
+    Node for Pod 2 ->>-Node for Pod 1: Answer
+    note left of Node for Pod 1: Rewrite Source IP to Service's
+    Node for Pod 1 ->> Pod 1: Answer
