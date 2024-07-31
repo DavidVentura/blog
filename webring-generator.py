@@ -65,18 +65,20 @@ def generate_card_html(entry):
     url = details.get('url', '')
     
     card_html = f"""
-    <div class="card">
-        <div class="flex items-center gap-4">
-            <div class="avatar">
-                <img src="{image_url}" alt="{title} logo">
-            </div>
-            <div class="grid gap-1">
-                <p class="text-sm font-medium leading-none"><b><a href="{url}">{title}</a></b></p>
+    <div class="rss-list-item">        
+        <div class="rss-list-item-avatar">
+            <img src="{image_url}" alt="{title} logo">
+        </div>
+        <div class="rss-list-item-content">
+            <a href="{url}"><h3>{title}</h3></a>
+            <div class="rss-list-item-content-description">
+                {description}
             </div>
         </div>
-        <div class="mt-2">
-            <p class="text-sm mt-2">{description}</p>
-            <a href="{xml_url}" target="_blank" class="text-sm text-blue-600 hover:underline">RSS Feed</a>
+        <div class="rss-list-item-cta">
+            <a href="{xml_url}" target="_blank">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" ><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+            </a>
         </div>
     </div>
     """
@@ -149,7 +151,7 @@ def generate_html_page(entries):
     </head>
     <body>
         <h1>RSS Feed Entries</h1>
-        <div class="card-container">
+        <div class="rss-list">
             {cards_html}
         </div>
     </body>

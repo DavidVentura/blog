@@ -149,6 +149,35 @@
   }
   #footer a {
     @apply font-medium underline underline-offset-2 decoration-dotted decoration-gray-300 hover:text-blue-400 visited:text-blue-900;
+  } 
+
+  .rss-list {
+    @apply flex flex-col 
+    rounded border border-gray-300;
+  }
+
+  .rss-list-item {
+    @apply flex items-center 
+    gap-2 p-2 
+    border-t border-t-gray-300 first:border-t-0;
+  }
+
+  .rss-list-item-avatar {
+    @apply w-8 h-8 
+    rounded 
+    overflow-hidden 
+    shrink-0;
+  }
+
+  .rss-list-item-avatar img {
+    @apply w-full h-auto relative 
+    before:block before:absolute before:w-8 before:h-8 before:bg-gray-300 before:bg-image-off before:bg-no-repeat before:bg-center;
+  }
+
+  .rss-list-item-content {
+    @apply flex-1 
+      min-w-0 max-h-9 
+      overflow-hidden;
   }
 
 
@@ -168,7 +197,22 @@
 	  vertical-align: baseline;
   }
   
+  .rss-list-item-content h3 {
+    @apply my-0 text-sm;
+  }
+  .rss-list-item a {
+    @apply hover:text-blue-400 visited:text-blue-900
+  }
+  
+  .rss-list-item-content-description, .rss-list-item-content-description p {
+    @apply my-0 
+    text-gray-500 text-xs text-ellipsis whitespace-nowrap overflow-hidden;
+  }
+
+  .rss-list-item-cta {
+  }
 }
+
 
 @tailwind components;
 @tailwind utilities;
