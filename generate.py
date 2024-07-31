@@ -83,7 +83,7 @@ class PostMetadata:
         if not self.slug and self.date.year >= 2024:
             raise ValueError(f"New posts must have slugs: {self.title} does not have it")
 
-        tmp_title = self.title.replace(' ', '-').replace('"', '').lower().strip('-')
+        tmp_title = self.title.replace(' ', '-').replace('"', '').replace("'", "").lower().strip('-')
         slug = valid_title_chars.sub('', tmp_title).strip('-')
         return slug
 
@@ -139,19 +139,24 @@ def embed_mermaid(relpath, text, r: PostMetadata):
     match_substr = None
     for match in EMBED_MERMAID_RE.finditer(text):
         fname = match.group('fname')
+        bname = os.path.basename(fname)
         full_fname = os.path.join(relpath, fname)
-        bdir = f'blog/html/images/mermaid/{r.get_slug()}'
+        bdir = f'blog/html/images/{r.get_slug()}'
         os.makedirs(bdir, exist_ok=True)
-        new_fname = f'{bdir}/{fname}.svg'
+        new_fname = f'{bdir}/{bname}.svg'
         if os.path.isfile(new_fname) and newer(new_fname, [full_fname]):
             print('skipping', new_fname, 'nwer', full_fname)
             # do not regenerate the same files if the sources were 
             # not modified
-            continue
-        print('out=', new_fname)
-        subprocess.run(['./node_modules/.bin/mmdc', '-i', full_fname, '-o', new_fname, '-b', 'white'])
+        else:
+            command = ['./node_modules/.bin/mmdc',
+                       '-i', full_fname,
+                       '-o', new_fname,
+                       '-b', 'white',
+                       '--cssFile', 'mermaid.css']
+            subprocess.run(command)
         match_substr = match.group(0)
-        text = text.replace(match_substr, f'![](/images/mermaid/{r.get_slug()}/{fname}.svg)')
+        text = text.replace(match_substr, f'![](/images/{r.get_slug()}/{bname}.svg)')
     return text
 
 def embed_files(relpath, text):
@@ -197,6 +202,7 @@ def copy_relative_assets(html, assets_dir, post_dir):
             continue
         og_file = post_dir / src
         if og_file.exists():
+            print("copy", og_file, assets_dir / og_file.name)
             shutil.copyfile(og_file, assets_dir / og_file.name)
         else:
             print(f"Relative-referenced file {src} does not exist")
@@ -221,13 +227,14 @@ def main(filter_name: Optional[str]):
             print("Target post file (%s) does not exist" % post_file)
             continue
 
-        if filter_name and filter_name.lower() not in post_dir.name.lower():
-            continue
-
-        debug(post_dir)
 
         md_str = post_file.open(encoding='utf-8').read()
         r = PostMetadata.from_text(md_str)
+
+        if filter_name:
+            fn = filter_name.lower()
+            if fn not in post_dir.name.lower() and fn not in r.title.lower():
+                continue
 
         if r.incomplete and not DEVMODE:
             debug('Incomplete - skipping')
@@ -280,7 +287,7 @@ def generate_feed():
     fg.id(BLOG_URL)
     fg.title('Mumbling about computers')
     fg.author({'name': 'David Ventura',
-               'email': 'davidventura27+blog@gmail.com'})
+               'email': 'hello@davidv.dev'})
     fg.link(href=BLOG_URL, rel='alternate')
     fg.link(href=("%srss.xml" % BLOG_URL), rel='self')
     fg.description('Blog')
@@ -297,7 +304,7 @@ def make_rss_entry(feed, item: PostMetadata):
     tstamp = pytz.timezone("Europe/Amsterdam").localize(tstamp)
     fe.link(href=url)
     fe.author({'name': 'David Ventura',
-               'email': 'davidventura27+blog@gmail.com'})
+               'email': 'hello@davidv.dev'})
     fe.pubDate(tstamp)
     fe.title(item.get_title())
     if item.description:
@@ -393,7 +400,6 @@ if __name__ == '__main__':
         generate_tag_index(tag)
     series = get_all_series()
     for series_name in series:
-        print(series_name)
         generate_series_index(series_name)
     generate_sitemap(tags)
     filter_name = sys.argv[2] if len(sys.argv) > 2 else None
