@@ -19,6 +19,7 @@ from bs4 import BeautifulSoup
 from feedgen.feed import FeedGenerator
 from jinja2 import Template
 from markdown2 import Markdown
+import yaml
 
 BLOG_URL = 'https://blog.davidv.dev/'
 BODY_TEMPLATE_FILE = 'blog/template/body.html'
@@ -55,6 +56,31 @@ class BlogPosting:
           }
 
 @dataclass
+class SeriesMetadata:
+    name: str
+    posts: list["PostMetadata"]
+
+    @staticmethod
+    @lru_cache
+    def from_name(name: str) -> 'SeriesMetadata':
+        path = Path('blog/series.yml')
+        with path.open() as fd:
+            data = yaml.load(fd, Loader=yaml.CLoader)
+        posts = []
+        print(data)
+        for series in data:
+            print(series, name)
+            if series['name'].strip() != name.strip():
+                print('no')
+                continue
+            for post in series['posts']:
+                posts.append(PostMetadata.from_path(f"blog/raw/{post}/POST.md", False))
+            break
+        assert posts
+
+        return SeriesMetadata(name, posts)
+
+@dataclass
 class PostMetadata:
     title: str
     tags: List[str]
@@ -63,7 +89,6 @@ class PostMetadata:
     slug: Optional[str] = None
     incomplete: bool = False
     series: Optional[str] = None
-    series_idx: Optional[int] = None
 
     def get_title(self):
         title = self.title
@@ -93,20 +118,18 @@ class PostMetadata:
 
     @staticmethod
     @lru_cache
-    def from_path(fname) -> 'PostMetadata':
+    def from_path(fname, with_series=True) -> 'PostMetadata':
         with open(fname, 'r') as fd:
-            return PostMetadata.from_dict(md.convert(fd.read()).metadata)
+            return PostMetadata.from_dict(md.convert(fd.read()).metadata, with_series)
 
     @staticmethod
-    def from_dict(d) -> 'PostMetadata':
+    def from_dict(d, with_series=True) -> 'PostMetadata':
         date = datetime.strptime(d['date'], "%Y-%m-%d").date()
         tags = [t.strip() for t in d['tags'].split(',') if t]
         data = {**d, 'date': date, 'tags': tags} 
         data.pop('started', None)
-        if data.get('series') or data.get('series_idx'):
-            assert data.get('series_idx')
-            assert data.get('series')
-            data['series'] = data['series'].strip()
+        if with_series and data.get('series'):
+            data['series'] = SeriesMetadata.from_name(data['series'].strip())
         return PostMetadata(**data)
 
     @property
@@ -185,7 +208,8 @@ def generate_post(header: str, body: str, meta: PostMetadata):
             full_url=meta.full_url,
             base_url=BLOG_URL,
             structured_metadata=json.dumps(meta.as_schema_posting.as_dict()),
-            devmode=DEVMODE)
+            devmode=DEVMODE,
+            series=meta.series)
     assert rendered is not None
     return rendered
 
@@ -290,7 +314,7 @@ def generate_feed():
                'email': 'hello@davidv.dev'})
     fg.link(href=BLOG_URL, rel='alternate')
     fg.link(href=("%srss.xml" % BLOG_URL), rel='self')
-    fg.description('Blog')
+    fg.description('Exploring software development, embedded systems, and homelab projects.')
     fg.language('en')
     fg.logo('https://blog.davidv.dev/images/logo.svg')
     return fg
@@ -398,9 +422,9 @@ if __name__ == '__main__':
     tags = get_all_tags()
     for tag in tags:
         generate_tag_index(tag)
-    series = get_all_series()
-    for series_name in series:
-        generate_series_index(series_name)
+    #series = get_all_series()
+    #for series_name in series:
+    #    generate_series_index(series_name)
     generate_sitemap(tags)
     filter_name = sys.argv[2] if len(sys.argv) > 2 else None
     main(filter_name)
