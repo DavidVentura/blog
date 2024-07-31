@@ -1,3 +1,4 @@
+import html
 import xml.etree.ElementTree as ET
 import requests
 import concurrent.futures
@@ -15,10 +16,16 @@ def fetch_feed_details(xml_url) -> dict | None:
         response.raise_for_status()
         feed_xml = ET.fromstring(response.content)
         
-        # Try to find description or subtitle
-        description = feed_xml.find(".//description")
-        if description is None or description.text is None:
-            description = feed_xml.find(".//subtitle")
+        descriptions = feed_xml.findall("./description") + feed_xml.findall("./channel/description")
+        description = None
+        for d in descriptions:
+            if d.text:
+                description = d.text
+                break
+        if description is None:
+            sub = feed_xml.find(".//subtitle")
+            if sub:
+                description = sub.text.strip()
         
         desc = ''
         url = ''
@@ -35,23 +42,25 @@ def fetch_feed_details(xml_url) -> dict | None:
 
         if not url:
             print(xml_url)
+
         if description is not None:
-            desc = description.text.strip()
+            desc = description.strip()
         return {"desc": desc, "url": url}
     except Exception as e:
         print(f"Error fetching description for {xml_url}: {str(e)}")
 
 def generate_card_html(entry):
     title = entry.get('title', 'No Title').replace('+', ' ')
+    title = html.escape(title)
     xml_url = entry.get('xmlUrl', '#')
     image_url = entry.get('{https://nononsenseapps.com/feeder}imageUrl', '')
 
-    if 'rachelbythebay' not in xml_url:
-        details = fetch_feed_details(xml_url)
-        if not details:
-            return None
-    else:
-        details = {}
+    if 'rachelbythebay' in xml_url:
+        return None
+
+    details = fetch_feed_details(xml_url)
+    if not details:
+        return None
     description = details.get('desc', '')
     url = details.get('url', '')
     
