@@ -4,8 +4,7 @@ date: 2024-05-25
 tags: pci-gpu, qemu, c
 slug: pcie-driver-dma
 description: Creating a simple driver for a simple PCI-e device (in QEMU)
-series: PCIe-device
-series_idx: 2
+series: Learning about PCI-e
 ---
 
 

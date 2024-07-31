@@ -1,0 +1,10 @@
+- name: Learning about PCI-e
+  posts: 
+    - learning-pcie
+    - learning-pcie-dma
+    - option-rom
+- name: Picopico
+  posts:
+    - pico8-console 
+    - pico8-performance
+    - building-a-compiler
