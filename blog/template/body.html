@@ -4,7 +4,7 @@
         <link rel="shortcut icon" type="image/svg" href="/images/logo.svg">
         <link rel="canonical" href="{{ full_url }}/">
 
-        <meta property="og:title" content='{{ title }}'>
+        <meta property="og:title" content="{{ title }}">
         <meta property="og:type" content="article" />
         <meta property="og:url" content="{{ full_url }}" />
         <meta property="og:site_name" content="Mumbling about computers" />
@@ -19,7 +19,7 @@
         <meta name="referrer" content="no-referrer">
         <meta name="description" content="{{description}}">
 
-        <link href="/css/style-2024-06-05.css" rel="stylesheet" type="text/css">
+        <link href="/css/style-2024-07-31.css" rel="stylesheet" type="text/css">
         <link href="/css/syntax.css" rel="stylesheet" type="text/css">
 
         <title>{{ title }}</title>
@@ -45,9 +45,6 @@
                     <li>
                         <a href="/rss.xml">RSS</a>
                     </li>
-                    <li>
-                        <a href="/blogs-i-follow.opml">Blogs I follow</a>
-                    </li>
                 </ul>
             </nav>
             <article id="blogpost">
@@ -72,6 +69,16 @@
                     {{ post }}
                 </section>
             </article>
+			<div id="footer">
+				<hr/>
+				<p>
+				Feel free to send me comments, questions or feedback <a href="mailto:hello@davidv.dev">via email</a>.
+				<!--
+				<br/>
+				If you liked this content, you may also enjoy other <a href="/blogs-i-follow.html">blogs I follow</a>.
+				-->
+				</p>
+			</div>
         </div>
     </body>
 </html>
