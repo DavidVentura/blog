@@ -121,9 +121,9 @@ int setup_chardev(GpuState* gpu, struct class* class, struct pci_dev *pdev) {
 And we need to update the init script to populate the /dev/ pseudo-fs:
 
 ```diff
- /busybox lspci
+  /busybox lspci
 + /busybox mdev -s
- exec /busybox sh
+  exec /busybox sh
 ```
 At this point, the character device will be visible in the filesystem:
 
