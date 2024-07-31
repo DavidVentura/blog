@@ -4,7 +4,11 @@
   .layout {
     @apply max-w-5xl px-4 mx-auto py-4 md:py-10;
   }
-  h1, .blog-title {
+  .blog-title {
+    @apply font-semibold text-2xl md:text-3xl;
+	line-height: 1;
+  }
+  h1 {
     @apply font-semibold text-3xl md:text-4xl;
   }
   h2 {
@@ -47,7 +51,7 @@
   #blogpost-content hr {
     @apply my-6;
   }
-  #blogpost-content a {
+  #blogpost a {
     @apply font-medium underline underline-offset-2 decoration-dotted decoration-gray-300 hover:text-blue-400 visited:text-blue-900;
   }
   #blogpost-content p code,
@@ -145,6 +149,23 @@
   }
   #footer a {
     @apply font-medium underline underline-offset-2 decoration-dotted decoration-gray-300 hover:text-blue-400 visited:text-blue-900;
+  }
+
+
+  #series ol {
+	padding: 0px 20px;
+  	list-style: decimal;
+  }
+
+  #series {
+	  background-color: #fff5c4bb;
+	  padding: 0.5rem 1rem 1rem 1rem;
+  }
+
+  .rss-logo {
+	  height: 0.8rem;
+	  display: inline;
+	  vertical-align: baseline;
   }
   
 }
