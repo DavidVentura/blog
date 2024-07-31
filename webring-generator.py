@@ -83,7 +83,7 @@ def generate_card_html(entry):
     return card_html
 
 def generate_html_page(entries):
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         cards_html = list(executor.map(generate_card_html, entries))
 
     cards_html = "\n".join([c for c in cards_html if c])
