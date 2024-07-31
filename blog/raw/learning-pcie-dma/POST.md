@@ -118,6 +118,13 @@ int setup_chardev(GpuState* gpu, struct class* class, struct pci_dev *pdev) {
 }
 ```
 
+And we need to update the init script to populate the /dev/ pseudo-fs:
+
+```diff
+ /busybox lspci
++ /busybox mdev -s
+ exec /busybox sh
+```
 At this point, the character device will be visible in the filesystem:
 
 ```bash
@@ -125,7 +132,7 @@ At this point, the character device will be visible in the filesystem:
 crw-rw----    1 0        0         241,   0 May 25 15:58 /dev/gpu-io
 ```
 
-At this point, I tried to `write` and got a bit stuck, as `write` receives a `void* private_data` via the `struct file*` but it must be populated during `open`, which does _not_ receive a `private_data`/`user_data` argument.
+Around this time, I tried to `write` and got a bit stuck, as `write` receives a `void* private_data` via the `struct file*` but it must be populated during `open`, which does _not_ receive a `private_data`/`user_data` argument.
 
 When reading the definition of [struct inode](https://elixir.bootlin.com/linux/latest/source/include/linux/fs.h#L721), I saw a pointer back to the character device (`struct cdev *i_cdev`), which gave me an idea:
 
