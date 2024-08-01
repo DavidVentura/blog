@@ -6,7 +6,7 @@
   }
   .blog-title {
     @apply font-semibold text-2xl md:text-3xl;
-	line-height: 1;
+    line-height: 1;
   }
   h1 {
     @apply font-semibold text-3xl md:text-4xl;
@@ -55,14 +55,14 @@
     @apply font-medium underline underline-offset-2 decoration-dotted decoration-gray-300 hover:text-blue-400 visited:text-blue-900;
   }
   #blogpost-content p code,
-    #blogpost-content li code {
+  #blogpost-content li code {
     @apply font-medium px-1 py-0.5 bg-gray-100 rounded text-sm;
   }
 
   #blogpost-content blockquote {
     @apply my-5 pl-4 border-l-2 border-gray-400 text-sm text-gray-600;
   }
-  
+
   /* Footnotes */
   #blogpost-content .footnotes {
     @apply text-sm opacity-75;
@@ -80,9 +80,9 @@
   }
 
   .codehilite {
-       @apply leading-3;
+    @apply leading-3;
   }
-  
+
 
   table {
     @apply w-full table-auto text-sm text-left my-4 border border-gray-200;
@@ -93,7 +93,7 @@
   }
 
   table td {
-    @apply p-2 opacity-75; 
+    @apply p-2 opacity-75;
   }
 
   table tr {
@@ -101,9 +101,9 @@
   }
 
   [data-tooltip] {
-      position: relative;
-      text-decoration: underline dotted gray;
-        cursor: help;
+    position: relative;
+    text-decoration: underline dotted gray;
+    cursor: help;
   }
   [data-tooltip]:hover::after {
     display: block;
@@ -123,94 +123,85 @@
   }
 
   .compare div {
-      @apply flex-1;
+    @apply flex-1;
   }
 
   a[data-header="1"] h2::before {
-	  content: "#";
-	  padding-right: 0.5rem;
+    content: "#";
+    padding-right: 0.5rem;
   }
   a[data-header="1"] h3::before {
-	  content: "##";
-	  padding-right: 0.5rem;
+    content: "##";
+    padding-right: 0.5rem;
   }
   a[data-header="1"] h4::before {
-	  content: "###";
-	  padding-right: 0.5rem;
+    content: "###";
+    padding-right: 0.5rem;
   }
 
   #blogpost-content a[data-header="1"] {
-	  text-decoration-line: none;
-      color: black;
+    text-decoration-line: none;
+    color: black;
   }
   #footer hr {
     @apply my-6;
-	border: 1px solid #bbb;
+    border: 1px solid #bbb;
   }
   #footer a {
     @apply font-medium underline underline-offset-2 decoration-dotted decoration-gray-300 hover:text-blue-400 visited:text-blue-900;
-  } 
+  }
 
   .rss-list {
-    @apply flex flex-col 
-    rounded border border-gray-300;
+    @apply flex flex-col rounded border border-gray-300;
   }
 
   .rss-list-item {
-    @apply flex items-center 
-    gap-2 p-2 
-    border-t border-t-gray-300 first:border-t-0;
+    @apply flex items-center gap-2 p-2 border-t border-t-gray-300 first:border-t-0;
   }
 
   .rss-list-item-avatar {
-    @apply w-8 h-8 
-    rounded 
-    overflow-hidden 
-    shrink-0;
+    @apply w-8 h-8 rounded overflow-hidden shrink-0;
   }
 
   .rss-list-item-avatar img {
-    @apply w-full h-auto relative 
-    before:block before:absolute before:w-8 before:h-8 before:bg-gray-300 before:bg-image-off before:bg-no-repeat before:bg-center;
+    @apply w-full h-auto relative before:block before:absolute before:w-8 before:h-8 before:bg-gray-300 before:bg-image-off before:bg-no-repeat before:bg-center;
+  }
+  .not-found {
+    @apply h-auto w-8 h-8 bg-gray-300 bg-image-off bg-no-repeat bg-center;
   }
 
   .rss-list-item-content {
-    @apply flex-1 
-      min-w-0 max-h-9 
-      overflow-hidden;
+    @apply flex-1 min-w-0;
   }
 
 
   #series ol {
-	padding: 0px 20px;
-  	list-style: decimal;
+    padding: 0px 20px;
+    list-style: decimal;
   }
 
   #series {
-	  background-color: #fff5c4bb;
-	  padding: 0.5rem 1rem 1rem 1rem;
+    background-color: #fff5c4bb;
+    padding: 0.5rem 1rem 1rem 1rem;
   }
 
   .rss-logo {
-	  height: 0.8rem;
-	  display: inline;
-	  vertical-align: baseline;
-  }
-  
-  .rss-list-item-content h3 {
-    @apply my-0 text-sm;
-  }
-  .rss-list-item a {
-    @apply hover:text-blue-400 visited:text-blue-900
-  }
-  
-  .rss-list-item-content-description, .rss-list-item-content-description p {
-    @apply my-0 
-    text-gray-500 text-xs text-ellipsis whitespace-nowrap overflow-hidden;
+    height: 0.8rem;
+    display: inline;
+    vertical-align: baseline;
   }
 
-  .rss-list-item-cta {
+  .rss-list-item-content h3 {
+    @apply my-0 text-ellipsis whitespace-nowrap overflow-hidden max-w-fit;
   }
+  .rss-list-item a {
+    @apply hover:text-blue-400 visited:text-blue-900;
+  }
+
+  .rss-list-item-content-description, .rss-list-item-content-description p {
+    @apply my-0 text-gray-500 text-sm text-ellipsis whitespace-nowrap overflow-hidden;
+  }
+
 }
 
 
