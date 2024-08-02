@@ -30,12 +30,14 @@
     </head>
     <body>
         <div class="layout">
-            <header class="my-2 flex flex-row items-end gap-2 md:gap-2 md:flex-row md:items-baseline border-gray-500 border-b pb-4">
-                <img src="/images/logo.svg" class="w-8 h-8 inline-block align-baseline" alt="Angry robot logo">
+            <header class="header">
+                <object type="image/svg+xml" data="/images/logo.svg" class="logo" alt="Angry robot logo" ></object>
+
                 <h2 class="blog-title">
                     <a href='/'>Mumbling about computers</a>
                 </h2>
             </header>
+
             <main id="indexlist">
 				{% if series is defined %}
 				<p>Posts belonging to the series <b>{{series}}</b></p>
