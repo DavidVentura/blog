@@ -67,11 +67,8 @@ class SeriesMetadata:
         with path.open() as fd:
             data = yaml.load(fd, Loader=yaml.CLoader)
         posts = []
-        print(data)
         for series in data:
-            print(series, name)
             if series['name'].strip() != name.strip():
-                print('no')
                 continue
             for post in series['posts']:
                 posts.append(PostMetadata.from_path(f"blog/raw/{post}/POST.md", False))
@@ -173,10 +170,12 @@ def embed_mermaid(relpath, text, r: PostMetadata):
             # not modified
         else:
             command = ['./node_modules/.bin/mmdc',
+                       '-p', '.puppeteerrc.json',
                        '-i', full_fname,
                        '-o', new_fname,
                        '-b', 'white',
                        '--cssFile', 'mermaid.css']
+            print(' '.join(command))
             subprocess.run(command)
         match_substr = match.group(0)
         text = text.replace(match_substr, f'![](/images/{r.get_slug()}/{bname}.svg)')
