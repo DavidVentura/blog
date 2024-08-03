@@ -6,6 +6,7 @@ import os
 import re
 import sys
 import json
+import xml.etree.ElementTree as ET
 
 import pytz
 
@@ -218,7 +219,96 @@ def newer(f1, files):
     return all([mtime(f1) > mtime(x) for x in files])
 
 
+def inject_styles_into_svg(svg: bytes) -> bytes:
+    """
+    Injects styles into SVG files so that they are nice in dark mode.
+    Rules:
+    - Darken white (#ffffff) rectangles
+    - Lighten text-color for objects with white background
+
+    """
+    style = """
+<defs>
+  <style type="text/css">
+    @media (prefers-color-scheme: dark)
+    {
+      svg {
+        background-color: rgb(17, 24, 39) !important;
+        --light-arrow:    #666;
+        --light-bg:       rgb(31, 41, 55);
+        --dark-red-bg:    rgb(231, 41, 55);
+        --dark-orange-bg: rgb(201, 81, 55);
+        --dark-yellow-bg: rgb(201, 81, 255);
+        --dark-gray-bg:   rgb(33, 33, 33);
+        --dark-green-bg:  rgb(33, 233, 33);
+      }
+
+      /* colored rectangles */
+      rect[fill="#f8cecc"] {
+        fill: var(--dark-red-bg) !important;
+      }
+      rect[fill="#ffe6cc"] {
+        fill: var(--dark-orange-bg) !important;
+      }
+      rect[fill="#fff2cc"] {
+        fill: var(--dark-yellow-bg) !important;
+      }
+      rect[fill="#f5f5f5"] {
+        fill: var(--dark-gray-bg) !important;
+      }
+      rect[fill="#d5e8d4"] {
+        fill: var(--dark-green-bg) !important;
+      }
+      /* black arrows */
+      path[fill="rgb(0, 0, 0)"] {
+        fill: var(--light-arrow) !important;
+      }
+      path[stroke="rgb(0, 0, 0)"] {
+        stroke: var(--light-arrow) !important;
+      }
+
+      /* default white bg */
+      rect[fill="#ffffff"] {
+        fill: var(--light-bg); 
+      }
+      path[fill="rgb(255, 255, 255)"] {
+        fill: var(--light-bg) !important;
+      }
+      rect[fill="rgb(255, 255, 255)"] {
+        fill: var(--light-bg) !important;
+      }
+      div[style*="background-color: rgb(255, 255, 255)"] {
+        background-color: var(--light-bg) !important;
+        color: #fff !important;
+      }
+
+      /* transparent bg */
+      rect:not([fill]) {
+        fill: var(--light-bg) !important;
+      }
+
+      /* black text */
+      div[style*="color: rgb(0, 0, 0)"] {
+        color: #fff !important;
+      }
+    }
+  </style>
+</defs>
+"""
+
+    root = ET.fromstring(svg)
+    
+    new_defs = ET.fromstring(style)
+    for defs in root.findall('{http://www.w3.org/2000/svg}defs'):
+        root.remove(defs)
+    
+    root.insert(0, new_defs)
+    
+    ET.register_namespace('', "http://www.w3.org/2000/svg")
+    return ET.tostring(root, encoding='unicode', method='xml').encode()
+
 def copy_relative_assets(html, assets_dir, post_dir):
+    # Images
     for img in html.find_all('img'):
         src = img.attrs['src']
         if src.startswith('/') or src.startswith('http'):
@@ -226,10 +316,16 @@ def copy_relative_assets(html, assets_dir, post_dir):
         og_file = post_dir / src
         if og_file.exists():
             print("copy", og_file, assets_dir / og_file.name)
-            shutil.copyfile(og_file, assets_dir / og_file.name)
+            with og_file.open("rb") as fd:
+                data = fd.read()
+            if og_file.suffix == ".svg":
+                data = inject_styles_into_svg(data)
+            with (assets_dir / og_file.name).open('wb') as fd:
+                fd.write(data)
         else:
             print(f"Relative-referenced file {src} does not exist")
 
+    # Videos
     for source in html.find_all('source'):
         src = source.attrs['src']
         if src.startswith('/') or src.startswith('http'):
@@ -279,7 +375,8 @@ def main(filter_name: Optional[str]):
         assets_dir.mkdir(exist_ok=True)
 
         if os.path.isfile(html_fname):
-            if newer(html_fname, [post_file, this_script, BODY_TEMPLATE_FILE] + _files_to_embed):
+            _static = [post_file, this_script, BODY_TEMPLATE_FILE] + _files_to_embed
+            if newer(html_fname, _static):
                 debug('Stale file')
                 continue
 
@@ -291,6 +388,7 @@ def main(filter_name: Optional[str]):
             anchor = html.new_tag("a", href=f'#{header.attrs["id"]}', **{"data-header":"1"})
             header.wrap(anchor)
 
+        # TODO: this should also be considered for 'newer'??
         copy_relative_assets(html, assets_dir, post_dir)
 
 
