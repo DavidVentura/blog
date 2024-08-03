@@ -211,7 +211,9 @@ A short summary of the ELF format, that only covers the parts relevant for this 
 
 This is probably better explained via a diagram:
 
-![](/images/elf.png)
+<center>
+<img src="assets/elf-header.svg" style="margin: 0px auto; width: 100%; max-width: 30rem" />
+</center>
 
 
 After extraction, this is what some symbols look like:

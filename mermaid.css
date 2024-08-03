@@ -1,8 +1,10 @@
-#my-svg .note {
-	fill: #eee;
-	stroke: #000;
-}
-#my-svg .noteText {
-	color: #000;
-	font-size: 14px !important;
+@media (prefers-color-scheme: light) {
+	#my-svg .note {
+		fill: #eee;
+		stroke: #000;
+	}
+	#my-svg .noteText {
+		color: #000;
+		font-size: 14px !important;
+	}
 }

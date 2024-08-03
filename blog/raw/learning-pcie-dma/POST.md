@@ -137,7 +137,7 @@ When reading the definition of [struct inode](https://elixir.bootlin.com/linux/l
 
 As `struct GpuState` _embeds_ `struct cdev`, having a pointer to `struct cdev` allows us to get a reference back to `GpuState` with `offsetof`:
 
-<img src="/images/pcie-device/container_of.svg" style="margin: 0px auto; width: 100%; max-width: 40rem" />
+<img src="assets/container_of.svg" style="margin: 0px auto; width: 100%; max-width: 40rem" />
 
 The kernel provides a `container_of` macro which is built for this specific purpose, so we can now implement open/read/write:
 
@@ -294,7 +294,7 @@ for(int i = 0; i < IRQ_COUNT; i++)
 
 which will reserve an 8KiB space for MSIs (at the 4K offset) and another 8KiB space for PBAs at the 12KiB offset, or, in stack form:
 
-<img src="/images/pcie-device/ioregion.svg" style="margin: 0px auto; width: 100%; max-width: 40rem" />
+<img src="assets/ioregion.svg" style="margin: 0px auto; width: 100%; max-width: 40rem" />
 
 At this point, we can see that MSI-X are enabled, and the offsets of the vector table & PBA:
 

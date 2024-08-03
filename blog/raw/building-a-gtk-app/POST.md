@@ -233,9 +233,9 @@ algorithm is again at 140ns which is mind-blowing.
 These timings are on my desktop pc, running on an [Odroid C2](https://wiki.odroid.com/odroid-c2/hardware/hardware) they are ~5x slower (subdomain benches clock at 850ns,
 165us, 685us)[^4].
 
-# The result
+## The result
 
-![](https://raw.githubusercontent.com/davidventura/hn/master/screenshots/comments.png?raw=true)
+<center>![](/images/qt-hn-comments.png)</center>
 
 [^1]: Although it is a tad slow on a test device (2013 Nexus 5). I might evaluate later the performance of calling a [rust implementation](https://github.com/kumabook/readability) instead, and whether that's worth it or not.
 [^2]: This is probably wrong on many levels, but I don't know any better

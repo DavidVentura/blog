@@ -165,7 +165,7 @@ def embed_mermaid(relpath, text, r: PostMetadata):
         bdir = f'blog/html/images/{r.get_slug()}'
         os.makedirs(bdir, exist_ok=True)
         new_fname = f'{bdir}/{bname}.svg'
-        if os.path.isfile(new_fname) and newer(new_fname, [full_fname]):
+        if os.path.isfile(new_fname) and newer(new_fname, [full_fname, 'mermaid.css']):
             print('skipping', new_fname, 'nwer', full_fname)
             # do not regenerate the same files if the sources were 
             # not modified
@@ -178,6 +178,12 @@ def embed_mermaid(relpath, text, r: PostMetadata):
                        '--cssFile', 'mermaid.css']
             print(' '.join(command))
             subprocess.run(command)
+            with open(new_fname) as fd:
+                data = fd.read()
+                data = inject_styles_into_svg(data, get_style_for_mermaid())
+            with open(new_fname, 'wb') as fd:
+                fd.write(data)
+
         match_substr = match.group(0)
         text = text.replace(match_substr, f'![](/images/{r.get_slug()}/{bname}.svg)')
     return text
@@ -219,15 +225,54 @@ def newer(f1, files):
     return all([mtime(f1) > mtime(x) for x in files])
 
 
-def inject_styles_into_svg(svg: bytes) -> bytes:
+def get_style_for_mermaid() -> str:
+    diagram_style = """
+<defs>
+  <style type="text/css">
+    @media (prefers-color-scheme: dark)
+    {
+      svg {
+        background-color: transparent !important;
+      }
+      /* actor boxes */
+      .actor {
+        fill: #999 !important;
+      }
+      /* actor text */
+      tspan {
+        color: #eee !important;
+      }
+      /* arrow */
+      .messageLine0 {
+        stroke: #aaa !important;
+      }
+      /* arrow text */
+      .messageText {
+        stroke: none !important;
+        fill: #aaa !important;
+      }
+      /* arrowhead */
+      #arrowhead path {
+        fill:#aaa !important;
+        stroke:#aaa; !important
+      }
+      /* notes box*/
+      .note {
+        fill: #eee !important;
+        stroke: #000 !important;
+      }
+      .noteText {
+        color: #000 !important;
+        font-size: 14px !important;
+      }
+    }
+  </style>
+</defs>
     """
-    Injects styles into SVG files so that they are nice in dark mode.
-    Rules:
-    - Darken white (#ffffff) rectangles
-    - Lighten text-color for objects with white background
+    return diagram_style
 
-    """
-    style = """
+def get_style_for_diagrams() -> str:
+    diagram_style = """
 <defs>
   <style type="text/css">
     @media (prefers-color-scheme: dark)
@@ -259,11 +304,18 @@ def inject_styles_into_svg(svg: bytes) -> bytes:
       rect[fill="#d5e8d4"] {
         fill: var(--dark-green-bg) !important;
       }
-      /* black arrows */
+      /* black arrows (ends) */
       path[fill="rgb(0, 0, 0)"] {
         fill: var(--light-arrow) !important;
       }
+      path[fill="#000000"] {
+        fill: var(--light-arrow) !important;
+      }
+      /* black arrows (lines) */
       path[stroke="rgb(0, 0, 0)"] {
+        stroke: var(--light-arrow) !important;
+      }
+      path[stroke="#000000"] {
         stroke: var(--light-arrow) !important;
       }
 
@@ -295,13 +347,15 @@ def inject_styles_into_svg(svg: bytes) -> bytes:
   </style>
 </defs>
 """
+    return diagram_style
+
+def inject_styles_into_svg(svg: bytes, style: str) -> bytes:
+    """
+    Injects styles into SVG files so that they are nice in dark mode.
+    """
 
     root = ET.fromstring(svg)
-    
     new_defs = ET.fromstring(style)
-    for defs in root.findall('{http://www.w3.org/2000/svg}defs'):
-        root.remove(defs)
-    
     root.insert(0, new_defs)
     
     ET.register_namespace('', "http://www.w3.org/2000/svg")
@@ -319,7 +373,7 @@ def copy_relative_assets(html, assets_dir, post_dir):
             with og_file.open("rb") as fd:
                 data = fd.read()
             if og_file.suffix == ".svg":
-                data = inject_styles_into_svg(data)
+                data = inject_styles_into_svg(data, get_style_for_diagrams())
             with (assets_dir / og_file.name).open('wb') as fd:
                 fd.write(data)
         else:

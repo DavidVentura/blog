@@ -51,7 +51,8 @@ svg.logo-svg {
   #blogpost-content h4 {
     @apply mt-6 mb-4;
   }
-  #blogpost-content img {
+  /* newer images are at /posts/.. */
+  #blogpost-content img[src^="/images/"] {
     @apply dark:brightness-50
   }
   p {
@@ -113,11 +114,11 @@ svg.logo-svg {
 
 
   table {
-    @apply w-full table-auto text-sm text-left my-4 border border-gray-200;
+    @apply w-full table-auto text-sm text-left my-4 border border-gray-200 dark:border-gray-800;
   }
 
   table th {
-    @apply p-2 font-medium bg-gray-50 text-gray-700;
+    @apply p-2 font-medium bg-gray-50 text-gray-700 dark:bg-gray-800 dark:border-gray-800 dark:text-gray-500;
   }
 
   table td {
@@ -125,7 +126,7 @@ svg.logo-svg {
   }
 
   table tr {
-    @apply border-b border-gray-200;
+    @apply border-b border-gray-200 dark:border-gray-800;
   }
 
   [data-tooltip] {

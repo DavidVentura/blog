@@ -159,7 +159,7 @@ Once all Option ROMs are registered, UEFI calls the `Supported` function on each
 
 In a diagram, something like this:
 
-<img src="/images/optionrom/boot-process.svg" style="margin: 0px auto; width: 100%; max-width: 17rem" />
+<img src="assets/boot-process.svg" style="margin: 0px auto; width: 100%; max-width: 17rem" />
 
 The goal of drivers is to install [protocols](https://uefi.org/specs/UEFI/2.10/02_Overview.html#protocols) on their respective device's handle. These protocols abstract away the hardware, into higher level operations that the device supports.
 

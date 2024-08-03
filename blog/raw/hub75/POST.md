@@ -17,15 +17,15 @@ However, these panels have a high refresh rate, so we can emulate color depth by
 What we consider normal colors are usually represented in 3 channels, R, G and B, each channel with an {^8-bit range|0-255}. The color white is represented as `#ffffff`, which is `255` (`0xff`) on all three channels.
 
 <center>
-	<img width="70%" src="/images/hub75/channels_exploded.svg"/>
+	<img width="70%" src="assets/channels_exploded.svg"/>
 </center>
 
 In the same fashion that white can be split into three channels, we can split each channel into a bit plane; paraphrasing [Wikipedia](https://en.wikipedia.org/wiki/Bit_plane), a bit plane is a set of bits corresponding to a given bit position in each of the binary numbers representing the signal.
 
-If we take the blue channel as an example (only 4 bits for easier representation)
+If we take the green channel as an example (only 4 bits for easier representation)
 
 <center>
-	<img width="70%" src="/images/hub75/bitplane_exploded.svg"/>
+	<img width="70%" src="assets/bitplane_exploded.svg"/>
 </center>
 
 Each bit-plane must be displayed for different lengths of time, otherwise the pattern `1100` and `0011` would be visible
@@ -41,7 +41,7 @@ Displaying brightness this way is called [binary coded modulation](http://www.ba
 Another example, representing a color with multiple channels as bitplanes over time:
 
 <center>
-	<img width="90%" src="/images/hub75/rgb_exploded.svg"/>
+	<img width="90%" src="assets/rgb_exploded.svg"/>
 </center>
 
 Here, this Magenta (`#d80073`) is only composed of the red and blue channels, so the green channel always stays off.
