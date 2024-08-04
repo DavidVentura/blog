@@ -13,8 +13,10 @@ class BlogMeta:
     image_url: str
     title: str
     url: str
-    description: str
+    #description: str
     xml_url: str
+    last_post_url: str
+    last_post_title: str
 
 def parse_xml(file_path):
     ET.register_namespace('feeder', "https://nononsenseapps.com/feeder")
@@ -25,7 +27,7 @@ def parse_xml(file_path):
 
 def fetch_feed_details(xml_url) -> dict | None:
     try:
-        response = requests.get(xml_url, timeout=2)
+        response = requests.get(xml_url, timeout=5)
         response.raise_for_status()
         feed_xml = ET.fromstring(response.content)
         
@@ -52,13 +54,30 @@ def fetch_feed_details(xml_url) -> dict | None:
             if not url:
                 url = link.text.strip()
             break
+        
+        last_post_url = None
+        last_post_title = None
+        # rss -- sometimes the first item does not have a link
+        for rss_item in feed_xml.findall("./channel/item"):
+            has_link = rss_item.find("link") is not None
+            if not has_link:
+                continue
+            last_post_url = rss_item.find("link").text.strip()
+            last_post_title = rss_item.find("title").text.strip()
+            break
+
+        if last_post_url is None:
+            namespace = {'': 'http://www.w3.org/2005/Atom'}
+            atom_item = feed_xml.find("entry", namespace)
+            last_post_url = atom_item.find("./link", namespace).attrib['href'].strip()
+            last_post_title = atom_item.find("title", namespace).text.strip()
 
         if not url:
             print(xml_url)
 
         if description is not None:
             desc = description.strip()
-        return {"desc": desc, "url": url}
+        return {"desc": desc, "url": url, 'last_post_url': last_post_url, 'last_post_title': last_post_title}
     except Exception as e:
         print(f"Error fetching description for {xml_url}: {str(e)}")
 
@@ -74,17 +93,24 @@ def parse_blog_meta(entry) -> BlogMeta | None:
         return None
     if 'davidv.dev' in xml_url:
         return None
+    # test
+    if 'adamch' not in xml_url:
+        #return None
+        pass
 
     details = fetch_feed_details(xml_url)
     if not details:
         return None
-    description = details.get('desc', '')
-    if len(description) > 100:
-        description = description[:100] + "..."
-    description = html.escape(description)
-    url = details.get('url', '')
 
-    return BlogMeta(image_url=image_url, title=title, url=url, description=description, xml_url=xml_url)
+    #description = details.get('desc', '').strip() or 'N/A'
+    #if len(description) > 100:
+    #    description = description[:100] + "..."
+    #description = html.escape(description)
+    url = details.get('url', '')
+    last_post_url = details['last_post_url']
+    last_post_title = details['last_post_title']
+
+    return BlogMeta(image_url=image_url, title=title, url=url, last_post_title=last_post_title, last_post_url=last_post_url, xml_url=xml_url)
 
 def generate_html_page(entries):
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
@@ -97,7 +123,7 @@ def generate_html_page(entries):
     return html_content
 
 def main():
-    input_file = 'blog/html/feeder-export-2024-07-28T17_59_36.832.opml'
+    input_file = 'blog/html/blogs-i-follow.opml'
     output_file = 'blog/html/blogs-i-follow.html'
     
     entries = parse_xml(input_file)

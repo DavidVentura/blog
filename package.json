@@ -4,7 +4,7 @@
   "description": "The idea of this repository is to explore and combine multiple technologies to achieve a static blog.",
   "main": "blog/html/index.html",
   "scripts": {
-    "tailwind": "npx tailwindcss --minify -i ./blog/html/css/style-input.css -o ./blog/html/css/style-2024-08-02.css",
+    "tailwind": "npx tailwindcss --minify -i ./blog/html/css/style-input.css -o ./blog/html/css/style-2024-08-04.css",
     "generate": "./venv/bin/python generate.py",
     "build": "pnpm generate && pnpm tailwind"
   },

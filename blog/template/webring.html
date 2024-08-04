@@ -19,7 +19,7 @@
         <meta name="referrer" content="no-referrer">
         <meta name="description" content="{{description}}">
 
-        <link href="/css/style-2024-08-02.css" rel="stylesheet" type="text/css">
+        <link href="/css/style-2024-08-04.css" rel="stylesheet" type="text/css">
         <link href="/css/syntax.css" rel="stylesheet" type="text/css">
 
         <title>{{ title }}</title>
@@ -40,9 +40,13 @@
                     <a href='/'>Mumbling about computers</a>
                 </h2>
             </header>
-            <p>
-              These are some blogs I've been following for a while and enjoy reading.
-              You can also access this list in <a href="blog/html/feeder-export-2024-07-28T17_59_36.832.opml">OPML</a> format for easy bulk-subscribing.
+            <p class="webring">
+              These are some blogs I've been following for a while; each of them includes a link to
+              <span data-tooltip="at the time of this page's generation">their last post</span> and RSS feed
+              so you can get an idea of the type of content they publish.
+              <br/>
+
+              You can also access this list in <a href="blog/html/blogs-i-follow.opml">OPML</a> format for easy bulk-subscribing.
               <br/>
               If you think your blog would fit among this list, send me an email and I'll check it out!.
             </p>
@@ -58,7 +62,7 @@
                     <div class="rss-list-item-content">
                         <a href="{{blog.url}}"><h3>{{blog.title}}</h3></a>
                         <div class="rss-list-item-content-description">
-                            {{blog.description}}
+                          Last post: <a href="{{blog.last_post_url}}">{{blog.last_post_title}}</a>
                         </div>
                     </div>
                     <div class="rss-list-item-cta">
