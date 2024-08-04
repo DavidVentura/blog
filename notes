@@ -1,0 +1,6 @@
+- drawio replace border color orange to F08C00
+
+originals from
+https://github.com/jgraph/drawio/blob/43787f7fa10fa3fbab71872c3a35544c8bc3e465/src/main/webapp/js/diagramly/Editor.js#L4879
+
+config at ./drawio.config.json

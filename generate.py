@@ -281,11 +281,12 @@ def get_style_for_diagrams() -> str:
         background-color: rgb(17, 24, 39) !important;
         --light-arrow:    #666;
         --light-bg:       rgb(31, 41, 55);
-        --dark-red-bg:    rgb(231, 41, 55);
-        --dark-orange-bg: rgb(201, 81, 55);
-        --dark-yellow-bg: rgb(201, 81, 255);
-        --dark-gray-bg:   rgb(33, 33, 33);
-        --dark-green-bg:  rgb(33, 233, 33);
+        --dark-red-bg:    #951f2b;
+        --dark-orange-bg: #8f4731;
+        --dark-yellow-bg: #c47a53;
+        --dark-gray-bg:   #999;
+        --dark-green-bg:  #2b5c2b;
+        --dark-blue-bg:   #2b3a57;
       }
 
       /* colored rectangles */
@@ -303,6 +304,9 @@ def get_style_for_diagrams() -> str:
       }
       rect[fill="#d5e8d4"] {
         fill: var(--dark-green-bg) !important;
+      }
+      rect[fill="#dae8fc"] {
+        fill: var(--dark-blue-bg) !important;
       }
       /* black arrows (ends) */
       path[fill="rgb(0, 0, 0)"] {
