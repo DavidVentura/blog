@@ -1,11 +1,17 @@
-The idea of this repository is to explore and combine multiple technologies to achieve a static blog.
+This repo hosts the scripts used to generate [my blog](https://blog.davidv.dev/).
 
-* Commit Markdown files to a github repository
-* Jenkins should trigger and run the 'build' step
-  * Set up required environment in a Docker container
-  * Convert HTML to Markdown, upload images to S3 and use them as source.
-  * Upload newly built HTML files to webserver
-* Push a notification of successful deployment somewhere
+* Posts are written in Markdown at `blog/posts/`
+* Each post may have its own assets at `blog/posts/<post>/assets/`
+    * These assets are transformed, if necessary. SVGs get custom CSS injected to support dark mode.
+* The `generate.py` command generates:
+    * All HTML posts
+    * The index
+    * The index per tag
+    * The RSS feed
+* The `webring-generator.py` generates `blogs-i-follow.html` from an OPML file.
 
+Requires:
+- python + pip (`requirements.txt` file)
+- pnpm (tailwind, mermaid svg generation)
 
-The result is [this](https://blog.davidv.dev/).
+The produced HTML + CSS is rsynced to a VPS running Caddy. The config is at `Caddyfile`.
