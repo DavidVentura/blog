@@ -11,7 +11,7 @@ fi
 
 function _exit {
 	echo updating timestamps so next non-dev builds will process this post
-	find "$DIR_TO_WATCH" -type f -exec touch {} \;
+	find "$DIR_TO_WATCH" -type f -name '*md' -exec touch {} \;
 }
 
 DIR_TO_WATCH="$1"
