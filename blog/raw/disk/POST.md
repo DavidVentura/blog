@@ -179,16 +179,6 @@ So, we are looking at _another_ filesystem (rootfs)
 
 
 
-## GRUB2 bootloader loaded from ESP
-  - where is grub loaded? how is it defined? does it matter?
-  - finding, FAT partition
-  - PE format
-## GRUB2 reads its configuration file
- - wacky format
- - show entry example
- - how to find blockdev again ?
- - load /boot kernel
- - 
 ## GRUB2 loads Linux kernel and initramfs
 
 Grub has support for partitions & filesystems via modules
