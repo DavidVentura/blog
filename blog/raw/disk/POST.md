@@ -13,7 +13,7 @@ The path from firmware to userland is surprisingly {^complex|consisting of many 
 
 In this post I'll explain as many details as possible when booting a fairly standard system with `ESP`, `/boot` and `/` partitions, which has the `/` partition configured with software [RAID](https://en.wikipedia.org/wiki/RAID):
 
-<img src="assets/basic-disk-layout-light.svg" style="margin: 0px auto; width: 100%; max-width: 20rem" />
+<img src="assets/basic-disk-layout-light.svg" style="margin: 0px auto; width: 100%; max-width: 30rem" />
 
 We'll investigate various pieces of software:
 
@@ -22,7 +22,7 @@ We'll investigate various pieces of software:
 - [Linux](https://www.kernel.org/): Kernel
 - [mdadm](https://en.wikipedia.org/wiki/Mdadm): Software raid implementation
 
-Sadly, not all of these are hosted in a way that I can link to references in a stable way (mostly, released as tarballs). In those cases, I'm going to link to a GitHub mirror[^hosting].
+Sadly, not all of these are hosted in a way that I can link to references in a stable way (mostly, released as tarballs). In those cases, I'm going to link to a third-party mirror[^hosting].
 
 [^hosting]: this post includes enough rabbit holes, I didn't want to _also_ go explore how to host these sources in a nice way.
 
@@ -121,9 +121,9 @@ set prefix=($root)'/grub'
 configfile $prefix/grub.cfg
 ```
 
-This configuration must be placed next to the Grub image (executable); this path is set when building the grub image with `grub-mkimage`, if setting a value for `prefix`.
+This configuration must be placed next to the Grub image (executable), in the ESP; this path is set when building the grub image with `grub-mkimage`, if setting a value for `prefix`.
 
-So, what does grub do once this configuration is read? It will scan all (or just this one? unclear) block devices for a partition with a matching UUID, then load a new configuration.
+So, what does grub do once this configuration is read? It will scan all block devices for a partition with a matching UUID, then load a new configuration.
 
 But how do you identify the correct partition?
 
@@ -135,7 +135,7 @@ Each filesystem, however, places this information at different offsets, so we ne
 |----------|------|-----------|----|
 |XFS|  `0x00000` |`"XFSB"` |[link](https://righteousit.com/2018/05/21/xfs-part-1-superblock/)|
 |Ext4| `0x00438` |`0xEF53` |[link](https://ext4.wiki.kernel.org/index.php/Ext4_Disk_Layout#The_Super_Block)|
-|BTRFS|`0x10000` |`"_BHRfS_M"` |[link](https://archive.kernel.org/oldwiki/btrfs.wiki.kernel.org/index.php/On-disk_Format.html#Superblock)|
+|BTRFS|`0x10040` |`"_BHRfS_M"` |[link](https://archive.kernel.org/oldwiki/btrfs.wiki.kernel.org/index.php/On-disk_Format.html#Superblock)|
 
 
 When looking at my first partition on disk:
@@ -150,7 +150,7 @@ $ dd if=/dev/nvme0n1p2 bs=1 count=$((1024+64)) | hexdump -C
 00000430  1f cd b0 63 82 00 ff ff  53 ef 01 00 01 00 00 00
 ```
 
-we can see the 0x53 0xef (little endian) on the last row, on the right, so this is an EXT4 filesystem.
+we can see the `0x53 0xef` (little endian) on the last row, so this is an EXT4 filesystem.
 
 On EXT4 we can find the UUID at `0x468` (`0x68` within the superblock)
 
@@ -165,36 +165,47 @@ Through the magic of an EXT4 implementation[^ext4-too-deep], Grub will traverse 
 
 [^ext4-too-deep]: I really wanted to go into how EXT4 is traversed but that was waaay too deep. The docs are "fairly clear".
 
+
 ```
 menuentry 'Linux'  {
         insmod part_gpt
         insmod ext2
-        search --no-floppy --fs-uuid --set=root 07cf334c-5057-444e-9590-5e94e40b5c90
-        linux   /vmlinuz-6.8.0-40-generic root=UUID=5cc96333-4373-48e6-bccf-4e8d1ff15680
+
+        linux   /vmlinuz-6.8.0-40-generic root=UUID=9c5e17bc-8649-40db-bede-b48e10adc713
         initrd  /initrd.img-6.8.0-40-generic
 }
 ```
 
-So, we are looking at _another_ filesystem (rootfs)
+The line preceded by `linux` lists the kernel (`/vmlinuz-6.8.0-40-generic`) and the [kernel cmdline](https://www.kernel.org/doc/html/v6.10/admin-guide/kernel-parameters.html).
+
+The line preceded by `initrd` points to the [initrd](https://docs.kernel.org/admin-guide/initrd.html)
+
+> initrd provides the capability to load a RAM disk by the boot loader. This RAM disk can then be mounted as the root file system and programs can be run from it. Afterwards, a new root file system can be mounted from a different device. The previous root (from initrd) is then moved to a directory and can be subsequently unmounted.
+> 
+> initrd is mainly designed to allow system startup to occur in two phases, where the kernel comes up with a minimum set of compiled-in drivers, and where additional modules are loaded from initrd.
 
 
 
-## GRUB2 loads Linux kernel and initramfs
+## Loading the kernel and initrd
 
-Grub has support for partitions & filesystems via modules
-once the kernel image file is found, it's loaded 
-- kernel loaded at LOAD_PHYSICAL_ADDR https://github.com/torvalds/linux/blob/1fb918967b56df3262ee984175816f0acb310501/arch/x86/include/asm/page_types.h#L35
-	- which is 0x0c000000 = 192MB
+Grub will load the kernel image (`vmlinuz-6.8.0-40-generic`) at [LOAD\_PHYSICAL\_ADDR](https://github.com/torvalds/linux/blob/1fb918967b56df3262ee984175816f0acb310501/arch/x86/include/asm/page_types.h#L35) (which is `0x0c000000` = 192MB ?? I thought 16MB?) why here?
 
-then the initramfs is loaded at 'arbitrary' address, grub2 prefers 'as high as possible':
-	- https://chromium.googlesource.com/chromiumos/third_party/grub2/+/11508780425a8cd9a8d40370e2d2d4f458917a73/grub-core/loader/i386/linux.c#1104
+Grub also needs to load the initrd somewhere, and while any address is valid, grub2 prefers [as high as possible](https://chromium.googlesource.com/chromiumos/third_party/grub2/+/11508780425a8cd9a8d40370e2d2d4f458917a73/grub-core/loader/i386/linux.c#1104).
+
+Why is anywhere OK? because grub needs to communicate at least three things:
+- cmdline address & length
+- initrd address & length
+- UEFI's memory map
+
+it will do this by populating some fields in the [boot protocol](https://www.kernel.org/doc/html/v6.3/x86/boot.html#id1) struct (which is defined [here](https://www.kernel.org/doc/html/v6.3/x86/zero-page.html))
+
 
 grub will jump to the [64bit entry point](https://github.com/torvalds/linux/blob/v6.1/arch/x86/boot/compressed/head_64.S#L336) at 0x200
 
-## kernel loads initramfs
-how does it know where the initramfs is?
+## kernel loads initrd
+how does it know where the initrd is?
 
-- initramfs address is communicated via the [boot protocol](https://www.kernel.org/doc/html/v6.3/x86/boot.html), reading the docs did not help me understand anything tbh
+- initrd address is communicated via the [boot protocol](https://www.kernel.org/doc/html/v6.3/x86/boot.html), reading the docs did not help me understand anything tbh
 
 this is roughly the callstack i understood from reading code, i'm less certain about it being correct the deeper it goes
 
