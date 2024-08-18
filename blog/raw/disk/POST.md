@@ -96,10 +96,86 @@ Inside that GUID-tagged, FAT-formatted partition, it will look for a file in the
 
 [^bootloader-filename]: The filename (or a fallback) _may_ be configured in some UEFI implementations, but you can't depend on it, so everyone uses the default.
 
+## TODO: FAT file listing?
 
-UEFI will load the bootloader[^bootloader] from `\EFI\BOOT\BOOTX64.EFI` (usually a bootloader, in our case GRUB2) in memory and prepare to execute it.
+UEFI will load the bootloader[^bootloader], which is a [Portable Executable](https://en.wikipedia.org/wiki/Portable_Executable), from `\EFI\BOOT\BOOTX64.EFI` (in our case GRUB2) in memory and prepare to execute it.
 
 [^bootloader]: sometimes you don't need a bootloader, such as the [EFI Boot Stub](https://docs.kernel.org/admin-guide/efi-stub.html), UEFI applications or hobby kernels.
+
+
+### The bootloader
+
+In a UEFI system, the bootloader must be a [Position Independent Executable](https://en.wikipedia.org/wiki/Position-independent_code) (PIE).
+
+When the bootloader is executed, it's still running in the UEFI environment, so it must be careful to not clobber any of UEFI's state, which is defined in a MemoryMap and can be obtained by calling the [GetMemoryMap](https://uefi.org/htmlspecs/ACPI_Spec_6_4_html/15_System_Address_Map_Interfaces/uefi-getmemorymap-boot-services-function.html) service.
+
+Allocations should be performed with the [AllocatePages](https://uefi.org/specs/UEFI/2.10/07_Services_Boot_Services.html?highlight=getmemorymap#efi-boot-services-allocatepages) or [AllocatePool](https://uefi.org/specs/UEFI/2.10/07_Services_Boot_Services.html?highlight=getmemorymap#id16) boot services so UEFI has an up to date view on memory usage and does not clobber Grub's data.
+
+Once Grub is loaded, it will load its configuration from [a few pre-defined paths]().
+
+The configuration must be named "grub.cfg" and looks something like this:
+
+```
+search.fs_uuid 7ce5b857-b91e-4dab-a23c-44b631e6ebab root 
+set prefix=($root)'/grub'
+configfile $prefix/grub.cfg
+```
+
+This configuration must be placed next to the Grub image (executable); this path is set when building the grub image with `grub-mkimage`, if setting a value for `prefix`.
+
+So, what does grub do once this configuration is read? It will scan all (or just this one? unclear) block devices for a partition with a matching UUID, then load a new configuration.
+
+But how do you identify the correct partition?
+
+We have the start/end of each partition from the GPT header and all filesystems implement a concept of ["Super Block"](https://en.wikipedia.org/wiki/Unix_File_System#Design), which places significant metadata at a static position within the block, both for self-reference and external identification.
+
+Each filesystem, however, places this information at different offsets, so we need an initial way of identifying the filesystem, and we can do so through [Magic number](https://en.wikipedia.org/wiki/Magic_number_(programming)) which are defined in their documentation
+
+|Filesystem|Offset|Magic value|Docs|
+|----------|------|-----------|----|
+|XFS|  `0x00000` |`"XFSB"` |[link](https://righteousit.com/2018/05/21/xfs-part-1-superblock/)|
+|Ext4| `0x00438` |`0xEF53` |[link](https://ext4.wiki.kernel.org/index.php/Ext4_Disk_Layout#The_Super_Block)|
+|BTRFS|`0x10000` |`"_BHRfS_M"` |[link](https://archive.kernel.org/oldwiki/btrfs.wiki.kernel.org/index.php/On-disk_Format.html#Superblock)|
+
+
+When looking at my first partition on disk:
+
+```bash
+$ dd if=/dev/nvme0n1p2 bs=1 count=$((1024+64)) | hexdump -C
+00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+*
+00000400  00 60 d1 01 00 0a 45 07  4c 0d 5d 00 df 77 7f 02
+00000410  b0 01 93 01 00 00 00 00  02 00 00 00 02 00 00 00
+00000420  00 80 00 00 00 80 00 00  00 20 00 00 3f d1 09 65
+00000430  1f cd b0 63 82 00 ff ff  53 ef 01 00 01 00 00 00
+```
+
+we can see the 0x53 0xef (little endian) on the last row, on the right, so this is an EXT4 filesystem.
+
+On EXT4 we can find the UUID at `0x468` (`0x68` within the superblock)
+
+```bash
+$ dd if=/dev/nvme0n1p2 bs=1 count=16 skip=$((1128)) | hexdump -C
+00000000  7c e5 b8 57 b9 1e 4d ab  a2 3c 44 b6 31 e6 eb ab
+```
+
+which matches the UUID in grub configuration, so this must be the partition we are looking for (and it was, my `/boot` partition).
+
+Through the magic of an EXT4 implementation[^ext4-too-deep], Grub will traverse the filesystem and find the second level configuration, which looks something like this (trimmed):
+
+[^ext4-too-deep]: I really wanted to go into how EXT4 is traversed but that was waaay too deep. The docs are "fairly clear".
+
+```
+menuentry 'Linux'  {
+        insmod part_gpt
+        insmod ext2
+        search --no-floppy --fs-uuid --set=root 07cf334c-5057-444e-9590-5e94e40b5c90
+        linux   /vmlinuz-6.8.0-40-generic root=UUID=5cc96333-4373-48e6-bccf-4e8d1ff15680
+        initrd  /initrd.img-6.8.0-40-generic
+}
+```
+
+So, we are looking at _another_ filesystem (rootfs)
 
 
 
