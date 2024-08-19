@@ -66,3 +66,7 @@
 .vi { color: #19177C } /* Name.Variable.Instance */
 .vm { color: #19177C } /* Name.Variable.Magic */
 .il { color: #666666 } /* Literal.Number.Integer.Long */
+
+@media (prefers-color-scheme: dark) {
+.nv { color: #5957fc } /* Name.Variable */
+}
