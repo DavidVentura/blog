@@ -166,29 +166,25 @@ Through the magic of an EXT4 implementation[^ext4-too-deep], Grub will traverse 
 [^ext4-too-deep]: I really wanted to go into how EXT4 is traversed but that was waaay too deep. The docs are "fairly clear".
 
 
-```
+```bash
 menuentry 'Linux'  {
-        insmod part_gpt
-        insmod ext2
-
+        #       v path to kernel          v cmdline
         linux   /vmlinuz-6.8.0-40-generic root=UUID=9c5e17bc-8649-40db-bede-b48e10adc713
+        #       v path to initrd
         initrd  /initrd.img-6.8.0-40-generic
 }
 ```
 
-The line preceded by `linux` lists the kernel (`/vmlinuz-6.8.0-40-generic`) and the [kernel cmdline](https://www.kernel.org/doc/html/v6.10/admin-guide/kernel-parameters.html).
+In the config we see 3 things:
 
-The line preceded by `initrd` points to the [initrd](https://docs.kernel.org/admin-guide/initrd.html)
-
-> initrd provides the capability to load a RAM disk by the boot loader. This RAM disk can then be mounted as the root file system and programs can be run from it. Afterwards, a new root file system can be mounted from a different device. The previous root (from initrd) is then moved to a directory and can be subsequently unmounted.
-> 
-> initrd is mainly designed to allow system startup to occur in two phases, where the kernel comes up with a minimum set of compiled-in drivers, and where additional modules are loaded from initrd.
-
+- The kernel image (`/vmlinuz-6.8.0-40-generic`): Kernel that we are booting
+- The [kernel cmdline](https://www.kernel.org/doc/html/v6.10/admin-guide/kernel-parameters.html): Boot-time parameters to the kernel
+- The [initrd](https://docs.kernel.org/admin-guide/initrd.html): A root filesystem to mount in a RAM-disk, to bootstrap the real root filesystem.
 
 
 ## Loading the kernel and initrd
 
-Grub will load the kernel image (`vmlinuz-6.8.0-40-generic`) at [LOAD\_PHYSICAL\_ADDR](https://github.com/torvalds/linux/blob/1fb918967b56df3262ee984175816f0acb310501/arch/x86/include/asm/page_types.h#L35) (which is `0x0c000000` = 192MB ?? I thought 16MB?) why here?
+Grub will load the kernel image (`vmlinuz-6.8.0-40-generic`) at [LOAD\_PHYSICAL\_ADDR](https://github.com/torvalds/linux/blob/v6.10/arch/x86/include/asm/page_types.h#L35) (which is `0x100_000` = 1MB, based on [the boot protocol](https://www.kernel.org/doc/html/v6.3/x86/boot.html#loading-the-rest-of-the-kernel))
 
 Grub also needs to load the initrd somewhere, and while any address is valid, grub2 prefers [as high as possible](https://chromium.googlesource.com/chromiumos/third_party/grub2/+/11508780425a8cd9a8d40370e2d2d4f458917a73/grub-core/loader/i386/linux.c#1104).
 
@@ -197,17 +193,86 @@ Why is anywhere OK? because grub needs to communicate at least three things:
 - initrd address & length
 - UEFI's memory map
 
-it will do this by populating some fields in the [boot protocol](https://www.kernel.org/doc/html/v6.3/x86/boot.html#id1) struct (which is defined [here](https://www.kernel.org/doc/html/v6.3/x86/zero-page.html))
+it will do this by populating some fields in the [boot protocol](https://www.kernel.org/doc/html/v6.3/x86/boot.html#id1) struct (which is defined [here](https://www.kernel.org/doc/html/v6.3/x86/boot.html#the-real-mode-kernel-header) and has additional fields defined [here](https://www.kernel.org/doc/html/v6.3/x86/zero-page.html)).
+
+To populate these fields, GRUB will read the Kernel header, which is at offset `0x1f0` within the image. After reading the header and casting it to a struct, it will write it back, with updated values for
+- cmdline address & length
+- initrd address & length
 
 
-grub will jump to the [64bit entry point](https://github.com/torvalds/linux/blob/v6.1/arch/x86/boot/compressed/head_64.S#L336) at 0x200
+### Transferring control to the kernel
 
-## kernel loads initrd
-how does it know where the initrd is?
+In 64-bit boot protocol, the kernel [entry point](https://github.com/torvalds/linux/blob/v6.1/arch/x86/boot/compressed/head_64.S#L336) is at a fixed offset: `0x200`.
 
-- initrd address is communicated via the [boot protocol](https://www.kernel.org/doc/html/v6.3/x86/boot.html), reading the docs did not help me understand anything tbh
+Before jumping though, GRUB will put the **physical** address of the [boot\_params structure]() TODO into the `rsi` register, also as part of the boot protocol.
 
-this is roughly the callstack i understood from reading code, i'm less certain about it being correct the deeper it goes
+How does the kernel load the initrd?
+
+During [early initialization](https://github.com/torvalds/linux/blob/v6.10/arch/x86/kernel/head_64.S#L420), the kernel will save the `rsi` register into `r15`, which is callee-saved.
+
+After the early initialization is done, the kernel will copy [r15 to rdi](https://github.com/torvalds/linux/blob/v6.10/arch/x86/kernel/head_64.S#L415) then call [x86\_64\_start\_kernel](https://github.com/torvalds/linux/blob/v6.10/arch/x86/kernel/head_64.S#L420), which is the `C` entrypoint of the kernel.
+
+From there we are on more familiar land, and the kernel will eventually call `copy_bootdata(__va(real_mode_data));` (here `__va` will get the virtual address from a physical address).
+
+`copy_bootdata`, finally, will copy the kernel cmdline and the boot params (which include the initrd address) onto kernel-managed memory.
+
+At this point, the kernel will finally call `start_kernel()` and the non-platform-specific kernel code will start executing.
+
+Eventually, [do\_populate\_rootfs](https://github.com/torvalds/linux/blob/v6.1/init/initramfs.c#L699) is called[^populate-rootfs]
+
+[^populate-rootfs]: I'm not super clear on how the `__init` calls get scheduled for modules, I see that `rootfs_initcall` generates a function in a specific section, but what ends up calling it?
+
+Eventually, the kernel will call `run_init_process(ramdisk_execute_command);` where `ramdisk_execute_command` defaults to `/init` but can be overridden in `rdinit_setup`, which looks at the `rdinit=` [kernel commandline argument](), and we are on (crude) userland!
+
+## Beloved userland
+
+We are on PID1, but it's not a _good_ PID1 -- we are in a ramdisk with limited utility; the goal in initrd is usually to perform some bootstrapping action and pivot to a useful workload as soon as possible, so let's see what that looks like.
+
+From the [grub config](#the-bootloader) we saw an interesting parameter in the kernel's commandline arguments:
+
+```
+linux   /vmlinuz-6.8.0-40-generic root=UUID=9c5e17bc-8649-40db-bede-b48e10adc713
+```
+
+`root`, meaning the root filesystem, and is tagged with `UUID=...`, so we get to go on another hunt for disks.
+
+This time though, the previous table of filesystem magic identifier was not useful:
+
+```hexdump
+0000000 0000 0000 0000 0000 0000 0000 0000 0000
+*
+0001000 4efc a92b 0001 0000 0001 0000 0000 0000
+...
+0003000 0000 0000 0000 0000 0000 0000 0000 0000
+*
+8100400 e000 0095 7f00 0257 f98c 001d d553 023d
+```
+
+If you don't read `hexdump` often, what this means is that in the ranges `0x0000-0x1000` and `0x3000-0x8100400` there are only zeroes.
+These are the three ranges we needed to identify either of `xfs`, `ext4` or `btrfs`, so this must be another way of storing data.
+
+In this case, the root filesystem is on a RAID1 configuration using `mdadm`, how do we verify it? Another magic number table!
+
+|Identifier|Offset|Magic value|Docs|
+|----------|------|-----------|----|
+|mdadm|  `0x1000` |`0xa92b4efc` |[link](https://raid.wiki.kernel.org/index.php/RAID_superblock_formats#Section:_Superblock.2F.22Magic-Number.22_Identification_area)|
+
+
+We know we want to interact with the `md` module to assemble the virtual device, so we first need to load the module.
+
+Load md module (modprobe)
+
+look at block devices we want to mount (/dev/sda /dev/sdb) - how to list?
+interact with module (ioctl)
+
+mount (syscall) the new md block device
+
+pivot_root
+
+exec systemd
+---
+
+This is the rough callstack I got from reading code, i'm less certain about it being correct the deeper it goes
 
 1. [Boot parameters](https://github.com/torvalds/linux/blob/v6.10/arch/x86/kernel/head64.c#L408) are saved and processed in `copy_bootdata`
 2. `copy_bootdata` is called by `x86_64_start_kernel`, the C entrypoint into the kernel
@@ -224,32 +289,6 @@ this is roughly the callstack i understood from reading code, i'm less certain a
 10. GRUB [sets up](https://chromium.googlesource.com/chromiumos/third_party/grub2/+/11508780425a8cd9a8d40370e2d2d4f458917a73/grub-core/loader/i386/linux.c#651) the RSI register to point to `real_mode_target` (???) 
 	11. how is this the boot_params structure??
 
-mounting rootfs
-somehow this works rootfs_initcall(populate_rootfs);
-https://github.com/torvalds/linux/blob/v6.1/init/initramfs.c#L762
-
-which eventually calls [do_populate_rootfs](https://github.com/torvalds/linux/blob/v6.1/init/initramfs.c#L696)
-which calls `unpack_to_rootfs(__initramfs_start, __initramfs_size);`
-- where do start/size come from?
-[vmlinux.lds.h](https://github.com/torvalds/linux/blob/master/include/asm-generic/vmlinux.lds.h#L935) but HOW ARE THEY SET
-
-kernel_init calls kernel_init_freeable which calls all the rootfs initramfs stuff
-then kernel_init calls `run_init_process(ramdisk_execute_command);` where `ramdisk_execute_command` defaults to `/init` but can be overridden in `rdinit_setup`, which looks at the `rdinit=` [kernel commandline argument]()
-
-## beloved userland
-
-We are on PID1, but it's not a _good_ PID1 -- we are in a ramdisk with limited utility.
-
-Load md module (modprobe)
-
-look at block devices we want to mount (/dev/sda /dev/sdb) - how to list?
-interact with module (ioctl)
-
-mount (syscall) the new md block device
-
-pivot_root
-
-exec systemd
 
 ## example qemu img
 -- - 
@@ -280,6 +319,7 @@ availability
 
 Device-Mapper
 
+```
 david@framework:~/git/blog$ truncate -s 100M device1
 david@framework:~/git/blog$ truncate -s 100M device2
 david@framework:~/git/blog$ sudo mdadm --create  --level=1 --raid-devices=2 --spare-devices=0 --name='arrayname' device1 device2
@@ -308,6 +348,7 @@ mdadm: must be super-user to perform this action
 david@framework:~/git/blog$ sudo mdadm -v --detail --scan /dev/md0
 ARRAY /dev/md0 level=raid1 num-devices=2 metadata=1.2 name=framework:arrayname UUID=6865ede1:f1a76b48:45071d66:a55755bd
    devices=/dev/loop2,/dev/loop23
+```
 
 ```
 david@framework:~/git/blog$ hexdump -C device1
@@ -338,10 +379,12 @@ david@framework:~/git/blog$ hexdump -C device1
 ```
 david@framework:~/git/blog$ 
 
+```
 david@framework:~/git/blog$ file device1
 device1: Linux Software RAID version 1.2 (1) UUID=6865ede1:f1a76b48:45071d66:a55755bd name=framework:arrayname level=1 disks=2
 david@framework:~/git/blog$ file device2
 device2: Linux Software RAID version 1.2 (1) UUID=6865ede1:f1a76b48:45071d66:a55755bd name=framework:arrayname level=1 disks=2
+```
 
 
 
