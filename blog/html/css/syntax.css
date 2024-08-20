@@ -69,4 +69,5 @@
 
 @media (prefers-color-scheme: dark) {
 .nv { color: #5957fc } /* Name.Variable */
+.no { color: #a80000 } /* Name.Constant */
 }
