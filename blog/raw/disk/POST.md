@@ -163,7 +163,7 @@ which matches the UUID in grub configuration, so this must be the partition we a
 
 Through the magic of an EXT4 implementation[^ext4-too-deep], Grub will traverse the filesystem and find the second level configuration, which looks something like this (trimmed):
 
-[^ext4-too-deep]: I really wanted to go into how EXT4 is traversed but that was waaay too deep. The docs are "fairly clear".
+[^ext4-too-deep]: I really wanted to go into how EXT4 is traversed but that was waaay too deep. [The docs](https://ext4.wiki.kernel.org/index.php/Ext4_Disk_Layout) are "fairly clear".
 
 
 ```bash
@@ -188,23 +188,15 @@ Grub will load the kernel image (`vmlinuz-6.8.0-40-generic`) at [LOAD\_PHYSICAL\
 
 Grub also needs to load the initrd somewhere, and while any address is valid, grub2 prefers [as high as possible](https://chromium.googlesource.com/chromiumos/third_party/grub2/+/11508780425a8cd9a8d40370e2d2d4f458917a73/grub-core/loader/i386/linux.c#1104).
 
-Why is anywhere OK? because grub needs to communicate at least three things:
-- cmdline address & length
-- initrd address & length
-- UEFI's memory map
+How does the kernel find out the address and size for the initrd and cmdline arguments?
 
-it will do this by populating some fields in the [boot protocol](https://www.kernel.org/doc/html/v6.3/x86/boot.html#id1) struct (which is defined [here](https://www.kernel.org/doc/html/v6.3/x86/boot.html#the-real-mode-kernel-header) and has additional fields defined [here](https://www.kernel.org/doc/html/v6.3/x86/zero-page.html)).
+Again, it's specified in the [boot protocol](https://www.kernel.org/doc/html/v6.3/x86/boot.html#id1) &mdash; the [Kernel's Real Mode header](https://www.kernel.org/doc/html/v6.3/x86/boot.html#the-real-mode-kernel-header) must be read from the kernel image (at offset `0x1f0`) and written back _somewhere_, with updated fields for cmdline/initrd addresses (among others).
 
-To populate these fields, GRUB will read the Kernel header, which is at offset `0x1f0` within the image. After reading the header and casting it to a struct, it will write it back, with updated values for
-- cmdline address & length
-- initrd address & length
-
+But if the header is somewhere, _again_, how does the kernel find it? Well, Grub must place the **physical** address of the header in the `rsi` register before jumping into kernel code.
 
 ### Transferring control to the kernel
 
-In 64-bit boot protocol, the kernel [entry point](https://github.com/torvalds/linux/blob/v6.1/arch/x86/boot/compressed/head_64.S#L336) is at a fixed offset: `0x200`.
-
-Before jumping though, GRUB will put the **physical** address of the [boot\_params structure]() TODO into the `rsi` register, also as part of the boot protocol.
+In 64-bit boot protocol, the kernel's [entry point](https://github.com/torvalds/linux/blob/v6.1/arch/x86/boot/compressed/head_64.S#L336) is at a fixed offset: `0x200`.
 
 How does the kernel load the initrd?
 
@@ -218,13 +210,14 @@ From there we are on more familiar land, and the kernel will eventually call `co
 
 At this point, the kernel will finally call `start_kernel()` and the non-platform-specific kernel code will start executing.
 
-Eventually, [do\_populate\_rootfs](https://github.com/torvalds/linux/blob/v6.1/init/initramfs.c#L699) is called[^populate-rootfs]
+Eventually, [do\_populate\_rootfs](https://github.com/torvalds/linux/blob/v6.1/init/initramfs.c#L699) is called[^populate-rootfs], after which, the kernel will call `run_init_process(ramdisk_execute_command);`[^rdinit], and we are on (crude) userland!
+
 
 [^populate-rootfs]: I'm not super clear on how the `__init` calls get scheduled for modules, I see that `rootfs_initcall` generates a function in a specific section, but what ends up calling it?
 
-Eventually, the kernel will call `run_init_process(ramdisk_execute_command);` where `ramdisk_execute_command` defaults to `/init` but can be overridden in `rdinit_setup`, which looks at the `rdinit=` [kernel commandline argument](), and we are on (crude) userland!
+[^rdinit]: `ramdisk_execute_command` defaults to `/init` but can be overridden in `rdinit_setup`, which looks at the `rdinit=` [kernel commandline argument]()
 
-## Beloved userland
+## Early userspace
 
 We are on PID1, but it's not a _good_ PID1 -- we are in a ramdisk with limited utility; the goal in initrd is usually to perform some bootstrapping action and pivot to a useful workload as soon as possible, so let's see what that looks like.
 
@@ -260,10 +253,145 @@ In this case, the root filesystem is on a RAID1 configuration using `mdadm`, how
 
 We know we want to interact with the `md` module to assemble the virtual device, so we first need to load the module.
 
-Load md module (modprobe)
+Loading a module is simple, we only need to open the file and call the `finit_module` syscall on the file descriptor:
 
-look at block devices we want to mount (/dev/sda /dev/sdb) - how to list?
-interact with module (ioctl)
+add note on module being ELF, etc
+
+```rust
+// TODO
+```
+
+Now the module is loaded, but how do we tell the module to create the virtual (?? TODO) device?
+
+First, we need to find the right disks among the sea of block devices, _conveniently_ the kernel will group them up for easy listing in `/sys/class/block`:
+
+```bash
+/sys/class/block/nvme0n1   -> ../../devices/pci0000:00/0000:00:03.1/0000:2b:00.0/nvme/nvme0/nvme0n1
+/sys/class/block/nvme0n1p1 -> ../../devices/pci0000:00/0000:00:03.1/0000:2b:00.0/nvme/nvme0/nvme0n1/nvme0n1p1
+/sys/class/block/nvme0n1p2 -> ../../devices/pci0000:00/0000:00:03.1/0000:2b:00.0/nvme/nvme0/nvme0n1/nvme0n1p2
+/sys/class/block/nvme0n1p3 -> ../../devices/pci0000:00/0000:00:03.1/0000:2b:00.0/nvme/nvme0/nvme0n1/nvme0n1p3
+/sys/class/block/nvme0n1p4 -> ../../devices/pci0000:00/0000:00:03.1/0000:2b:00.0/nvme/nvme0/nvme0n1/nvme0n1p4
+/sys/class/block/nvme1n1   -> ../../devices/pci0000:00/0000:00:03.2/0000:2c:00.0/nvme/nvme1/nvme1n1
+/sys/class/block/nvme1n1p1 -> ../../devices/pci0000:00/0000:00:03.2/0000:2c:00.0/nvme/nvme1/nvme1n1/nvme1n1p1
+/sys/class/block/nvme1n1p2 -> ../../devices/pci0000:00/0000:00:03.2/0000:2c:00.0/nvme/nvme1/nvme1n1/nvme1n1p2
+/sys/class/block/nvme1n1p3 -> ../../devices/pci0000:00/0000:00:03.2/0000:2c:00.0/nvme/nvme1/nvme1n1/nvme1n1p3
+/sys/class/block/nvme1n1p4 -> ../../devices/pci0000:00/0000:00:03.2/0000:2c:00.0/nvme/nvme1/nvme1n1/nvme1n1p4
+
+```
+
+but which ones make the RAID1 device (TODO)?
+
+Well, we can look at the [Superblock](https://raid.wiki.kernel.org/index.php/RAID_superblock_formats#The_version-1_superblock_format_on-disk_layout) again which looks something like this:
+
+```rust
+pub struct MdpSuperblock1 {
+    pub array_info: ArrayInfo,
+    pub feature_bit4: FeatureBit4,
+    pub device_info: DeviceInfo,
+    pub array_state_info: ArrayStateInfo,
+    pub dev_roles: Vec<u16>,
+}
+#[repr(C, packed)]
+pub struct ArrayInfo {
+    pub magic: u32,
+    pub major_version: u32,
+    pub feature_map: u32,
+    _pad0: u32,
+    set_uuid: [u8; 16],
+    set_name: [u8; 32],
+    ctime: u64,          // /* lo 40 bits are seconds, top 24 are microseconds or 0*/
+    pub level: u32,      /* -4 (multipath), -1 (linear), 0,1,4,5 */
+    pub layout: u32,     /* used for raid5, raid6, raid10, and raid0 */
+    pub size: u64,       // in 512b sectors
+    pub chunksize: u32,  // in 512b sectors
+    pub raid_disks: u32, // count
+    // Union of offset + size for MD_FEATURE_PPL
+    opaque_union_bitmap_offset_ppl: u32,
+}
+// Other structs omitted
+```
+
+If we interpret the byte range `0x1000-0x1064` as an `ArrayInfo`, we can validate (through the Superblock `magic`) whether the block device is in fact a member of a software RAID, and if yes, member of _which_ array by reading the UUID.
+
+In this case, `nvme0n1p3` and `nvme1n1p3` are members of the array with UUID `3373544e:facdb6ce:a5f48e39:c6a4a29e`.
+
+Having identified the devices, and the properties of the array (2 disks, raid 1), how do we assemble it? If I wanted to chicken out, at this point I'd say `mdadm --assemble`, but that's no fun.
+
+Due to _reasons_ (TODO link) Linux has implemented a cop-out syscall: ioctl. (TODO, more explanation)
+
+We can definitely perform some IO-Control on the MD module to assemble the array.
+
+
+First, load the disk metadata & prepare array metadata (TODO: links to ioctl structs).
+
+For any ioctl, we need an open file descriptor that is linked to the module, so we are going to make a device node:
+
+```
+mknodat(AT_FDCWD, "/dev/.tmp.md.150649:9:0", S_IFBLK|0600, makedev(0x9, 0)) = 0
+openat(AT_FDCWD, "/dev/.tmp.md.150649:9:0", O_RDWR|O_EXCL|O_DIRECT) = 4
+```
+
+now we can set the array information
+```
+ioctl(4, SET_ARRAY_INFO, 0x7fffc396b2d0) = 0
+```
+add the disks
+```
+ioctl(4, ADD_NEW_DISK, 0x5dd7357b7a98)  = 0
+ioctl(4, ADD_NEW_DISK, 0x5dd7357b7c80)  = 0
+```
+and start the array
+```
+ioctl(4, RUN_ARRAY, 0)                  = 0
+```
+
+BAM, array is up:
+```
+$ cat /proc/mdstat
+...
+```
+
+now: mount & pivot_root
+
+Running `mdadm --assemble`
+```strace
+mknodat(AT_FDCWD, "/dev/.tmp.md.150649:9:0", S_IFBLK|0600, makedev(0x9, 0)) = 0
+openat(AT_FDCWD, "/dev/.tmp.md.150649:9:0", O_RDWR|O_EXCL|O_DIRECT) = 4
+unlink("/dev/.tmp.md.150649:9:0")       = 0
+ioctl(4, STOP_ARRAY, 0)                 = 0
+
+# ^^^ "stop the array, just in case" ???
+
+# read disk1
+openat(AT_FDCWD, "/dev/loop8", O_RDWR|O_EXCL|O_DIRECT) = 5
+ioctl(5, BLKSSZGET, [512])              = 0
+fstat(5, {st_mode=S_IFBLK|0660, st_rdev=makedev(0x7, 0x8), ...}) = 0
+ioctl(5, BLKGETSIZE64, [10485760])      = 0
+lseek(5, 4096, SEEK_SET)                = 4096
+read(5, "\374N+\251\1\0\0\0\0\0\0\0\0\0\0\0$\326\204\335\274g`\374\245\323\244\237Y+\33B"..., 4096) = 4096
+lseek(5, 0, SEEK_CUR)                   = 8192
+^ read 4KiB at 4KiB = superblock
+
+# read disk2
+openat(AT_FDCWD, "/dev/loop9", O_RDWR|O_EXCL|O_DIRECT) = 5
+ioctl(5, BLKSSZGET, [512])              = 0
+fstat(5, {st_mode=S_IFBLK|0660, st_rdev=makedev(0x7, 0x9), ...}) = 0
+ioctl(5, BLKGETSIZE64, [10485760])      = 0
+lseek(5, 4096, SEEK_SET)                = 4096
+read(5, "\374N+\251\1\0\0\0\0\0\0\0\0\0\0\0$\326\204\335\274g`\374\245\323\244\237Y+\33B"..., 4096) = 4096
+
+ioctl(4, SET_ARRAY_INFO, 0x7fffc396b2d0) = 0
+ioctl(4, ADD_NEW_DISK, 0x5dd7357b7a98)  = 0
+ioctl(4, ADD_NEW_DISK, 0x5dd7357b7c80)  = 0
+ioctl(4, RUN_ARRAY, 0)                  = 0
+```
+
+Running `mdadm --stop`
+
+```strace
+open("/dev/md111", O_RDONLY) = 3
+ioctl(3, STOP_ARRAY, 0)
+```
 
 mount (syscall) the new md block device
 
