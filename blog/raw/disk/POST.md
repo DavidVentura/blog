@@ -266,6 +266,21 @@ Now the module is loaded, but how do we tell the module to create the virtual (?
 First, we need to find the right disks among the sea of block devices, _conveniently_ the kernel will group them up for easy listing in `/sys/class/block`:
 
 ```bash
+$ ls /sys
+ls: cannot access '/sys': No such file or directory
+```
+
+Right. Initrd. Okay, we can mount the [sysfs](https://docs.kernel.org/filesystems/sysfs.html) with the `mount` syscall:
+
+```rust
+// TODO
+     int mount(const char *source, const char *target, const char *filesystemtype, unsigned long mountflags, const void *data);
+```
+
+Now we can actually look at the block devices
+
+```bash
+$ ls /sys/class/block
 /sys/class/block/nvme0n1   -> ../../devices/pci0000:00/0000:00:03.1/0000:2b:00.0/nvme/nvme0/nvme0n1
 /sys/class/block/nvme0n1p1 -> ../../devices/pci0000:00/0000:00:03.1/0000:2b:00.0/nvme/nvme0/nvme0n1/nvme0n1p1
 /sys/class/block/nvme0n1p2 -> ../../devices/pci0000:00/0000:00:03.1/0000:2b:00.0/nvme/nvme0/nvme0n1/nvme0n1p2
@@ -281,7 +296,7 @@ First, we need to find the right disks among the sea of block devices, _convenie
 
 but which ones make the RAID1 device (TODO)?
 
-Well, we can look at the [Superblock](https://raid.wiki.kernel.org/index.php/RAID_superblock_formats#The_version-1_superblock_format_on-disk_layout) again which looks something like this:
+Well, we can look at the first few kilobytes of each and check if they have a valid [superblock](https://raid.wiki.kernel.org/index.php/RAID_superblock_formats#The_version-1_superblock_format_on-disk_layout), which looks something like this:
 
 ```rust
 pub struct MdpSuperblock1 {
@@ -322,8 +337,6 @@ Due to _reasons_ (TODO link) Linux has implemented a cop-out syscall: ioctl. (TO
 We can definitely perform some IO-Control on the MD module to assemble the array.
 
 
-First, load the disk metadata & prepare array metadata (TODO: links to ioctl structs).
-
 For any ioctl, we need an open file descriptor that is linked to the module, so we are going to make a device node:
 
 ```
@@ -331,74 +344,74 @@ mknodat(AT_FDCWD, "/dev/.tmp.md.150649:9:0", S_IFBLK|0600, makedev(0x9, 0)) = 0
 openat(AT_FDCWD, "/dev/.tmp.md.150649:9:0", O_RDWR|O_EXCL|O_DIRECT) = 4
 ```
 
-now we can set the array information
+First, load the disk and array metadata (defined above as `ArrayInfo` and `DeviceInfo`) from the block devices.
+With this information, we can build the struct `mdu_array_info_t`, [defined here](https://github.com/torvalds/linux/blob/v6.10/include/uapi/linux/raid/md_u.h#L73), which only requires basic information for the array (RAID level, disk count, present disks, etc).
+
+We can inform the `md` driver about the array information
+
 ```
 ioctl(4, SET_ARRAY_INFO, 0x7fffc396b2d0) = 0
 ```
-add the disks
+
+Then populate a struct `mdu_disk_info_t`, [defined here](https://github.com/torvalds/linux/blob/v6.10/include/uapi/linux/raid/md_u.h#L112) for each; this struct is even more basic than the previous one.
+
+And add the disks to the array:
 ```
 ioctl(4, ADD_NEW_DISK, 0x5dd7357b7a98)  = 0
 ioctl(4, ADD_NEW_DISK, 0x5dd7357b7c80)  = 0
 ```
-and start the array
+
+Start the array
 ```
 ioctl(4, RUN_ARRAY, 0)                  = 0
 ```
 
-BAM, array is up:
+BAM, array is up[^procfs]:
 ```
 $ cat /proc/mdstat
 ...
 ```
 
-now: mount & pivot_root
+[^procfs]: mount `procfs` like we did with `sysfs`
 
-Running `mdadm --assemble`
-```strace
-mknodat(AT_FDCWD, "/dev/.tmp.md.150649:9:0", S_IFBLK|0600, makedev(0x9, 0)) = 0
-openat(AT_FDCWD, "/dev/.tmp.md.150649:9:0", O_RDWR|O_EXCL|O_DIRECT) = 4
-unlink("/dev/.tmp.md.150649:9:0")       = 0
-ioctl(4, STOP_ARRAY, 0)                 = 0
+The steps required to assemble an array is documented [here](https://github.com/torvalds/linux/blob/master/Documentation/admin-guide/md.rst#general-rules---apply-for-all-superblock-formats)
 
-# ^^^ "stop the array, just in case" ???
 
-# read disk1
-openat(AT_FDCWD, "/dev/loop8", O_RDWR|O_EXCL|O_DIRECT) = 5
-ioctl(5, BLKSSZGET, [512])              = 0
-fstat(5, {st_mode=S_IFBLK|0660, st_rdev=makedev(0x7, 0x8), ...}) = 0
-ioctl(5, BLKGETSIZE64, [10485760])      = 0
-lseek(5, 4096, SEEK_SET)                = 4096
-read(5, "\374N+\251\1\0\0\0\0\0\0\0\0\0\0\0$\326\204\335\274g`\374\245\323\244\237Y+\33B"..., 4096) = 4096
-lseek(5, 0, SEEK_CUR)                   = 8192
-^ read 4KiB at 4KiB = superblock
+TODO: /dev/md111; automatic??
 
-# read disk2
-openat(AT_FDCWD, "/dev/loop9", O_RDWR|O_EXCL|O_DIRECT) = 5
-ioctl(5, BLKSSZGET, [512])              = 0
-fstat(5, {st_mode=S_IFBLK|0660, st_rdev=makedev(0x7, 0x9), ...}) = 0
-ioctl(5, BLKGETSIZE64, [10485760])      = 0
-lseek(5, 4096, SEEK_SET)                = 4096
-read(5, "\374N+\251\1\0\0\0\0\0\0\0\0\0\0\0$\326\204\335\274g`\374\245\323\244\237Y+\33B"..., 4096) = 4096
+Like before, we can now call the `mount` syscall to use our newly-assembled array:
 
-ioctl(4, SET_ARRAY_INFO, 0x7fffc396b2d0) = 0
-ioctl(4, ADD_NEW_DISK, 0x5dd7357b7a98)  = 0
-ioctl(4, ADD_NEW_DISK, 0x5dd7357b7c80)  = 0
-ioctl(4, RUN_ARRAY, 0)                  = 0
+```
+mount /dev/md111 /rootfs
 ```
 
-Running `mdadm --stop`
+## REAL userspace
 
-```strace
-open("/dev/md111", O_RDONLY) = 3
-ioctl(3, STOP_ARRAY, 0)
+Now we have all our lovely files at `/rootfs` but that's not so great &mdash; we want a _real_ root filesystem and we want it at `/`.
+
+There's a syscall, `pivot_root` which does precisely what we need:
+
+> moves the root mount to the directory `put_old` and makes `new_root` the new root mount.
+
+```c
+syscall(SYS_pivot_root, "/rootfs", "/old-root");
+chdir("/")
 ```
 
-mount (syscall) the new md block device
+which should be followed by passing control to init[^cleanup]
 
-pivot_root
+[^cleanup]: there's some cleanup to do, at least unmounting the `/old-root` to free some RAM
 
-exec systemd
----
+```c
+exec("/sbin/init")
+```
+
+## Putting it all together
+
+<img src="assets/full-disk-layout-light.svg" style="margin: 0px auto; width: 100%; max-width: 30rem" />
+
+
+# callstack?
 
 This is the rough callstack I got from reading code, i'm less certain about it being correct the deeper it goes
 
@@ -419,67 +432,27 @@ This is the rough callstack I got from reading code, i'm less certain about it b
 
 
 ## example qemu img
--- - 
-Kernel starts and begins initialization
-Initramfs is unpacked and executed 
- - init=...
-Initramfs loads necessary RAID modules
-- modprobe dm/md
-mdadm is run to assemble the RAID0 array
-ioctl SET_ARRAY_INFO
-ioctl RUN_ARRAY
-https://github.com/torvalds/linux/blob/v6.10/drivers/md/md.c#L7876
-- explain used ioctl
-Root filesystem is mounted from the RAID0 array
-- explain used syscall
-Control is passed to the actual root filesystem
-- explain pivot root
-Init system (e.g. systemd) starts on the root filesystem
-- exec
 
+# But why?
 
-
-partition table
-
-GPT
-
-availability
-
-Device-Mapper
+I wanted to check something with a RAID setup, so I made a little lab setup:
 
 ```
-david@framework:~/git/blog$ truncate -s 100M device1
-david@framework:~/git/blog$ truncate -s 100M device2
-david@framework:~/git/blog$ sudo mdadm --create  --level=1 --raid-devices=2 --spare-devices=0 --name='arrayname' device1 device2
-mdadm: device device1 exists but is not an md array.
-david@framework:~/git/blog$ 
+$ truncate -s 100M device1 && sudo losetup -f device1
+$ truncate -s 100M device2 && sudo losetup -f device2
 
-david@framework:~/git/blog$ sudo losetup -f device1
-david@framework:~/git/blog$ sudo losetup -f device2
-$ sudo losetup -l | grep device
-/dev/loop23         0      0         0  0 /home/david/git/blog/device2                       0     512
-/dev/loop2          0      0         0  0 /home/david/git/blog/device1                       0     512
-
-david@framework:~/git/blog$ sudo mdadm --create  --level=1 --raid-devices=2 --spare-devices=0 --name='arrayname' /dev/md0 /dev/loop2 /dev/loop23
-mdadm: Note: this array has metadata at the start and
-    may not be suitable as a boot device.  If you plan to
-    store '/boot' on this device please ensure that
-    your boot-loader understands md/v1.x metadata, or use
-    --metadata=0.90
-Continue creating array? yes
+$ sudo mdadm --create  --level=1 --raid-devices=2 --spare-devices=0 --name='arrayname' /dev/md0 /dev/loop2 /dev/loop23
 mdadm: Defaulting to version 1.2 metadata
 mdadm: array /dev/md0 started.
-david@framework:~/git/blog$ ls -lhrt /dev/md0
-brw-rw---- 1 root disk 9, 0 Aug 11 19:23 /dev/md0
-david@framework:~/git/blog$ mdadm -v --detail --scan /dev/md0
-mdadm: must be super-user to perform this action
-david@framework:~/git/blog$ sudo mdadm -v --detail --scan /dev/md0
+$ sudo mdadm -v --detail --scan /dev/md0
 ARRAY /dev/md0 level=raid1 num-devices=2 metadata=1.2 name=framework:arrayname UUID=6865ede1:f1a76b48:45071d66:a55755bd
    devices=/dev/loop2,/dev/loop23
 ```
 
+and here I thought.. 'huh, I wonder how much is necessary to build an array?':
+
 ```
-david@framework:~/git/blog$ hexdump -C device1
+$ hexdump -C device1
 00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
 *
 00001000  fc 4e 2b a9 01 00 00 00  00 00 00 00 00 00 00 00  |.N+.............|
@@ -505,17 +478,5 @@ david@framework:~/git/blog$ hexdump -C device1
 *
 06400000
 ```
-david@framework:~/git/blog$ 
 
-```
-david@framework:~/git/blog$ file device1
-device1: Linux Software RAID version 1.2 (1) UUID=6865ede1:f1a76b48:45071d66:a55755bd name=framework:arrayname level=1 disks=2
-david@framework:~/git/blog$ file device2
-device2: Linux Software RAID version 1.2 (1) UUID=6865ede1:f1a76b48:45071d66:a55755bd name=framework:arrayname level=1 disks=2
-```
-
-
-
-filesystem
-
-xfs/ext4/..
+Just a couple of bytes? What about the rest of the (boot) stack?
