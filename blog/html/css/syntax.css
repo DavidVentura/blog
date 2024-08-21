@@ -1,6 +1,8 @@
 .hll { background-color: #ffffcc }
 .c { color: #2aa198; font-style: italic } /* Comment */
-.err { border: 1px solid #dc322f } /* Error */
+/*
+.err { border: 1px solid #dc322f }
+*/ /* Error - useless */
 .k { color: #859900; font-weight: bold } /* Keyword */
 .o { color: #666666 } /* Operator */
 .ch { color: #2aa198; font-style: italic } /* Comment.Hashbang */
@@ -70,4 +72,5 @@
 @media (prefers-color-scheme: dark) {
 .nv { color: #5957fc } /* Name.Variable */
 .no { color: #a80000 } /* Name.Constant */
+.kt { color: #FFD1DC } /* Keyword.Type */
 }
