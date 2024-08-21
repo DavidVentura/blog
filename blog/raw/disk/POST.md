@@ -408,6 +408,35 @@ exec("/sbin/init")
 
 ## Putting it all together
 
+On boot, the processor will start to execute UEFI code, which will:
+- Look for bootable block devices
+    - By checking for a GPT header
+- Pick a device with an `EFI System Partition`
+- Execute the bootloader at `\EFI\BOOT\BOOTX64.EFI`
+    - Which must be a Portable Executable
+
+The bootloader will:
+- Read its configuration within the `EFI System Partition`
+- Look for block devices containing partitions referenced in the configuration
+    - Checking each partition listed in the GPT for matching UUIDs
+- Load modules for the filesystem
+- Load the kernel and initrd from the filesystem
+- Jump into the kernel
+
+The kernel will:
+- Populate the root filesystem from the initrd
+- Execute `/init` from the (temporary) root filesystem
+
+The (temporary) `init` process will:
+- Look for block devices referenced in the `root=` kernel commandline argument
+- Mount the device
+    - Optionally, assemble a virtual device from RAID members
+- Pivot the root filesystem to the real filesystem
+- Unmount the temporary rootfs
+- Replace itself (`exec`) with the new init (`/sbin/init`)
+
+And the disk layout looks something like this:
+
 <img src="assets/full-disk-layout-light.svg" style="margin: 0px auto; width: 100%; max-width: 30rem" />
 
 
@@ -449,7 +478,9 @@ ARRAY /dev/md0 level=raid1 num-devices=2 metadata=1.2 name=framework:arrayname U
    devices=/dev/loop2,/dev/loop23
 ```
 
-and here I thought.. 'huh, I wonder how much is necessary to build an array?':
+and here I thought.. 
+
+> huh, I wonder how much is necessary to build an array?
 
 ```
 $ hexdump -C device1
@@ -461,20 +492,13 @@ $ hexdump -C device1
 00001030  61 6d 65 00 00 00 00 00  00 00 00 00 00 00 00 00  |ame.............|
 00001040  8e f3 b8 66 00 00 00 00  01 00 00 00 00 00 00 00  |...f............|
 00001050  00 18 03 00 00 00 00 00  00 00 00 00 02 00 00 00  |................|
-00001060  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
 *
-00001080  00 08 00 00 00 00 00 00  00 18 03 00 00 00 00 00  |................|
 00001090  08 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
 000010a0  00 00 00 00 00 00 00 00  a5 cc 7f 3a a6 bc 32 e7  |...........:..2.|
 000010b0  97 b7 72 89 75 54 b6 2f  00 00 08 00 10 00 00 00  |..r.uT./........|
 000010c0  8e f3 b8 66 00 00 00 00  11 00 00 00 00 00 00 00  |...f............|
 000010d0  ff ff ff ff ff ff ff ff  6f 63 64 60 80 00 00 00  |........ocd`....|
 000010e0  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
-*
-00001100  00 00 01 00 ff ff ff ff  ff ff ff ff ff ff ff ff  |................|
-00001110  ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  |................|
-*
-00001200  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
 *
 06400000
 ```
