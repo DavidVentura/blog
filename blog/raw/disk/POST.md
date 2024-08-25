@@ -1,6 +1,6 @@
 ---
 title: Booting x86-64: from firmware to PID1
-date: 2024-08-18
+date: 2024-08-25
 tags: uefi, linux
 slug: booting-x86-64
 description: All I (now) know about booting x86-64
