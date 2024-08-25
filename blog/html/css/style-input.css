@@ -245,6 +245,9 @@ svg.logo-svg {
     dark:text-gray-500 dark:hover:text-gray-400 dark:visited:text-gray-600
      ;
   }
+  :target > * {
+    @apply font-bold dark:text-gray-50;
+  }
 }
 
 
