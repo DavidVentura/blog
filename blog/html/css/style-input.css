@@ -246,7 +246,7 @@ svg.logo-svg {
      ;
   }
   :target > * {
-    @apply font-bold dark:text-gray-50;
+    @apply font-bold dark:text-gray-300;
   }
 }
 
