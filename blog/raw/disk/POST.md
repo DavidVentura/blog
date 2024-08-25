@@ -1,9 +1,9 @@
 ---
 title: Booting x86-64: from firmware to PID1
 date: 2024-08-18
-tags: uefi, qemu, linux
+tags: uefi, linux
 slug: booting-x86-64
-description: All I know about booting x86-64
+description: All I (now) know about booting x86-64
 ---
 
 ## Introduction
@@ -427,7 +427,7 @@ const void *data = NULL;
 mount("/dev/md125", "/rootfs", "ext4", mountflags, data);
 ```
 
-## REAL userspace
+## Going to userspace
 
 Now we have all our lovely files at `/rootfs` but that's not good enough &mdash; we want a _real_ root filesystem and we want it at `/`.
 
@@ -522,6 +522,8 @@ I ended up spending about a week in this rabbit hole, of which about 3 days were
 
 I wanted to go into filesystems (both `FAT` for ESP and `ext4` for rootfs), but it seemed larger than everything else combined and I'm a chicken after all.
 [The docs](https://ext4.wiki.kernel.org/index.php/Ext4_Disk_Layout) are "fairly clear".
+
+I also wanted to prepare a QEMU image which would go through all of this, and I probably will, but not right now.
 
 I am left with some questions and observations:
 
