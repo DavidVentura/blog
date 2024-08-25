@@ -15,10 +15,10 @@ In this post I'll explain as many details as possible when booting a fairly stan
 
 <img src="assets/basic-disk-layout-light.svg" style="margin: 0px auto; width: 100%; max-width: 30rem" />
 
-We'll investigate various pieces of software:
+We'll investigate:
 
 - [EDK2](https://github.com/tianocore/edk2): UEFI reference implementation
-- [Grub2](https://www.gnu.org/software/grub/): Bootloader
+- [GRUB2](https://www.gnu.org/software/grub/): Bootloader
 - [Linux](https://www.kernel.org/): Kernel
 - [mdadm](https://en.wikipedia.org/wiki/Mdadm): Software raid implementation
 
@@ -28,7 +28,7 @@ Sadly, not all of these are hosted in a way that I can link to references in a s
 
 ## Storage devices
 
-Storage in computers relies on physical disks, which are _usually_[^storage-types] divided in two types: mechanical hard drives (with spinning platters which store data magnetically; and solid-state drives (SSDs) which use flash memory for faster access times and improved reliability.
+Storage in computers relies on physical disks, which are usually divided in two[^storage-types] types: mechanical hard drives (with spinning platters which store data magnetically; and solid-state drives (SSDs) which use flash memory for faster access times and improved reliability.
 
 [^storage-types]: You can also have floppy disks, cd-roms, tape, or anything really, but it's not really important here.
 
@@ -61,14 +61,15 @@ BIOS is very simple but also _quite_ limited. Having only 16 bytes of informatio
 
 ### UEFI
 
-Given the limitations of BIOS, Intel started UEFI [in 2005](https://en.wikipedia.org/wiki/UEFI#History), which _did_ overcome all of these limitations, but also became a _massive beast_[^beast] .
+Given the limitations of BIOS, Intel started UEFI [in ~2005](https://en.wikipedia.org/wiki/UEFI#History)[^started[^started]], which _did_ overcome all of these limitations, but also became a _massive beast_[^beast] .
 
+[^started]: they actually started EFI "in the 1990s" but it didn't really take off
 [^beast]: The [specification](https://uefi.org/sites/default/files/resources/UEFI_Spec_2_10_Aug29.pdf) is 2145 pages, and mentions things like "bytecode virtual machine", "HTTP Boot", "Bluetooth", "Wi-Fi", "IPsec".
 
 
-On power on, the firmware needs to determine which disk to boot from, so it will check a set of variables (`BootOrder`, `Boot####`) in NVRAM for a pre-defined boot order (using [gRT->GetVariable()](https://uefi.org/specs/UEFI/2.10/08_Services_Runtime_Services.html#variable-services)).
+At system power-on, the firmware needs to determine which disk to boot from, so it will check a set of variables (`BootOrder`, `Boot####`) in {^NVRAM|Non-volatile RAM} for a pre-defined boot order (using [gRT->GetVariable()](https://uefi.org/specs/UEFI/2.10/08_Services_Runtime_Services.html#variable-services)).
 
-If no valid boot order is stored in NVRAM, then UEFI will enumerate all connected storage (by calling `LocateHandle()` with a `SearchType` of `EFI_BLOCK_IO_PROTOCOL`).
+If no valid boot order is stored in NVRAM, then UEFI will enumerate all connected storage devices by calling `LocateHandle()` with a `SearchType` of `EFI_BLOCK_IO_PROTOCOL`.
 
 Once a disk is selected for booting, the firmware reads the [GUID Partition Table (GPT)](https://en.wikipedia.org/wiki/GUID_Partition_Table) header.
 
@@ -83,8 +84,8 @@ The second **logical block** (LBA 1) contains the GPT header; there's also a bac
 So, we are at a point that UEFI has:
 
 1. Initialized the hardware sufficiently to enumerate all block devices
-2. Filtered said devices down ones with a valid GPT header
-3. Picked a device to boot (based on user preference or other algorithm)
+2. Filtered said devices down to the ones with a valid GPT header
+3. Picked a device to boot based on user preference (choice saved to NVRAM) or other algorithm (usually "first valid device")
 
 How does UEFI find the bootloader?
 
@@ -96,24 +97,20 @@ Inside that GUID-tagged, FAT-formatted partition, it will look for a file in the
 
 [^bootloader-filename]: The filename (or a fallback) _may_ be configured in some UEFI implementations, but you can't depend on it, so everyone uses the default.
 
-## TODO: FAT file listing?
+UEFI will load that file, which is a bootloader[^bootloader] (in our case, this is GRUB2) in [Portable Executable](https://en.wikipedia.org/wiki/Portable_Executable) format,  in memory and prepare to execute it.
 
-UEFI will load the bootloader[^bootloader], which is a [Portable Executable](https://en.wikipedia.org/wiki/Portable_Executable), from `\EFI\BOOT\BOOTX64.EFI` (in our case GRUB2) in memory and prepare to execute it.
-
-[^bootloader]: sometimes you don't need a bootloader, such as the [EFI Boot Stub](https://docs.kernel.org/admin-guide/efi-stub.html), UEFI applications or hobby kernels.
+[^bootloader]: sometimes you don't need a bootloader, such as when using the [EFI Boot Stub](https://docs.kernel.org/admin-guide/efi-stub.html), running UEFI applications or "hobby" kernels (which are usually UEFI applications).
 
 
 ### The bootloader
 
-In a UEFI system, the bootloader must be a [Position Independent Executable](https://en.wikipedia.org/wiki/Position-independent_code) (PIE).
+In a UEFI system, the bootloader must be a [Position Independent Executable](https://en.wikipedia.org/wiki/Position-independent_code) (PIE), as there is no guarantee of the physical address at which it will be loaded.
 
-When the bootloader is executed, it's still running in the UEFI environment, so it must be careful to not clobber any of UEFI's state, which is defined in a MemoryMap and can be obtained by calling the [GetMemoryMap](https://uefi.org/htmlspecs/ACPI_Spec_6_4_html/15_System_Address_Map_Interfaces/uefi-getmemorymap-boot-services-function.html) service.
+When the bootloader is executed, it's still running in the UEFI environment, so it must be careful to not clobber any of UEFI's state, which is defined in a `MemoryMap` and can be obtained by calling the [GetMemoryMap](https://uefi.org/htmlspecs/ACPI_Spec_6_4_html/15_System_Address_Map_Interfaces/uefi-getmemorymap-boot-services-function.html) service.
 
-Allocations should be performed with the [AllocatePages](https://uefi.org/specs/UEFI/2.10/07_Services_Boot_Services.html?highlight=getmemorymap#efi-boot-services-allocatepages) or [AllocatePool](https://uefi.org/specs/UEFI/2.10/07_Services_Boot_Services.html?highlight=getmemorymap#id16) boot services so UEFI has an up to date view on memory usage and does not clobber Grub's data.
+Allocations should be performed with the [AllocatePages](https://uefi.org/specs/UEFI/2.10/07_Services_Boot_Services.html?highlight=getmemorymap#efi-boot-services-allocatepages) or [AllocatePool](https://uefi.org/specs/UEFI/2.10/07_Services_Boot_Services.html?highlight=getmemorymap#id16) boot services so UEFI has an up to date view on memory usage and does not clobber GRUB's data.
 
-Once Grub is loaded, it will load its configuration from [a few pre-defined paths]().
-
-The configuration must be named "grub.cfg" and looks something like this:
+Once GRUB is loaded, it will load its configuration from `$PREFIX/grub.cfg` (prefix is set at build time) which looks something like this:
 
 ```
 search.fs_uuid 7ce5b857-b91e-4dab-a23c-44b631e6ebab root 
@@ -121,49 +118,50 @@ set prefix=($root)'/grub'
 configfile $prefix/grub.cfg
 ```
 
-This configuration must be placed next to the Grub image (executable), in the ESP; this path is set when building the grub image with `grub-mkimage`, if setting a value for `prefix`.
+This configuration must be placed next to the GRUB image (executable), in the ESP.
 
-So, what does grub do once this configuration is read? It will scan all block devices for a partition with a matching UUID, then load a new configuration.
+So, what does GRUB do once this configuration is read? It will scan all block devices for a partition with a matching UUID, then load a new configuration.
 
 But how do you identify the correct partition?
 
-We have the start/end of each partition from the GPT header and all filesystems implement a concept of ["Super Block"](https://en.wikipedia.org/wiki/Unix_File_System#Design), which places significant metadata at a static position within the block, both for self-reference and external identification.
+From the GPT header, We know the start & end of every partition, and _very conveniently_ filesystems usually implement a concept of [Super Block](https://en.wikipedia.org/wiki/Unix_File_System#Design), which places significant metadata at a static position within the block, both for self-reference and external identification.
 
-Each filesystem, however, places this information at different offsets, so we need an initial way of identifying the filesystem, and we can do so through [Magic number](https://en.wikipedia.org/wiki/Magic_number_(programming)) which are defined in their documentation
+Each filesystem, however, places this information at different offsets[^multi-fs], so we need an initial way of identifying the filesystem, and we can do so through their identifying [Magic numbers](https://en.wikipedia.org/wiki/Magic_number_(programming)) which are defined in their documentation
+
+[^multi-fs]: What happens if you plop down multiple superblocks on the same block device?
 
 |Filesystem|Offset|Magic value|Docs|
 |----------|------|-----------|----|
-|XFS|  `0x00000` |`"XFSB"` |[link](https://righteousit.com/2018/05/21/xfs-part-1-superblock/)|
+|XFS|  `0x00000` |`"XFSB"` |[link](https://righteousit.com/2018/05/21/xfs-part-1-superblock/) (didn't find official doc)|
 |Ext4| `0x00438` |`0xEF53` |[link](https://ext4.wiki.kernel.org/index.php/Ext4_Disk_Layout#The_Super_Block)|
 |BTRFS|`0x10040` |`"_BHRfS_M"` |[link](https://archive.kernel.org/oldwiki/btrfs.wiki.kernel.org/index.php/On-disk_Format.html#Superblock)|
 
 
-When looking at my first partition on disk:
+When looking at the second partition on my disk
 
 ```bash
-$ dd if=/dev/nvme0n1p2 bs=1 count=$((1024+64)) | hexdump -C
+$ dd if=/dev/nvme0n1p2 bs=1 count=$((1024+64)) | hexdump
 00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
 *
 00000400  00 60 d1 01 00 0a 45 07  4c 0d 5d 00 df 77 7f 02
 00000410  b0 01 93 01 00 00 00 00  02 00 00 00 02 00 00 00
 00000420  00 80 00 00 00 80 00 00  00 20 00 00 3f d1 09 65
 00000430  1f cd b0 63 82 00 ff ff  53 ef 01 00 01 00 00 00
+                                   ^^ ^^
 ```
 
 we can see the `0x53 0xef` (little endian) on the last row, so this is an EXT4 filesystem.
 
-On EXT4 we can find the UUID at `0x468` (`0x68` within the superblock)
+On EXT4 we can find the UUID at `0x468` (`0x68` within the superblock, 1128 in decimal)
 
 ```bash
-$ dd if=/dev/nvme0n1p2 bs=1 count=16 skip=$((1128)) | hexdump -C
-00000000  7c e5 b8 57 b9 1e 4d ab  a2 3c 44 b6 31 e6 eb ab
+$ dd if=/dev/nvme0n1p2 bs=1 count=16 skip=1128 | hexdump
+7c e5 b8 57 b9 1e 4d ab  a2 3c 44 b6 31 e6 eb ab
 ```
 
-which matches the UUID in grub configuration, so this must be the partition we are looking for (and it was, my `/boot` partition).
+which matches the UUID in GRUB configuration, so this must be the partition we are looking for (and indeed, it is my `/boot` partition).
 
-Through the magic of an EXT4 implementation[^ext4-too-deep], Grub will traverse the filesystem and find the second level configuration, which looks something like this (trimmed):
-
-[^ext4-too-deep]: I really wanted to go into how EXT4 is traversed but that was waaay too deep. [The docs](https://ext4.wiki.kernel.org/index.php/Ext4_Disk_Layout) are "fairly clear".
+Through the magic of an EXT4 implementation, GRUB will traverse the filesystem and find the second level configuration, which looks something like this (trimmed):
 
 
 ```bash
@@ -184,15 +182,17 @@ In the config we see 3 things:
 
 ## Loading the kernel and initrd
 
-Grub will load the kernel image (`vmlinuz-6.8.0-40-generic`) at [LOAD\_PHYSICAL\_ADDR](https://github.com/torvalds/linux/blob/v6.10/arch/x86/include/asm/page_types.h#L35) (which is `0x100_000` = 1MB, based on [the boot protocol](https://www.kernel.org/doc/html/v6.3/x86/boot.html#loading-the-rest-of-the-kernel))
+GRUB will load the kernel image (`vmlinuz-6.8.0-40-generic`) at [LOAD\_PHYSICAL\_ADDR](https://github.com/torvalds/linux/blob/v6.10/arch/x86/include/asm/page_types.h#L35) (which is `0x100_000` = 1MB, based on [the boot protocol](https://www.kernel.org/doc/html/v6.3/x86/boot.html#loading-the-rest-of-the-kernel))
 
-Grub also needs to load the initrd somewhere, and while any address is valid, grub2 prefers [as high as possible](https://chromium.googlesource.com/chromiumos/third_party/grub2/+/11508780425a8cd9a8d40370e2d2d4f458917a73/grub-core/loader/i386/linux.c#1104).
+GRUB also needs to load the initrd somewhere, and while any address is valid, GRUB prefers [as high as possible](https://chromium.googlesource.com/chromiumos/third_party/grub2/+/11508780425a8cd9a8d40370e2d2d4f458917a73/grub-core/loader/i386/linux.c#1104)[^grub-loading-addr].
+
+[^grub-loading-addr]: I assume this is due to historical reasons, when booting in real mode, the CPU can only access 1MiB memory, and placing the kernel as high as possible limits memory fragmentation
 
 How does the kernel find out the address and size for the initrd and cmdline arguments?
 
 Again, it's specified in the [boot protocol](https://www.kernel.org/doc/html/v6.3/x86/boot.html#id1) &mdash; the [Kernel's Real Mode header](https://www.kernel.org/doc/html/v6.3/x86/boot.html#the-real-mode-kernel-header) must be read from the kernel image (at offset `0x1f0`) and written back _somewhere_, with updated fields for cmdline/initrd addresses (among others).
 
-But if the header is somewhere, _again_, how does the kernel find it? Well, Grub must place the **physical** address of the header in the `rsi` register before jumping into kernel code.
+But if the header is somewhere, _again_, how does the kernel find it? Well, GRUB must place the **physical** address of the header in the `rsi` register before jumping into kernel code.
 
 ### Transferring control to the kernel
 
@@ -202,7 +202,7 @@ How does the kernel load the initrd?
 
 During [early initialization](https://github.com/torvalds/linux/blob/v6.10/arch/x86/kernel/head_64.S#L420), the kernel will save the `rsi` register into `r15`, which is callee-saved.
 
-After the early initialization is done, the kernel will copy [r15 to rdi](https://github.com/torvalds/linux/blob/v6.10/arch/x86/kernel/head_64.S#L415) then call [x86\_64\_start\_kernel](https://github.com/torvalds/linux/blob/v6.10/arch/x86/kernel/head_64.S#L420), which is the `C` entrypoint of the kernel.
+After the early initialization is done, the kernel will copy [r15 to rdi](https://github.com/torvalds/linux/blob/v6.10/arch/x86/kernel/head_64.S#L415) (because `rdi` is the first argument to a function in the then [System V calling convention](https://en.wikipedia.org/wiki/X86_calling_conventions#System_V_AMD64_ABI)), then it will `call` [x86\_64\_start\_kernel](https://github.com/torvalds/linux/blob/v6.10/arch/x86/kernel/head_64.S#L420), which is the `C` entrypoint of the kernel.
 
 From there we are on more familiar land, and the kernel will eventually call `copy_bootdata(__va(real_mode_data));` (here `__va` will get the virtual address from a physical address).
 
@@ -215,13 +215,15 @@ Eventually, [do\_populate\_rootfs](https://github.com/torvalds/linux/blob/v6.1/i
 
 [^populate-rootfs]: I'm not super clear on how the `__init` calls get scheduled for modules, I see that `rootfs_initcall` generates a function in a specific section, but what ends up calling it?
 
-[^rdinit]: `ramdisk_execute_command` defaults to `/init` but can be overridden in `rdinit_setup`, which looks at the `rdinit=` [kernel commandline argument]()
+[^rdinit]: `ramdisk_execute_command` defaults to `/init` but can be overridden in `rdinit_setup`, which looks at the `rdinit=` [kernel commandline argument](https://www.kernel.org/doc/html/v4.14/admin-guide/kernel-parameters.html)
 
 ## Early userspace
 
-We are on PID1, but it's not a _good_ PID1 -- we are in a ramdisk with limited utility; the goal in initrd is usually to perform some bootstrapping action and pivot to a useful workload as soon as possible, so let's see what that looks like.
+We are on _a_ PID1, but it's not a _good_ PID1 &mdash; we are in a ramdisk with limited utility; the goal of the initrd is, usually[^alternative-initrds], to perform some bootstrapping action and pivot to a useful workload as soon as possible, so let's see what that looks like.
 
-From the [grub config](#the-bootloader) we saw an interesting parameter in the kernel's commandline arguments:
+[^alternative-initrds]: There are use cases for initrds which never pass on to a real userland, for example: [flashing an OS from an initramfs](/posts/flashing-linux-disk-images-from-an-initramfs/)
+
+From the [GRUB config](#the-bootloader) we saw an interesting parameter in the kernel's commandline arguments:
 
 ```
 linux   /vmlinuz-6.8.0-40-generic root=UUID=9c5e17bc-8649-40db-bede-b48e10adc713
@@ -229,7 +231,7 @@ linux   /vmlinuz-6.8.0-40-generic root=UUID=9c5e17bc-8649-40db-bede-b48e10adc713
 
 `root`, meaning the root filesystem, and is tagged with `UUID=...`, so we get to go on another hunt for disks.
 
-This time though, the previous table of filesystem magic identifier was not useful:
+This time though, the previous table of filesystem magic identifier was not useful, when looking at the contents of the drive:
 
 ```hexdump
 0000000 0000 0000 0000 0000 0000 0000 0000 0000
@@ -241,27 +243,41 @@ This time though, the previous table of filesystem magic identifier was not usef
 8100400 e000 0095 7f00 0257 f98c 001d d553 023d
 ```
 
-If you don't read `hexdump` often, what this means is that in the ranges `0x0000-0x1000` and `0x3000-0x8100400` there are only zeroes.
-These are the three ranges we needed to identify either of `xfs`, `ext4` or `btrfs`, so this must be another way of storing data.
+We see.. nothing useful?
+
+Let me clarify, what this dump is trying to show is that there are only zeroes in the ranges `0x0000-0x1000` (xfs and ext4 place their signatures in this range) and `0x3000-0x8100400` (btrfs places its signature here), so this must be another way of storing data.
 
 In this case, the root filesystem is on a RAID1 configuration using `mdadm`, how do we verify it? Another magic number table!
 
-|Identifier|Offset|Magic value|Docs|
+|Name|Offset|Magic value|Docs|
 |----------|------|-----------|----|
 |mdadm|  `0x1000` |`0xa92b4efc` |[link](https://raid.wiki.kernel.org/index.php/RAID_superblock_formats#Section:_Superblock.2F.22Magic-Number.22_Identification_area)|
 
 
 We know we want to interact with the `md` module to assemble the virtual device, so we first need to load the module.
 
-Loading a module is simple, we only need to open the file and call the `finit_module` syscall on the file descriptor:
+### Loading kernel modules
 
-add note on module being ELF, etc
+Kernel modules are stored as [ELF](https://en.wikipedia.org/wiki/Executable_and_Linkable_Format) (Executable and Linkable Format) files, which allows the kernel to:
+
+- Verify the module's compatibility with the running kernel, by checking the `.modinfo` section
+- Resolve symbols (function names, variables) between the module and the kernel
+- Perform necessary relocations to load the module at any available kernel address
+
+The userspace task of loading a module is relatively simple; we need to open the file and call the `finit_module` syscall on the file descriptor:
 
 ```rust
-// TODO
+let file = File::open(path)?;
+let fd = file.as_raw_fd();
+
+let params_cstr = std::ffi::CString::new("module parameters")?;
+
+unsafe {
+    finit_module(fd, params_cstr.as_ptr() as *const c_char, 0)
+};
 ```
 
-Now the module is loaded, but how do we tell the module to create the virtual (?? TODO) device?
+Now the module is loaded, but how do we tell the module to create the virtual device?
 
 First, we need to find the right disks among the sea of block devices, _conveniently_ the kernel will group them up for easy listing in `/sys/class/block`:
 
@@ -272,9 +288,11 @@ ls: cannot access '/sys': No such file or directory
 
 Right. Initrd. Okay, we can mount the [sysfs](https://docs.kernel.org/filesystems/sysfs.html) with the `mount` syscall:
 
-```rust
-// TODO
-     int mount(const char *source, const char *target, const char *filesystemtype, unsigned long mountflags, const void *data);
+```c
+unsigned long mountflags = 0;
+const void *data = NULL;
+
+mount("none", "/sys", "sysfs", mountflags, data);
 ```
 
 Now we can actually look at the block devices
@@ -294,24 +312,20 @@ $ ls /sys/class/block
 
 ```
 
-but which ones make the RAID1 device (TODO)?
+but which ones make up the array?
 
 Well, we can look at the first few kilobytes of each and check if they have a valid [superblock](https://raid.wiki.kernel.org/index.php/RAID_superblock_formats#The_version-1_superblock_format_on-disk_layout), which looks something like this:
 
 ```rust
 pub struct MdpSuperblock1 {
     pub array_info: ArrayInfo,
-    pub feature_bit4: FeatureBit4,
     pub device_info: DeviceInfo,
-    pub array_state_info: ArrayStateInfo,
-    pub dev_roles: Vec<u16>,
+    // ...
 }
 #[repr(C, packed)]
 pub struct ArrayInfo {
     pub magic: u32,
     pub major_version: u32,
-    pub feature_map: u32,
-    _pad0: u32,
     set_uuid: [u8; 16],
     set_name: [u8; 32],
     ctime: u64,          // /* lo 40 bits are seconds, top 24 are microseconds or 0*/
@@ -320,8 +334,16 @@ pub struct ArrayInfo {
     pub size: u64,       // in 512b sectors
     pub chunksize: u32,  // in 512b sectors
     pub raid_disks: u32, // count
-    // Union of offset + size for MD_FEATURE_PPL
-    opaque_union_bitmap_offset_ppl: u32,
+    // ...
+}
+#[repr(C)]
+pub struct DeviceInfo {
+    pub data_offset: u64,
+    pub data_size: u64,
+    pub super_offset: u64,
+    pub dev_number: u32,
+    pub device_uuid: [u8; 16],
+    // ...
 }
 // Other structs omitted
 ```
@@ -330,64 +352,84 @@ If we interpret the byte range `0x1000-0x1064` as an `ArrayInfo`, we can validat
 
 In this case, `nvme0n1p3` and `nvme1n1p3` are members of the array with UUID `3373544e:facdb6ce:a5f48e39:c6a4a29e`.
 
-Having identified the devices, and the properties of the array (2 disks, raid 1), how do we assemble it? If I wanted to chicken out, at this point I'd say `mdadm --assemble`, but that's no fun.
+Having identified the devices, and the properties of the array (2 disks in RAID1), how do we assemble it? I could say `mdadm --assemble`, but I am no chicken.
 
-Due to _reasons_ (TODO link) Linux has implemented a cop-out syscall: ioctl. (TODO, more explanation)
+Due to [_reasons_](https://docs.kernel.org/driver-api/ioctl.html) Linux[^windows-ioctl] has implemented a cop-out syscall: `ioctl` (I/O Control) which allows encoding device-specific "driver calls" (in contrast to "system calls")
 
-We can definitely perform some IO-Control on the MD module to assemble the array.
+[^windows-ioctl]: Windows has the ~same idea with `DeviceIoControl`
 
+In our case, we'll use `ioctl` to interact with the `md` (Multiple Devices) driver for array operations, as defined [in the docs](https://www.kernel.org/doc/html/v6.10/admin-guide/md.html#general-rules-apply-for-all-superblock-formats).
 
-For any ioctl, we need an open file descriptor that is linked to the module, so we are going to make a device node:
+For any ioctl, we need an open file descriptor that is linked to the module, so we are going to make a device node with ["major" device number 0x9](https://www.kernel.org/doc/html/v6.10/admin-guide/devices.html):
 
+```c
+const char *devpath = "/dev/.tmp.md.150649:9:0";
+
+mknodat(AT_FDCWD, devpath, S_IFBLK | 0600, makedev(0x9, 0));
+int fd = openat(AT_FDCWD, devpath, O_RDWR | O_EXCL | O_DIRECT);
+// fd is 4
 ```
-mknodat(AT_FDCWD, "/dev/.tmp.md.150649:9:0", S_IFBLK|0600, makedev(0x9, 0)) = 0
-openat(AT_FDCWD, "/dev/.tmp.md.150649:9:0", O_RDWR|O_EXCL|O_DIRECT) = 4
-```
 
-First, load the disk and array metadata (defined above as `ArrayInfo` and `DeviceInfo`) from the block devices.
-With this information, we can build the struct `mdu_array_info_t`, [defined here](https://github.com/torvalds/linux/blob/v6.10/include/uapi/linux/raid/md_u.h#L73), which only requires basic information for the array (RAID level, disk count, present disks, etc).
+To inform the `md` driver about the array composition we need to populate a struct `mdu_array_info_t`, [defined here](https://github.com/torvalds/linux/blob/v6.10/include/uapi/linux/raid/md_u.h#L73), with information gathered from the superblock (defined above as `ArrayInfo` and `DeviceInfo`), which we read from the block devices.
+
+With this information, we can build the  which only requires basic information for the array (RAID level, disk count, present disks, etc).
 
 We can inform the `md` driver about the array information
 
-```
-ioctl(4, SET_ARRAY_INFO, 0x7fffc396b2d0) = 0
-```
-
-Then populate a struct `mdu_disk_info_t`, [defined here](https://github.com/torvalds/linux/blob/v6.10/include/uapi/linux/raid/md_u.h#L112) for each; this struct is even more basic than the previous one.
-
-And add the disks to the array:
-```
-ioctl(4, ADD_NEW_DISK, 0x5dd7357b7a98)  = 0
-ioctl(4, ADD_NEW_DISK, 0x5dd7357b7c80)  = 0
-```
-
-Start the array
-```
-ioctl(4, RUN_ARRAY, 0)                  = 0
+```c
+const mdu_array_info_t array_info = {
+  .major_version = 1,
+  .minor_version = 2,
+  .level = 1,
+  .nr_disks = 2,
+  // ...
+};
+ioctl(4, SET_ARRAY_INFO, &array_info);
 ```
 
-BAM, array is up[^procfs]:
+Then, for each disk, we have to populate a struct `mdu_disk_info_t`, [defined here](https://github.com/torvalds/linux/blob/v6.10/include/uapi/linux/raid/md_u.h#L112); this struct is even more basic than the previous one.
+
+```c
+const mdu_disk_info_t disk_info = {
+  .number = 0,
+  .major = 7, // block device major number
+  .minor = 1, // block device minor number
+  .raid_disk = 0,
+  .state = (1 << MD_DISK_SYNC) | (1 << MD_DISK_ACTIVE),
+};
+ioctl(4, ADD_NEW_DISK, &disk_info);
 ```
+
+Then we start the array (confusingly, without populating the `mdu_param_t` struct):
+
+```c
+ioctl(4, RUN_ARRAY, NULL);
+```
+
+We can verify that the array is up[^procfs]:
+```bash
 $ cat /proc/mdstat
-...
+Personalities : [raid0] [raid1] [raid6] [raid5] [raid4] [raid10] 
+md125 : active raid1 nvme1n1p3[0] nvme0n1p3[1]
+      157154304 blocks super 1.2 [2/2] [UU]
+      bitmap: 2/2 pages [8KB], 65536KB chunk
 ```
 
 [^procfs]: mount `procfs` like we did with `sysfs`
 
-The steps required to assemble an array is documented [here](https://github.com/torvalds/linux/blob/master/Documentation/admin-guide/md.rst#general-rules---apply-for-all-superblock-formats)
 
+Like before, we can now call the `mount` syscall to use our newly-assembled filesystem:
 
-TODO: /dev/md111; automatic??
+```c
+unsigned long mountflags = 0;
+const void *data = NULL;
 
-Like before, we can now call the `mount` syscall to use our newly-assembled array:
-
-```
-mount /dev/md111 /rootfs
+mount("/dev/md125", "/rootfs", "ext4", mountflags, data);
 ```
 
 ## REAL userspace
 
-Now we have all our lovely files at `/rootfs` but that's not so great &mdash; we want a _real_ root filesystem and we want it at `/`.
+Now we have all our lovely files at `/rootfs` but that's not good enough &mdash; we want a _real_ root filesystem and we want it at `/`.
 
 There's a syscall, `pivot_root` which does precisely what we need:
 
@@ -398,7 +440,9 @@ syscall(SYS_pivot_root, "/rootfs", "/old-root");
 chdir("/")
 ```
 
-which should be followed by passing control to init[^cleanup]
+Which marks the end of the tasks for the initrd! Hooray!
+
+Now we only need to replace ourselves by passing control to the real init process[^cleanup]
 
 [^cleanup]: there's some cleanup to do, at least unmounting the `/old-root` to free some RAM
 
@@ -419,7 +463,8 @@ The bootloader will:
 - Read its configuration within the `EFI System Partition`
 - Look for block devices containing partitions referenced in the configuration
     - Checking each partition listed in the GPT for matching UUIDs
-- Load modules for the filesystem
+    - Load modules for the filesystems in the referenced partitions
+- Load second-level configuration (which points to the kernel and initrd)
 - Load the kernel and initrd from the filesystem
 - Jump into the kernel
 
@@ -440,50 +485,16 @@ And the disk layout looks something like this:
 <img src="assets/full-disk-layout-light.svg" style="margin: 0px auto; width: 100%; max-width: 30rem" />
 
 
-# callstack?
 
-This is the rough callstack I got from reading code, i'm less certain about it being correct the deeper it goes
+# Closing thoughts
 
-1. [Boot parameters](https://github.com/torvalds/linux/blob/v6.10/arch/x86/kernel/head64.c#L408) are saved and processed in `copy_bootdata`
-2. `copy_bootdata` is called by `x86_64_start_kernel`, the C entrypoint into the kernel
-3. `x86_64_start_kernel` is mapped (?) onto the `initial_code` symbol in [head_64.S](https://github.com/torvalds/linux/blob/v6.10/arch/x86/kernel/head_64.S#L481)
-4. `initial_code` is [called](https://github.com/torvalds/linux/blob/v6.10/arch/x86/kernel/head_64.S#L420) on `jump_to_C_code`
-5. `jump_to_C_code` is reached from a jmp to `common_startup_64`
-6. ...
-7. `startup64` is [called](https://github.com/torvalds/linux/blob/v6.10/arch/x86/boot/compressed/head_64.S#L286)  ??
-8.  ??
-9.  somehow reach `.Lon_kernel_cs` which says
->	 RSI holds a pointer to a boot_params structure provided by the
->	 loader, and this needs to be preserved across C function calls. So
->	 move it into a callee saved register.
-10. GRUB [sets up](https://chromium.googlesource.com/chromiumos/third_party/grub2/+/11508780425a8cd9a8d40370e2d2d4f458917a73/grub-core/loader/i386/linux.c#651) the RSI register to point to `real_mode_target` (???) 
-	11. how is this the boot_params structure??
+I went into this because I noticed that a freshly initialized array has surprisingly little inside of it
 
-
-## example qemu img
-
-# But why?
-
-I wanted to check something with a RAID setup, so I made a little lab setup:
-
-```
-$ truncate -s 100M device1 && sudo losetup -f device1
-$ truncate -s 100M device2 && sudo losetup -f device2
-
-$ sudo mdadm --create  --level=1 --raid-devices=2 --spare-devices=0 --name='arrayname' /dev/md0 /dev/loop2 /dev/loop23
-mdadm: Defaulting to version 1.2 metadata
-mdadm: array /dev/md0 started.
-$ sudo mdadm -v --detail --scan /dev/md0
+```bash
+$ mdadm -v --detail --scan /dev/md0
 ARRAY /dev/md0 level=raid1 num-devices=2 metadata=1.2 name=framework:arrayname UUID=6865ede1:f1a76b48:45071d66:a55755bd
    devices=/dev/loop2,/dev/loop23
-```
-
-and here I thought.. 
-
-> huh, I wonder how much is necessary to build an array?
-
-```
-$ hexdump -C device1
+$ hexdump -C /dev/loop2
 00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
 *
 00001000  fc 4e 2b a9 01 00 00 00  00 00 00 00 00 00 00 00  |.N+.............|
@@ -503,4 +514,19 @@ $ hexdump -C device1
 06400000
 ```
 
-Just a couple of bytes? What about the rest of the (boot) stack?
+which made me think "Just a couple of bytes? Surely the rest of the boot stack is also small"
+
+I was so naive.
+
+I ended up spending about a week in this rabbit hole, of which about 3 days were reading Kernel, GRUB and util-linux code, and somehow I ended up re-implemeting `mdadm` ([here](https://github.com/davidventura/device-mapper), at a PoC stage) to make sure I understood it, the rest of the time was "thinking"/"processing" and writing this post.
+
+I wanted to go into filesystems (both `FAT` for ESP and `ext4` for rootfs), but it seemed larger than everything else combined and I'm a chicken after all.
+[The docs](https://ext4.wiki.kernel.org/index.php/Ext4_Disk_Layout) are "fairly clear".
+
+I am left with some questions and observations:
+
+- This process has three separate entities (UEFI, GRUB, Linux) listing block devices and inspecting their contents 
+    - It _feels_ unnecessary, but I'm not sure it can be done flexibly in another way (simpler ways probably lead back to something BIOS or petitboot?)
+- Why does the kernel need to be loaded at `LOAD_PHYSICAL_ADDR`? Shouldn't any address be good?
+- How _exactly_ does GRUB set the `rsi` register to the real mode header? I didn't get it from the source code.
+
