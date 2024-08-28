@@ -42,8 +42,9 @@ def export_page(drawio_fname: Path, out_dir: Path, index: int, name: str, theme:
 
 
 def export_pages(drawio_fname: Path, out_dir: Path):
-    pages = get_page_names(Path("./disk.drawio"))
+    pages = get_page_names(drawio_fname)
     themes = [Theme.DARK, Theme.LIGHT]
+    # FIXME
     themes = [Theme.LIGHT]
     with ThreadPoolExecutor(len(pages) * len(themes)) as tpe:
         for idx, page in enumerate(pages):
