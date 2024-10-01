@@ -1,0 +1,13 @@
+sequenceDiagram
+    participant C as Client
+    participant H as Host System
+    participant VM as Micro-VM
+
+    C->>H: Initiates connection
+    H->>VM: Spawns micro-VM
+    VM->>VM: Starts webserver as init
+    VM->>H: Port is open
+    H->>+VM: Forwards connection
+    VM->>-H: Processes request
+    VM->>VM: Terminates
+    H->>C: Forwards response to client
