@@ -2,11 +2,9 @@
 title: Spawning VMs for unreasonable workloads
 date: 2024-10-01
 tags: rust, firecracker, linux, shitpost, short
-incomplete: yes
 slug: abusing-firecracker
-description: 
+description: Running VMs just because it's quick and easy
 ---
-
 
 Some time ago, I forked [Firecracker](https://github.com/firecracker-microvm/firecracker/tree/main) for some experiments and realized
 you can spawn networked a VM in [as little as 6 milliseconds](/posts/minimizing-linux-boot-times/), fully programmatically.
@@ -40,7 +38,7 @@ The only downside is that you need to be root (or member of `kvm` + setting up a
 
 For someone more creative, super-fast VM creation would've spawned many ideas for new tools, but I've only managed to come up with four:
 
-## Populating ext4 image files
+## Populating filesystem images
 
 Somehow the only ext4/btrfs/xfs implementations live in the kernel, requiring you to mount disk images to modify them, which is _barbaric_. 
 
