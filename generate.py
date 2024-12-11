@@ -365,6 +365,9 @@ def inject_styles_into_svg(svg: bytes, style: str) -> bytes:
     ET.register_namespace('', "http://www.w3.org/2000/svg")
     return ET.tostring(root, encoding='unicode', method='xml').encode()
 
+def copy_post_md(dst_assets_dir: Path, post_dir: Path):
+    shutil.copyfile(post_dir / "POST.md", dst_assets_dir / "POST.md")
+
 def copy_relative_assets(html, assets_dir, post_dir):
     # Images
     for img in html.find_all('img'):
@@ -448,6 +451,7 @@ def main(filter_name: Optional[str]):
 
         # TODO: this should also be considered for 'newer'??
         copy_relative_assets(html, assets_dir, post_dir)
+        copy_post_md(assets_dir, post_dir)
 
 
         if html.find('asciinema-player'):
