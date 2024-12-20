@@ -14,4 +14,5 @@ dot blog/raw/bookworm/architecture.dot -Tpng > blog/html/images/bookworm-archite
 
 echo 'syncing'
 rsync -ar blog/html/ root@blog.davidv.dev:/var/www/blog-devops
+rsync -ar blog/html/ root@la.blog.davidv.dev:/var/www/blog-devops
 echo 'synced'
