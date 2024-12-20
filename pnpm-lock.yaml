@@ -16,8 +16,8 @@ importers:
         specifier: ^10.2.2
         version: 10.2.2
       pnpm:
-        specifier: ^8.6.12
-        version: 8.6.12
+        specifier: ^9.15.0
+        version: 9.15.0
       tailwindcss:
         specifier: ^3.4.3
         version: 3.4.3
@@ -783,6 +783,7 @@ packages:
 
   npx@10.2.2:
     resolution: {integrity: sha512-eImmySusyeWphzs5iNh791XbZnZG0FSNvM4KSah34pdQQIDsdTDhIwg1sjN3AIVcjGLpbQ/YcfqHPshKZQK1fA==}
+    deprecated: This package is now part of the npm CLI.
     hasBin: true
     bundledDependencies:
       - npm
@@ -840,9 +841,9 @@ packages:
     resolution: {integrity: sha512-saLsH7WeYYPiD25LDuLRRY/i+6HaPYr6G1OUlN39otzkSTxKnubR9RTxS3/Kk50s1g2JTgFwWQDQyplC5/SHZg==}
     engines: {node: '>= 6'}
 
-  pnpm@8.6.12:
-    resolution: {integrity: sha512-Eza4C5SO/Xl5IYozupbZ5NOA5leBRPYxmXmXfe7G4/4uCkRLhks84rB33aitxNZU/uMrnDGGjwrLktoKvPjqHA==}
-    engines: {node: '>=16.14'}
+  pnpm@9.15.0:
+    resolution: {integrity: sha512-duI3l2CkMo7EQVgVvNZije5yevN3mqpMkU45RBVsQpmSGon5djge4QfUHxLPpLZmgcqccY8GaPoIMe1MbYulbA==}
+    engines: {node: '>=18.12'}
     hasBin: true
 
   postcss-import@15.1.0:
@@ -907,7 +908,7 @@ packages:
 
   puppeteer@19.11.1:
     resolution: {integrity: sha512-39olGaX2djYUdhaQQHDZ0T0GwEp+5f9UB9HmEP0qHfdQHIq0xGQZuAZ5TLnJIc/88SrPLpEflPC+xUqOTv3c5g==}
-    deprecated: < 22.5.0 is no longer supported
+    deprecated: < 22.8.2 is no longer supported
 
   queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
@@ -2018,7 +2019,7 @@ snapshots:
 
   pirates@4.0.6: {}
 
-  pnpm@8.6.12: {}
+  pnpm@9.15.0: {}
 
   postcss-import@15.1.0(postcss@8.4.38):
     dependencies:
