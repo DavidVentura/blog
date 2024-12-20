@@ -22,6 +22,9 @@ from jinja2 import Template
 from markdown2 import Markdown
 import yaml
 
+sys.path.insert(0, "/home/david/git/blog")
+import explode_drawio
+
 BLOG_URL = 'https://blog.davidv.dev/'
 BODY_TEMPLATE_FILE = 'blog/template/body.html'
 BODY_TEMPLATE = Template(open(BODY_TEMPLATE_FILE, 'r').read())
@@ -368,6 +371,15 @@ def inject_styles_into_svg(svg: bytes, style: str) -> bytes:
 def copy_post_md(dst_assets_dir: Path, post_dir: Path):
     shutil.copyfile(post_dir / "POST.md", dst_assets_dir / "POST.md")
 
+def build_relative_assets(post_dir: Path):
+    assets_dir = (post_dir / "assets")
+    if not assets_dir.exists():
+        return
+    print('building', assets_dir)
+    for f in assets_dir.glob("*.drawio"):
+        print(f, f.parent)
+        explode_drawio.explode(f, f.parent)
+
 def copy_relative_assets(html, assets_dir, post_dir):
     # Images
     for img in html.find_all('img'):
@@ -435,6 +447,10 @@ def main(filter_name: Optional[str]):
         html_dir.mkdir(parents=True, exist_ok=True)
         assets_dir.mkdir(exist_ok=True)
 
+        raw_assets_dir = post_dir / "assets"
+        if raw_assets_dir.exists():
+            _files_to_embed.extend(raw_assets_dir.glob("*.drawio"))
+
         if os.path.isfile(html_fname):
             _static = [post_file, this_script, BODY_TEMPLATE_FILE] + _files_to_embed
             if newer(html_fname, _static):
@@ -450,6 +466,7 @@ def main(filter_name: Optional[str]):
             header.wrap(anchor)
 
         # TODO: this should also be considered for 'newer'??
+        build_relative_assets(post_dir)
         copy_relative_assets(html, assets_dir, post_dir)
         copy_post_md(assets_dir, post_dir)
 
