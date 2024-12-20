@@ -281,7 +281,7 @@ def get_style_for_diagrams() -> str:
     @media (prefers-color-scheme: dark)
     {
       svg {
-        background-color: rgb(17, 24, 39) !important;
+        --bg:             rgb(17, 24, 39);
         --light-arrow:    #666;
         --light-bg:       rgb(31, 41, 55);
         --dark-red-bg:    #951f2b;
@@ -290,6 +290,8 @@ def get_style_for_diagrams() -> str:
         --dark-gray-bg:   #999;
         --dark-green-bg:  #2b5c2b;
         --dark-blue-bg:   #2b3a57;
+
+        background-color: var(--bg) !important;
       }
 
       /* colored rectangles */
@@ -336,8 +338,9 @@ def get_style_for_diagrams() -> str:
       rect[fill="rgb(255, 255, 255)"] {
         fill: var(--light-bg) !important;
       }
+      /* text on top of arrow maybe? */
       div[style*="background-color: rgb(255, 255, 255)"] {
-        background-color: var(--light-bg) !important;
+        background-color: var(--bg) !important;
         color: #fff !important;
       }
 
