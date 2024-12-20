@@ -17,4 +17,4 @@ function _exit {
 DIR_TO_WATCH="$1"
 FILTER=$(basename $DIR_TO_WATCH)
 trap _exit INT
-inotifywait -m -e CLOSE_WRITE $DIR_TO_WATCH generate.py | while read -r line; do echo $line; venv/bin/python generate.py dev $FILTER >/dev/null; echo build | ts ; done
+inotifywait -m -e CLOSE_WRITE $DIR_TO_WATCH $DIR_TO_WATCH/assets/*.drawio generate.py | while read -r line; do echo $line; venv/bin/python generate.py dev $FILTER >/dev/null; echo build | ts ; done
