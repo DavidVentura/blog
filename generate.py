@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import time
 import shutil
 import subprocess
 import glob
@@ -29,7 +30,7 @@ BLOG_URL = 'https://blog.davidv.dev/'
 BODY_TEMPLATE_FILE = 'blog/template/body.html'
 BODY_TEMPLATE = Template(open(BODY_TEMPLATE_FILE, 'r').read())
 INDEX_TEMPLATE = Template(open('blog/template/index.html', 'r').read())
-DEBUG = True
+DEBUG = False
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
 EMBED_FILE_RE = re.compile(r'{embed-file (?P<fname>[^}]+)}')
 EMBED_MERMAID_RE = re.compile(r'{embed-mermaid (?P<fname>[^}]+)}')
@@ -375,12 +376,14 @@ def copy_post_md(dst_assets_dir: Path, post_dir: Path):
     shutil.copyfile(post_dir / "POST.md", dst_assets_dir / "POST.md")
 
 def build_relative_assets(post_dir: Path):
-    assets_dir = (post_dir / "assets")
+    assets_dir = post_dir / "assets"
     if not assets_dir.exists():
         return
-    print('building', assets_dir)
+    freshest_svg_in_assets = max(f.stat().st_mtime for f in assets_dir.glob("*.svg"))
+    freshest_drawio = max(f.stat().st_mtime for f in assets_dir.glob("*.drawio"))
+    if freshest_svg_in_assets > freshest_drawio:
+        return
     for f in assets_dir.glob("*.drawio"):
-        print(f, f.parent)
         explode_drawio.explode(f, f.parent)
 
 def copy_relative_assets(html, assets_dir, post_dir):
@@ -391,7 +394,7 @@ def copy_relative_assets(html, assets_dir, post_dir):
             continue
         og_file = post_dir / src
         if og_file.exists():
-            print("copy", og_file, assets_dir / og_file.name)
+            debug("copy", og_file, assets_dir / og_file.name)
             with og_file.open("rb") as fd:
                 data = fd.read()
             if og_file.suffix == ".svg":
@@ -414,7 +417,9 @@ def copy_relative_assets(html, assets_dir, post_dir):
 
 def main(filter_name: Optional[str]):
     this_script = __file__
+    _all_time_start = time.time()
     for post_dir in Path("blog/raw/").iterdir():
+        _time_start = time.time()
         if not post_dir.is_dir():
             continue
         post_file = post_dir / 'POST.md'
@@ -422,14 +427,15 @@ def main(filter_name: Optional[str]):
             print("Target post file (%s) does not exist" % post_file)
             continue
 
+        if filter_name:
+            fn = filter_name.lower()
+            #if fn not in post_dir.name.lower() and fn not in r.title.lower():
+            if fn not in post_dir.name.lower():
+                continue
+
 
         md_str = post_file.open(encoding='utf-8').read()
         r = PostMetadata.from_text(md_str)
-
-        if filter_name:
-            fn = filter_name.lower()
-            if fn not in post_dir.name.lower() and fn not in r.title.lower():
-                continue
 
         if r.incomplete and not DEVMODE:
             debug('Incomplete - skipping')
@@ -457,7 +463,7 @@ def main(filter_name: Optional[str]):
         if os.path.isfile(html_fname):
             _static = [post_file, this_script, BODY_TEMPLATE_FILE] + _files_to_embed
             if newer(html_fname, _static):
-                debug('Stale file')
+                #debug('Stale file')
                 continue
 
         debug('generating text post')
@@ -483,6 +489,10 @@ def main(filter_name: Optional[str]):
         debug('writing to file')
         open(html_fname, 'w', encoding='utf-8').write(blog_post)
         debug('finished')
+        taken = time.time() - _time_start
+        debug(f'time to build {r.get_title()} was {taken}')
+    taken_all = time.time() - _all_time_start
+    debug(f'time to build all {taken_all}')
 
 
 def generate_feed():
@@ -598,13 +608,15 @@ if __name__ == '__main__':
     DEVMODE = False
     if len(sys.argv) > 1 and sys.argv[1].lower() == 'dev':
         DEVMODE = True
-    tags = get_all_tags()
-    for tag in tags:
-        generate_tag_index(tag)
     #series = get_all_series()
     #for series_name in series:
     #    generate_series_index(series_name)
-    generate_sitemap(tags)
     filter_name = sys.argv[2] if len(sys.argv) > 2 else None
     main(filter_name)
-    generate_index()
+    # This is a hack for devmode, probably should be cached?
+    if not filter_name:
+        tags = get_all_tags()
+        for tag in tags:
+            generate_tag_index(tag)
+        generate_sitemap(tags)
+        generate_index()
