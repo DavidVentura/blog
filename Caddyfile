@@ -5,6 +5,12 @@ blog.davidv.dev {
                 }
         }
         root * /var/www/blog-devops/
+        header {
+		# "Analytics" for geo latency analysis
+                +region TODO
+		+ip_address {remote_host}
+        }
+
         @static {
                 file
                 path *.ico *.css *.js *.gif *.webp *.avif *.jpg *.jpeg *.png *.svg *.mp4
