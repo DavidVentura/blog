@@ -37,7 +37,7 @@ It's great when you have good placement -- the proxy does not drastically extend
 <img src="assets/proxy-good-placement.svg" style="margin: 0px auto; width: 100%; max-width: 35rem" />
 
 But in some cases...
-<img src="assets/proxy-bad-placement.svg" style="margin: 0px auto; width: 100%; max-width: 35rem" />
+<img src="assets/proxy-bad-placement.svg" style="margin: 0px auto; width: 100%; max-width: 40rem" />
 
 Disqualifying, bug also:
 - Crash bad
@@ -97,7 +97,6 @@ For example, "Service1" can be defined as:
     - Real IP: 1.2.3.4
     - Port: 8888
 
-FIXME
 
 <img src="assets/ipvs-example.svg" style="margin: 0px auto; width: 100%; max-width: 15rem" />
 
@@ -105,39 +104,153 @@ To manage the IPVS rules, we need a userspace component (could be something smar
 
 The main advantage over the userspace proxy is that there's no "software to upgrade or restart" (well, the kernel, but those upgrades are disruptive anyway)
 
-However, lost a very nice property from the proxy: being able to quickly detect closed connections and act accordingly (eg: by quarantining them for a little bit)
+However, we lost a very nice property from the userspace proxy: being able to quickly detect closed connections and act accordingly (eg: by quarantining them for a little bit)
 
-Hope is not lost!
 
 We can extend the userspace component, with the capability to detect closed connections; how?
 
-:sparkle: eBPF :sparkle:
+✨ eBPF ✨
 
-Hook into events, get notified of updates, add simple example
+eBPF is a mechanism in the Linux kernel that allows us to run [verified](https://docs.ebpf.io/linux/concepts/verifier/) programs _within_ the kernel, hooking into events and sending data with userspace applications through maps.
 
-We can trace the TCP state machine in the kernel by following [tcp_set_state](TODO)
+We would like to end up in the magical land where this is possible:
 
-example:
+```rust
+async fn handle_events(mut events: EventStream) {
+    while let Some(event) = events.next().await {
+        match event.interpret() {
+            ConnectionState::Failed(backend) => {
+                mark_backend_suspect(backend);
+            },
+            ConnectionState::Established(backend) => {
+                record_successful_connection(backend);
+            },
+        }
+    }
+}
 ```
-logs of tcp + curl establishment
+
+So.. let's build it!
+
+## Researching the data path
+
+We want to get notified when there's a state change on a (specific) TCP connection, and would you look at that, there's a [tcp\_set\_state](TODO) function that we can start with.
+
+These examples are summarized, the repo is [here](https://github.com/DavidVentura/tcpstate).
+
+```rust
+#![no_std]
+use core::net::IpAddr;
+
+pub struct TcpSocketEvent {
+    pub oldstate: TcpState,
+    pub newstate: TcpState,
+    pub src: IpAddr,
+    pub sport: u16,
+    pub dst: IpAddr,
+    pub dport: u16,
+}
+
+#[tracepoint]
+pub fn tcp_set_state(ctx: TracePointContext) -> i64 {
+    let evt_ptr = ctx.as_ptr() as *const trace_event_raw_inet_sock_set_state;
+    let evt = unsafe { evt_ptr.as_ref().ok_or(1i64)? };
+    if evt.protocol != IPPROTO_TCP {
+        // This shouldn't be possible, as far as I know
+        return 0;
+    }
+    let ev: TcpSocketEvent = make_ev_from_raw(evt);
+    info!(&ctx,
+          "TCP connection {}:{}->{}:{} changed state {}->{}",
+          ev.src,
+          ev.sport,
+          ev.dst,
+          ev.dport,
+          ev.oldstate,
+          ev.newstate);
+}
 ```
 
-so far so good, now let's try tracing an ipvs connection
+If we run this program and perform a `curl`, we get a very nice output:
+```bash
+$ curl example.com
+TCP conn
+TCP conn
+TCP conn
+TCP conn
+```
+
+So far so good, now let's try tracing an ipvs connection
+
+```bash
+$ # Create a service
+$ ipvsadm ..
+$ # Create a destination
+$ ipvsadm
+$ curl 1.2.3.4:80
+TCP conn
+TCP conn
+TCP conn
+TCP conn
 
 ```
-logs of the tcp state machine use virtual ip
+
+huh, that's not so useful, we don't know which backend got selected, so, if we hit a problem we don't know which backend to remove from the service!
+
+We somehow need to enrich the TCP state machine data with IPVS data, so let's look at IPVS events:
+
+[ip\_vs\_conn\_new]() sounds _very_ promising, though there is no tracepoint for it, so we will need to use a [kprobe](), which is not ideal.
+
+<small>
+Aside: Using a `kprobe` is not ideal, because tracepoints are stable interfaces and maintained by the kernel developers, while kprobes are "probing points" which we can use, but there are no stability guarantees.
+No stability guarantees across kernel versions means that we get to add integration testing for each supported version
+
+TODO maybe use this as a footnote for firetest.
+</small>
+
+In `ip_vs_conn_new`, we get an [ip\_vs\_conn\_param](), a destination address ([nf\_inet\_addr]()) and a destination port
+
+Let's also hook into it and see what we get
+
+```rust
+#![no_std]
+
+pub struct IpvsParam {
+    // TCP source port
+    sport: u16,
+    // TCP source address
+    saddr: u32,
+    // TCP dest address (virtual)
+    vaddr: u32,
+    // TCP dest port (virtual)
+    vport: u16,
+    // TCP dest address (real)
+    daddr: IpAddr,
+    // TCP dest port (real)
+    dport: u16,
+}
+
+#[kprobe]
+pub fn ip_vs_conn_new(ctx: ProbeContext) -> u32 {
+    let conn_ptr: *const ip_vs_conn_param = ctx.arg(0).ok_or(0u32)?;
+    let conn = unsafe { helpers::bpf_probe_read_kernel(&(*conn_ptr)).map_err(|x| 1u32)? };
+    let param: IpvsParam = make_ipvs_param_from_raw(evt);
+    info!("Establishing connection {param:?}");
+}
 ```
 
-huh, that's not so useful, we don't know which backend got selected, so, if we hit a problem we don't know which backend to remove from the service.
+If we trace a connection again, we get:
+```bash
+$ curl 1.2.3.4:80
+Establishing connection { sport: 0, ... }
+TCP conn
+TCP conn
+TCP conn
+TCP conn
+```
+<img src="assets/tcp-ipvs-conn.svg" style="margin: 0px auto; width: 100%; max-width: 15rem" />
 
-let's look at IPVS events first:
-
-we can put a hook on [ip_vs_conn_new]() (which sadly does not have a trace function, and we need a kprobe) (TODO difference)
-
-in here, we get an [ip_vs_conn_param](), a destination address ([nf_inet_addr]()) and a destination port
-
-
-As this event happens _before_ the TCP connection is started, we can save this data, to later look itup during TCP events
+As this event happens _before_ the TCP connection is started, we can save this data, to later look it up during TCP events
 
 We can store, in a hashmap, a key:
 ```rust
@@ -217,6 +330,9 @@ while let Some(i) = rx.recv().await {
 signal::ctrl_c().await?;
 info!("Exiting...");
 ```
+
+
+TODO: client side vs server side interrupt, by tcp_receive_reset
 
 which has all the upsides of the userspace connection proxy, and none of the downsides (beyond any sanity lost while trying to coerce `aya` + the eBPF verifier into letting me access valid pointers)
 
