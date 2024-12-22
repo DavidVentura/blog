@@ -10,3 +10,4 @@ node_modules
 blog/html/images/bookworm-architecture.png
 blog/html/sitemap.txt
 *.drawio.bkp
+__pycache__
