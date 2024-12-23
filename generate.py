@@ -30,7 +30,7 @@ BLOG_URL = 'https://blog.davidv.dev/'
 BODY_TEMPLATE_FILE = 'blog/template/body.html'
 BODY_TEMPLATE = Template(open(BODY_TEMPLATE_FILE, 'r').read())
 INDEX_TEMPLATE = Template(open('blog/template/index.html', 'r').read())
-DEBUG = False
+DEBUG = True
 valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
 EMBED_FILE_RE = re.compile(r'{embed-file (?P<fname>[^}]+)}')
 EMBED_MERMAID_RE = re.compile(r'{embed-mermaid (?P<fname>[^}]+)}')
@@ -284,13 +284,30 @@ def get_style_for_diagrams() -> str:
       svg {
         --bg:             rgb(17, 24, 39);
         --light-arrow:    #666;
-        --light-bg:       rgb(31, 41, 55);
-        --dark-red-bg:    #951f2b;
-        --dark-orange-bg: #8f4731;
-        --dark-yellow-bg: #c47a53;
-        --dark-gray-bg:   #999;
-        --dark-green-bg:  #2b5c2b;
-        --dark-blue-bg:   #2b3a57;
+        /* default white bg */
+        --light-bg:       #202938;
+        --light-border:   #474f5e;
+
+        --dark-gray-bg:       #999999;
+        --dark-gray-border:   #797b7b;
+
+        --dark-blue-bg:       #364b64;
+        --dark-blue-border:   #4d6481;
+
+        --dark-green-bg:       #536951;
+        --dark-green-border:   #678466;
+
+        --dark-orange-bg:      #876037;
+        --dark-orange-border:  #a67645;
+
+        --dark-yellow-bg:      #877339;
+        --dark-yellow-border:  #a39037;
+
+        --dark-red-bg:         #864643;
+        --dark-red-border:     #b04e4a;
+
+        --dark-purple-bg:      #67586f;
+        --dark-purple-border:  #816a8d;
 
         background-color: var(--bg) !important;
       }
@@ -298,21 +315,31 @@ def get_style_for_diagrams() -> str:
       /* colored rectangles */
       rect[fill="#f8cecc"] {
         fill: var(--dark-red-bg) !important;
+        stroke: var(--dark-red-border) !important;
       }
       rect[fill="#ffe6cc"] {
         fill: var(--dark-orange-bg) !important;
+        stroke: var(--dark-orange-border) !important;
       }
       rect[fill="#fff2cc"] {
         fill: var(--dark-yellow-bg) !important;
+        stroke: var(--dark-yellow-border) !important;
       }
       rect[fill="#f5f5f5"] {
         fill: var(--dark-gray-bg) !important;
+        stroke: var(--dark-gray-border) !important;
       }
       rect[fill="#d5e8d4"] {
         fill: var(--dark-green-bg) !important;
+        stroke: var(--dark-green-border) !important;
       }
       rect[fill="#dae8fc"] {
         fill: var(--dark-blue-bg) !important;
+        stroke: var(--dark-blue-border) !important;
+      }
+      rect[fill="#e1d5e7"] {
+        fill: var(--dark-purple-bg) !important;
+        stroke: var(--dark-purple-border) !important;
       }
       /* black arrows (ends) */
       path[fill="rgb(0, 0, 0)"] {
@@ -332,12 +359,15 @@ def get_style_for_diagrams() -> str:
       /* default white bg */
       rect[fill="#ffffff"] {
         fill: var(--light-bg); 
+        stroke: var(--light-border) !important;
       }
       path[fill="rgb(255, 255, 255)"] {
         fill: var(--light-bg) !important;
+        stroke: var(--light-border) !important;
       }
       rect[fill="rgb(255, 255, 255)"] {
         fill: var(--light-bg) !important;
+        stroke: var(--light-border) !important;
       }
       /* text on top of arrow maybe? */
       div[style*="background-color: rgb(255, 255, 255)"] {
@@ -379,11 +409,17 @@ def build_relative_assets(post_dir: Path):
     assets_dir = post_dir / "assets"
     if not assets_dir.exists():
         return
-    freshest_svg_in_assets = max(f.stat().st_mtime for f in assets_dir.glob("*.svg"))
-    freshest_drawio = max(f.stat().st_mtime for f in assets_dir.glob("*.drawio"))
-    if freshest_svg_in_assets > freshest_drawio:
+    svgs = list(assets_dir.glob("*.svg"))
+    drawios = list(assets_dir.glob("*.drawio"))
+    if len(drawios) == 0:
         return
-    for f in assets_dir.glob("*.drawio"):
+
+    if len(svgs) > 0:
+        freshest_svg_in_assets = max(f.stat().st_mtime for f in svgs)
+        freshest_drawio = max(f.stat().st_mtime for f in drawios)
+        if freshest_svg_in_assets > freshest_drawio:
+            return
+    for f in drawios:
         explode_drawio.explode(f, f.parent)
 
 def copy_relative_assets(html, assets_dir, post_dir):
