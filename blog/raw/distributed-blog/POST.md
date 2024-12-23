@@ -1,3 +1,11 @@
+---
+date: 2024-12-23
+title: Geo-distributed blog
+tags: meta
+description: idk
+slug: geo-distributed-blog
+incomplete: true
+---
 
 ![](assets/ams_small.png)
 
