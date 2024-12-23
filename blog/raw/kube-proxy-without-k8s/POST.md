@@ -134,9 +134,9 @@ So.. let's build it!
 
 ## Researching the data path
 
-We want to get notified when there's a state change on a (specific) TCP connection, and would you look at that, there's a [tcp\_set\_state](TODO) function that we can start with.
+We want to get notified when there's a state change on a (specific) TCP connection, and would you look at that, there's a [inet\_sock\_set\_state](TODO) function that we can start with.
 
-These examples are summarized, the repo is [here](https://github.com/DavidVentura/tcpstate).
+These examples are summarized, the repo is [here](https://github.com/DavidVentura/ipvs-tcp-from-scratch).
 
 ```rust
 #![no_std]
@@ -152,102 +152,117 @@ pub struct TcpSocketEvent {
 }
 
 #[tracepoint]
-pub fn tcp_set_state(ctx: TracePointContext) -> i64 {
+pub fn inet_sock_set_state(ctx: TracePointContext) -> i64 {
     let evt_ptr = ctx.as_ptr() as *const trace_event_raw_inet_sock_set_state;
     let evt = unsafe { evt_ptr.as_ref().ok_or(1i64)? };
     if evt.protocol != IPPROTO_TCP {
-        // This shouldn't be possible, as far as I know
         return 0;
     }
     let ev: TcpSocketEvent = make_ev_from_raw(evt);
-    info!(&ctx,
-          "TCP connection {}:{}->{}:{} changed state {}->{}",
-          ev.src,
-          ev.sport,
-          ev.dst,
-          ev.dport,
-          ev.oldstate,
-          ev.newstate);
+    if let Some(ev) = make_ev_from_raw(&ctx, evt) {
+        let os_name: &'static str = ev.oldstate.into();
+        let ns_name: &'static str = ev.newstate.into();
+        info!(
+            &ctx,
+            "TCP connection {}:{}->{}:{} changed state {}->{}",
+            ev.src, ev.sport, ev.dst, ev.dport, os_name, ns_name
+        );
+    }
+    Ok(0)
 }
 ```
 
 If we run this program and perform a `curl`, we get a very nice output:
 ```bash
-$ curl example.com
-TCP conn
-TCP conn
-TCP conn
-TCP conn
+$ tracer & curl -s example.com
+TCP connection 192.168.2.144:0    ->93.184.215.14:80 changed state Close      -> SynSent
+TCP connection 192.168.2.144:47256->93.184.215.14:80 changed state SynSent    -> Established
+TCP connection 192.168.2.144:47256->93.184.215.14:80 changed state Established-> FinWait1
+TCP connection 192.168.2.144:47256->93.184.215.14:80 changed state FinWait1   -> FinWait2
+TCP connection 192.168.2.144:47256->93.184.215.14:80 changed state FinWait2   -> Close
+
 ```
 
-So far so good, now let's try tracing an ipvs connection
+So far so good! Now let's try tracing an IPVS connection
 
 ```bash
-$ # Create a service
-$ ipvsadm ..
-$ # Create a destination
-$ ipvsadm
-$ curl 1.2.3.4:80
-TCP conn
-TCP conn
-TCP conn
-TCP conn
+$ # Create a service for 1.2.3.4:80
+$ ipvsadm -A  --tcp-service 1.2.3.4:80
+$ # Create a destination pointing to 'example.com' (IP from previous point)
+$ ipvsadm -a --tcp-service 1.2.3.4:80 -r 93.184.215.14 -m
+$ tracer & curl -s 1.2.3.4:80
+TCP connection 192.168.2.144:0    ->1.2.3.4:80 changed state Close      -> SynSent
+TCP connection 192.168.2.144:39040->1.2.3.4:80 changed state SynSent    -> Established
+TCP connection 192.168.2.144:39040->1.2.3.4:80 changed state Established-> FinWait1
+TCP connection 192.168.2.144:39040->1.2.3.4:80 changed state FinWait1   -> FinWait2
+TCP connection 192.168.2.144:39040->1.2.3.4:80 changed state FinWait2   -> Close
 
 ```
 
-huh, that's not so useful, we don't know which backend got selected, so, if we hit a problem we don't know which backend to remove from the service!
+Let's now add a "bad" backend to the service (there's nothing listening on that address):
+```bash
+$ ipvsadm -a --tcp-service 1.2.3.4:80 -r 192.168.2.100 -m
+```
 
-We somehow need to enrich the TCP state machine data with IPVS data, so let's look at IPVS events:
+When we run `curl` again, we see a failed connection.. but, to which backend?
+```text
+TCP connection 192.168.2.144:0    ->1.2.3.4:80 changed state Close   -> SynSent           
+TCP connection 192.168.2.144:57478->1.2.3.4:80 changed state SynSent -> Close
+```
+
+We somehow need to enrich the TCP state transition data with IPVS data, so let's look at IPVS events:
 
 [ip\_vs\_conn\_new]() sounds _very_ promising, though there is no tracepoint for it, so we will need to use a [kprobe](), which is not ideal.
-
-<small>
-Aside: Using a `kprobe` is not ideal, because tracepoints are stable interfaces and maintained by the kernel developers, while kprobes are "probing points" which we can use, but there are no stability guarantees.
-No stability guarantees across kernel versions means that we get to add integration testing for each supported version
-
-TODO maybe use this as a footnote for firetest.
-</small>
 
 In `ip_vs_conn_new`, we get an [ip\_vs\_conn\_param](), a destination address ([nf\_inet\_addr]()) and a destination port
 
 Let's also hook into it and see what we get
 
 ```rust
-#![no_std]
-
 pub struct IpvsParam {
-    // TCP source port
-    sport: u16,
-    // TCP source address
-    saddr: u32,
-    // TCP dest address (virtual)
-    vaddr: u32,
-    // TCP dest port (virtual)
-    vport: u16,
-    // TCP dest address (real)
-    daddr: IpAddr,
-    // TCP dest port (real)
-    dport: u16,
+    saddr: IpAddr, // TCP source address
+    sport: u16,    // TCP source port
+    vaddr: IpAddr, // TCP dest address (virtual)
+    vport: u16,    // TCP dest port (virtual)
+    daddr: IpAddr, // TCP dest address (real)
+    dport: u16,    // TCP dest port (real)
 }
 
 #[kprobe]
 pub fn ip_vs_conn_new(ctx: ProbeContext) -> u32 {
     let conn_ptr: *const ip_vs_conn_param = ctx.arg(0).ok_or(0u32)?;
     let conn = unsafe { helpers::bpf_probe_read_kernel(&(*conn_ptr)).map_err(|x| 1u32)? };
-    let param: IpvsParam = make_ipvs_param_from_raw(evt);
-    info!("Establishing connection {param:?}");
+    let param: IpvsParam = make_ipvs_param_from_raw(conn);
+    info!(
+        ctx,
+        "{}:{} -> virtual={}:{} real={}:{}",
+        param.saddr, param.sport,
+        param.vaddr, param.vport,
+        param.daddr, param.dport
+    );
 }
 ```
 
-If we trace a connection again, we get:
-```bash
-$ curl 1.2.3.4:80
-Establishing connection { sport: 0, ... }
-TCP conn
-TCP conn
-TCP conn
-TCP conn
+If we trace a connection again, we get lucky and hit a good backend:
+```text
+TCP  connection 192.168.2.144:0->1.2.3.4:80 changed state Close->SynSent
+
+IPVS connection 192.168.2.144:39634 -> virtual=1.2.3.4:80 real=93.184.215.14:80
+
+TCP  connection 192.168.2.144:39634->1.2.3.4:80 changed state SynSent->Established
+TCP  connection 192.168.2.144:39634->1.2.3.4:80 changed state Established->FinWait1
+TCP  connection 192.168.2.144:39634->1.2.3.4:80 changed state FinWait1->FinWait2
+TCP  connection 192.168.2.144:39634->1.2.3.4:80 changed state FinWait2->Close
 ```
+But after a little bit, we try again and we hit the bad backend:
+```text
+TCP  connection 192.168.2.144:0->1.2.3.4:80 changed state Close->SynSent
+
+IPVS connection 192.168.2.144:49512 -> virtual=1.2.3.4:80 real=192.168.2.100:80
+
+TCP  connection 192.168.2.144:49512->1.2.3.4:80 changed state SynSent->Close
+```
+
 <img src="assets/tcp-ipvs-conn.svg" style="margin: 0px auto; width: 100%; max-width: 15rem" />
 
 As this event happens _before_ the TCP connection is started, we can save this data, to later look it up during TCP events
@@ -294,7 +309,7 @@ pub struct TcpSocketEvent {
 }
 ```
 
-crux of the ebpf impl, svc being Option is because the trace of `tcp_set_state` happens _before_ a source port is assigned!
+crux of the ebpf impl, svc being Option is because the trace of `inet_sock_set_state` happens _before_ a source port is assigned!
 
 ```c
 /* Socket identity is still unknown (sport may be zero).
@@ -302,7 +317,7 @@ crux of the ebpf impl, svc being Option is because the trace of `tcp_set_state` 
  * lock select source port, enter ourselves into the hash tables and
  * complete initialization after this.
  */
-tcp_set_state(sk, TCP_SYN_SENT);
+inet_sock_set_state(sk, TCP_SYN_SENT);
 ```
 
 // See:
@@ -335,6 +350,15 @@ info!("Exiting...");
 TODO: client side vs server side interrupt, by tcp_receive_reset
 
 which has all the upsides of the userspace connection proxy, and none of the downsides (beyond any sanity lost while trying to coerce `aya` + the eBPF verifier into letting me access valid pointers)
+
+### On `kprobe`s and testing
+<small>
+Aside: Using a `kprobe` is not ideal, because tracepoints are stable interfaces and maintained by the kernel developers, while kprobes are "probing points" which we can use, but there are no stability guarantees.
+No stability guarantees across kernel versions means that we get to add integration testing for each supported version
+
+TODO maybe use this as a footnote for firetest.
+</small>
+
 
 ---
 
