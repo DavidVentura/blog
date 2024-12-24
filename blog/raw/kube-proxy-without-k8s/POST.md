@@ -401,10 +401,49 @@ so, we now can get the `Close->SynSent` event with a source port, but it still h
 
 we can only use this event for timing information on further events
 
+so far we've been printing events to stdout, but that's not too useful, we want to apply some logic and take action based on these events, so we need to send them to userspace
+
+aya makes this extremely easy --
+
+
 
 ## NEXT -> send events to userspace
+```rust
+fn push_tcp_event<C: EbpfContext>(ctx: &C, evt: &TcpSocketEvent) {
+    unsafe {
+        #[allow(static_mut_refs)]
+        TCP_EVENTS.output(ctx, evt, 0);
+    }
+}
+```
+
+In `blah` and `blah` we were logging the TCP events, we now construct a `TcpSocketEvent` instance and push it through the perf buffer
+```rust
+let ev = TcpSocketEvent {
+  // ...
+};
+push_tcp_event(ctx, &ev);
+```
+
+in `tcp_connect` we have a bit of a special case -- we don't receive the old and new states, but by definition they **must** be `Close` and `SynSent` respectively.
+
+Log the results _in userspace_:
+
+```
+got ev Some(TcpSocketEvent { oldstate: Close      , newstate: SynSent    , src: 192.168.0.185, sport: 46780, dst: 1.2.3.4, dport: 80 })
+got ev Some(TcpSocketEvent { oldstate: SynSent    , newstate: Established, src: 192.168.0.185, sport: 46780, dst: 1.2.3.4, dport: 80 })
+got ev Some(TcpSocketEvent { oldstate: Established, newstate: FinWait1   , src: 192.168.0.185, sport: 46780, dst: 1.2.3.4, dport: 80 })
+got ev Some(TcpSocketEvent { oldstate: FinWait1   , newstate: FinWait2   , src: 192.168.0.185, sport: 46780, dst: 1.2.3.4, dport: 80 })
+got ev Some(TcpSocketEvent { oldstate: FinWait2   , newstate: Close      , src: 192.168.0.185, sport: 46780, dst: 1.2.3.4, dport: 80 })
+```
+
+which is great, but we didn't yet define the IPVS side of the data on `TcpSocketEvent`
+
+## THEN -> pass also the Option<Service>
+
 ## THEN -> identify local close and remote close via rcv_reset
 ## THEN -> find timeout before they happen with retrans
+
 --- 
 crux of the ebpf impl, svc being Option is because the trace of `inet_sock_set_state` happens _before_ a source port is assigned!
 this _sucks_.. but.. we can cheat a little bit, by tracing _any function_ that receives a useful context, while the tcp lock is held,
