@@ -140,14 +140,14 @@ These examples are summarized, the repo is [here](https://github.com/DavidVentur
 
 ```rust
 #![no_std]
-use core::net::IpAddr;
+use core::net::Ipv4Addr;
 
 pub struct TcpSocketEvent {
     pub oldstate: TcpState,
     pub newstate: TcpState,
-    pub src: IpAddr,
+    pub src: Ipv4Addr,
     pub sport: u16,
-    pub dst: IpAddr,
+    pub dst: Ipv4Addr,
     pub dport: u16,
 }
 
@@ -220,12 +220,12 @@ Let's also hook into it and see what we get
 
 ```rust
 pub struct IpvsParam {
-    saddr: IpAddr, // TCP source address
-    sport: u16,    // TCP source port
-    vaddr: IpAddr, // TCP dest address (virtual)
-    vport: u16,    // TCP dest port (virtual)
-    daddr: IpAddr, // TCP dest address (real)
-    dport: u16,    // TCP dest port (real)
+    saddr: Ipv4Addr, // TCP source address
+    sport: u16,      // TCP source port
+    vaddr: Ipv4Addr, // TCP dest address (virtual)
+    vport: u16,      // TCP dest port (virtual)
+    daddr: Ipv4Addr, // TCP dest address (real)
+    dport: u16,      // TCP dest port (real)
 }
 
 #[kprobe]
@@ -263,21 +263,25 @@ IPVS connection 192.168.2.144:49512 -> virtual=1.2.3.4:80 real=192.168.2.100:80
 TCP  connection 192.168.2.144:49512->1.2.3.4:80 changed state SynSent->Close
 ```
 
-<img src="assets/tcp-ipvs-conn.svg" style="margin: 0px auto; width: 100%; max-width: 15rem" />
+This is all the information we need, now we just need to put it together:
 
-As this event happens _before_ the TCP connection is started, we can save this data, to later look it up during TCP events
+As this event happens _before_ the TCP connection is started, we can save this data, to later look it up during TCP events;
 
-We can store, in a hashmap, a key:
+during the socket state transition we have a 5-tuple that identifies the connection:
+
+```
+(proto, source addr, source port, dest addr, dest port)
+```
+
+and during the IPVS events we have that, _plus_ the real address and port
+
+We will need to split the IpvsParam into two parts, which we can use in a hashmap, first, a key:
 ```rust
 struct TcpKey {
-    // TCP source port
-    sport: u16,
-    // TCP dest port  (virtual)
-    vport: u16,
-    // TCP source address
-    saddr: u32,
-    // TCP dest address (virtual)
-    vaddr: u32,
+    saddr: IpAddr, // TCP source address
+    sport: u16,    // TCP source port
+    vaddr: IpAddr, // TCP dest address (virtual)
+    vport: u16,    // TCP dest port  (virtual)
 }
 ```
 
@@ -289,27 +293,48 @@ pub struct IpvsDest {
 }
 ```
 
-now, we have access to this hashmap during the TCP state transitions, and it now looks a lot more promising
-
-if we see transition `CLOSE->OPEN` (TODO) we receive
-- Virtual IP destination address and port
-- Source IP address and port
-
-We can use these to build the `TcpKey` again, look up the corresponding `IpvsDest` and return that to userspace as a
-
 ```rust
-#[derive(Debug, PartialEq)]
-pub struct TcpSocketEvent {
-    pub oldstate: TcpState,
-    pub newstate: TcpState,
-    pub sport: u16,
-    pub dport: u16,
-    pub dst: IpAddr,
-    pub svc: Option<IpvsDest>,
-}
+#[map]
+static IPVS_TCP_MAP: HashMap<TcpKey, IpvsDest> = HashMap::with_max_entries(1024, 0);
 ```
 
-crux of the ebpf impl, svc being Option is because the trace of `inet_sock_set_state` happens _before_ a source port is assigned!
+```
+Error: the BPF_PROG_LOAD syscall failed. Verifier output: last insn is not an exit or jmp
+verification time 9 usec
+processed 0 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
+```
+wat
+turns out if you
+```
+IPVS_TCP_MAP.insert(key, value, 0).unwrap()
+```
+can be fixed with
+```
+IPVS_TCP_MAP.insert(key, value, 0).is_ok()
+```
+
+```
+getting key 192.168.0.185:0 1.2.3.4:80 for state Close->SynSent
+Ignoring TCP conn not going to IPVS
+IPVS mapping inserted 192.168.0.185:55264 1.2.3.4:80
+getting key 192.168.0.185:55264 1.2.3.4:80 for state SynSent->Established
+TCP connection 192.168.0.185:55264->1.2.3.4:80 (real 93.184.215.14:80) changed state SynSent->Established
+getting key 192.168.0.185:55264 1.2.3.4:80 for state Established->FinWait1
+TCP connection 192.168.0.185:55264->1.2.3.4:80 (real 93.184.215.14:80) changed state Established->FinWait1
+getting key 192.168.0.185:55264 1.2.3.4:80 for state FinWait1->FinWait2
+TCP connection 192.168.0.185:55264->1.2.3.4:80 (real 93.184.215.14:80) changed state FinWait1->FinWait2
+getting key 192.168.0.185:55264 1.2.3.4:80 for state FinWait2->Close
+TCP connection 192.168.0.185:55264->1.2.3.4:80 (real 93.184.215.14:80) changed state FinWait2->Close
+```
+
+
+now, we have access to this hashmap during the TCP state transitions, and it now looks a lot more promising
+
+BUT! you can see that the first state transition does not get the IPVS data, there are two important aspects:
+- the `Close->SynSent` event, _for some reason_, is triggered BEFORE the source port assignment; why?? it's CLEARLY not sent a SYN packet with source port =0.
+- the state transition is triggered BEFORE the backend selection, which again, makes no sense, how do you send a SYN packet when you don't know the real address??
+
+there's this comment that states this is intended
 
 ```c
 /* Socket identity is still unknown (sport may be zero).
@@ -320,12 +345,68 @@ crux of the ebpf impl, svc being Option is because the trace of `inet_sock_set_s
 inet_sock_set_state(sk, TCP_SYN_SENT);
 ```
 
+I'd guess that it's to pprevent race conditions which don't acquire the lock?
+If state is SynSent and port is 0, it'd mean the socket has no port assigned yet, but if state
+is Closed and port is 0, what does that mean? though, i'm not sure it's relevant
+
+```c
 // See:
 // https://github.com/torvalds/linux/blob/v6.11/net/ipv4/tcp_ipv4.c#L294
 // tcp_connect is called here:
 // https://github.com/torvalds/linux/blob/v6.11/net/ipv4/tcp_ipv4.c#L337
 // critically, after `inet_hash_connect`, which assigns the source port.
+```
 
+by reading `tcp_v4_connect` we can hook into `tcp_connect` which is called with the lock held (TODO) and
+_after_ the source port is assigned.
+
+```rust
+#[kprobe]
+pub fn tcp_connect(ctx: ProbeContext) -> u32 {
+    let conn_ptr: *const sock = ctx.arg(0).ok_or(0u32)?;
+
+    let sk_comm =
+        unsafe { helpers::bpf_probe_read_kernel(&((*conn_ptr).__sk_common)).map_err(|x| 999u32)? };
+    // By definition, `tcp_connect` is called with SynSent state
+    // This `if` will never trigger -- it is here only to make the
+    // expected precondition explicit
+    if sk_comm.skc_state != TcpState::SynSent as u8 {
+        return Err(888);
+    }
+    let key = tcp_key_from_sk_comm(sk_comm);
+
+    info!(
+        ctx,
+        "after hash; getting key {}:{} {}:{} for state CLOSE->SYNSENT",
+        key.saddr,
+        key.sport,
+        key.vaddr,
+        key.vport,
+    );
+    0
+}
+```
+and we get
+
+```text
+getting key 192.168.0.185:0 1.2.3.4:80 for state Close->SynSent
+Ignoring TCP conn not going to IPVS
+after hash; getting key 192.168.0.185:37862 1.2.3.4:20480 for state CLOSE->SYNSENT
+IPVS mapping inserted 192.168.0.185:37862 1.2.3.4:80
+getting key 192.168.0.185:37862 1.2.3.4:80 for state SynSent->Close
+TCP connection 192.168.0.185:37862->1.2.3.4:80 (real 192.168.2.100:80) changed state SynSent->Close
+```
+
+so, we now can get the `Close->SynSent` event with a source port, but it still happens _before_ the backend selection
+
+we can only use this event for timing information on further events
+
+
+## NEXT -> send events to userspace
+## THEN -> identify local close and remote close via rcv_reset
+## THEN -> find timeout before they happen with retrans
+--- 
+crux of the ebpf impl, svc being Option is because the trace of `inet_sock_set_state` happens _before_ a source port is assigned!
 this _sucks_.. but.. we can cheat a little bit, by tracing _any function_ that receives a useful context, while the tcp lock is held,
 we can get access to the late-initialized sourceport; in this case, `tcp_connect` is a perfect function for that.
 
