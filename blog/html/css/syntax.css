@@ -73,4 +73,6 @@
 .nv { color: #5957fc } /* Name.Variable */
 .no { color: #a80000 } /* Name.Constant */
 .kt { color: #FFD1DC } /* Keyword.Type */
+.gd { color: #FF6961 }  /* Generic.Deleted */
+.gi { color: #77DD77 }  /* Generic.Inserted */
 }

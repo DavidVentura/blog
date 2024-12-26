@@ -196,19 +196,17 @@ TCP connection 192.168.2.144:39040->1.2.3.4:80 changed state SynSent    -> Estab
 TCP connection 192.168.2.144:39040->1.2.3.4:80 changed state Established-> FinWait1
 TCP connection 192.168.2.144:39040->1.2.3.4:80 changed state FinWait1   -> FinWait2
 TCP connection 192.168.2.144:39040->1.2.3.4:80 changed state FinWait2   -> Close
-
 ```
+Huh.. we see the virtual IP, not the real ip here, I guess that makes sense -- the 
+destination IP will be rewritten without the TCP layer being aware.
 
-Let's now add a "bad" backend to the service (there's nothing listening on that address):
+Let's now test with a "bad" backend on the service (there's nothing listening on that address):
 ```bash
 $ ipvsadm -a --tcp-service 1.2.3.4:80 -r 192.168.2.100 -m
-```
-
-When we run `curl` again, we see a failed connection.. but, to which backend?
-```text
 TCP connection 192.168.2.144:0    ->1.2.3.4:80 changed state Close   -> SynSent           
 TCP connection 192.168.2.144:57478->1.2.3.4:80 changed state SynSent -> Close
 ```
+We see the failed connection.. but, to which backend?
 
 We somehow need to enrich the TCP state transition data with IPVS data, so let's look at IPVS events:
 
@@ -216,7 +214,7 @@ We somehow need to enrich the TCP state transition data with IPVS data, so let's
 
 In `ip_vs_conn_new`, we get an [ip\_vs\_conn\_param](), a destination address ([nf\_inet\_addr]()) and a destination port
 
-Let's also hook into it and see what we get
+Let's hook into it and see what we get
 
 ```rust
 pub struct IpvsParam {
@@ -243,7 +241,7 @@ pub fn ip_vs_conn_new(ctx: ProbeContext) -> u32 {
 }
 ```
 
-If we trace a connection again, we get lucky and hit a good backend:
+If we trace a connection again, we may get lucky and hit the good backend:
 ```text
 TCP  connection 192.168.2.144:0->1.2.3.4:80 changed state Close->SynSent
 
@@ -254,7 +252,8 @@ TCP  connection 192.168.2.144:39634->1.2.3.4:80 changed state Established->FinWa
 TCP  connection 192.168.2.144:39634->1.2.3.4:80 changed state FinWait1->FinWait2
 TCP  connection 192.168.2.144:39634->1.2.3.4:80 changed state FinWait2->Close
 ```
-But after a little bit, we try again and we hit the bad backend:
+
+Or we may be a little less lucky and we hit the bad backend:
 ```text
 TCP  connection 192.168.2.144:0->1.2.3.4:80 changed state Close->SynSent
 
@@ -263,11 +262,9 @@ IPVS connection 192.168.2.144:49512 -> virtual=1.2.3.4:80 real=192.168.2.100:80
 TCP  connection 192.168.2.144:49512->1.2.3.4:80 changed state SynSent->Close
 ```
 
-This is all the information we need, now we just need to put it together:
+This is all the information we need for basic analysis, now we just need to put it together:
 
-As this event happens _before_ the TCP connection is started, we can save this data, to later look it up during TCP events;
-
-during the socket state transition we have a 5-tuple that identifies the connection:
+during the socket state transition we have the 5-tuple that identifies the connection:
 
 ```
 (proto, source addr, source port, dest addr, dest port)
@@ -275,7 +272,8 @@ during the socket state transition we have a 5-tuple that identifies the connect
 
 and during the IPVS events we have that, _plus_ the real address and port
 
-We will need to split the IpvsParam into two parts, which we can use in a hashmap, first, a key:
+We will need to split the `IpvsParam` into two parts, which we can use in a hashmap, first, a key:
+
 ```rust
 struct TcpKey {
     saddr: IpAddr, // TCP source address
@@ -293,46 +291,130 @@ pub struct IpvsDest {
 }
 ```
 
+and we can update `TcpSocketEvent` to use the `TcpKey`:
+```rust
+pub struct TcpSocketEvent {
+    pub oldstate: TcpState,
+    pub newstate: TcpState,
+    pub key: TcpKey,
+}
+```
+
+Then we declare the actual [HashMap](https://docs.rs/aya/latest/aya/maps/hash_map/struct.HashMap.html),
+ which could be shared with userspace, but I don't think we need to do that.
+
 ```rust
 #[map]
 static IPVS_TCP_MAP: HashMap<TcpKey, IpvsDest> = HashMap::with_max_entries(1024, 0);
 ```
 
+
+To keep state between the `ip_vs_conn_new` call and the followup `inet_sock_set_state` calls, we can 
+insert the data during `ip_vs_conn_new`:
+```rust
+IPVS_TCP_MAP.insert(key, value, 0).unwrap()
 ```
+
+and read it back during `inet_sock_set_state`:
+```rust
+let key: TcpKey = make_key_from_raw(&ctx, evt);
+let ipvs_data: Option<IpvsDest> = IPVS_TCP_MAP.get(&key);
+```
+
+or.. can we? The verifier was _not_ happy about this change:
+
+```text
 Error: the BPF_PROG_LOAD syscall failed. Verifier output: last insn is not an exit or jmp
 verification time 9 usec
 processed 0 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
 ```
-wat
-turns out if you
-```
-IPVS_TCP_MAP.insert(key, value, 0).unwrap()
-```
-can be fixed with
-```
-IPVS_TCP_MAP.insert(key, value, 0).is_ok()
+
+turns out that calling `unwrap()`, even though in runtime it's never called, is not fine, a simple change of
+
+```diff
+-IPVS_TCP_MAP.insert(key, value, 0).unwrap()
++IPVS_TCP_MAP.insert(key, value, 0).is_ok()
 ```
 
-```
-getting key 192.168.0.185:0 1.2.3.4:80 for state Close->SynSent
-Ignoring TCP conn not going to IPVS
+fixes the issue.
+
+
+If we observe the events now, we can see the real IP after the connection is established
+```bash
+TCP connection 192.168.0.185:55264->1.2.3.4:80 (real unknown)          changed state Close->SynSent
 IPVS mapping inserted 192.168.0.185:55264 1.2.3.4:80
-getting key 192.168.0.185:55264 1.2.3.4:80 for state SynSent->Established
 TCP connection 192.168.0.185:55264->1.2.3.4:80 (real 93.184.215.14:80) changed state SynSent->Established
-getting key 192.168.0.185:55264 1.2.3.4:80 for state Established->FinWait1
 TCP connection 192.168.0.185:55264->1.2.3.4:80 (real 93.184.215.14:80) changed state Established->FinWait1
-getting key 192.168.0.185:55264 1.2.3.4:80 for state FinWait1->FinWait2
 TCP connection 192.168.0.185:55264->1.2.3.4:80 (real 93.184.215.14:80) changed state FinWait1->FinWait2
-getting key 192.168.0.185:55264 1.2.3.4:80 for state FinWait2->Close
 TCP connection 192.168.0.185:55264->1.2.3.4:80 (real 93.184.215.14:80) changed state FinWait2->Close
 ```
 
+It now looks a lot more promising
 
-now, we have access to this hashmap during the TCP state transitions, and it now looks a lot more promising
+## Passing data to userspace
+
+so far we've been printing events to stdout, but that's not too useful, we want to apply some logic and take action based on these events, so we need to send them to userspace
+
+`aya` makes this extremely easy, by providing a [PerfEventArray](), we can pass data to userspace through a per-cpu ring buffer
+
+```rust
+#[map]
+static mut TCP_EVENTS: PerfEventArray<TcpSocketEvent> = PerfEventArray::new(0);
+
+fn push_tcp_event<C: EbpfContext>(ctx: &C, evt: &TcpSocketEvent) {
+    unsafe {
+        #[allow(static_mut_refs)]
+        TCP_EVENTS.output(ctx, evt, 0);
+    }
+}
+```
+
+In `inet_sock_set_state` and `tcp_connect` we were logging the TCP events, we now construct a `TcpSocketEvent` instance and push it through the perf buffer
+```rust
+let ev = TcpSocketEvent {
+  // ...
+};
+push_tcp_event(ctx, &ev);
+```
+
+in `tcp_connect` we have a bit of a special case -- we don't receive the old and new states, but by definition they **must** be `Close` and `SynSent` respectively.
+
+After setting this up, along with an async poller for the buffer (see [repo]() for details), we can
+Log the results _in userspace_:
+
+```rust
+let mut rx = watch_tcp_events(events).await.unwrap();
+for ev in rx.recv() {
+    println!("got ev {ev:?}");
+}
+```
+
+```text
+got ev Some(TcpSocketEvent { oldstate: Close      , newstate: SynSent    , src: 192.168.0.185, sport:     0, dst: 1.2.3.4, dport: 80 })
+got ev Some(TcpSocketEvent { oldstate: SynSent    , newstate: Established, src: 192.168.0.185, sport: 46780, dst: 1.2.3.4, dport: 80 })
+got ev Some(TcpSocketEvent { oldstate: Established, newstate: FinWait1   , src: 192.168.0.185, sport: 46780, dst: 1.2.3.4, dport: 80 })
+got ev Some(TcpSocketEvent { oldstate: FinWait1   , newstate: FinWait2   , src: 192.168.0.185, sport: 46780, dst: 1.2.3.4, dport: 80 })
+got ev Some(TcpSocketEvent { oldstate: FinWait2   , newstate: Close      , src: 192.168.0.185, sport: 46780, dst: 1.2.3.4, dport: 80 })
+```
+
+which is great, but we didn't yet define the IPVS side of the data on `TcpSocketEvent`
+
+## THEN -> pass also the Option<Service>
+
+```text
+got ev Some(TcpSocketEvent { oldstate: Close, newstate: SynSent, src: 192.168.0.185, sport: 0, dst: 1.2.3.4, dport: 80, ipvs_dest: None })
+got ev Some(TcpSocketEvent { oldstate: SynSent, newstate: Established, src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 93.184.215.14, dport: 80 }) })
+got ev Some(TcpSocketEvent { oldstate: Established, newstate: FinWait1, src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 93.184.215.14, dport: 80 }) })
+got ev Some(TcpSocketEvent { oldstate: FinWait1, newstate: FinWait2, src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 93.184.215.14, dport: 80 }) })
+got ev Some(TcpSocketEvent { oldstate: FinWait2, newstate: Close, src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 93.184.215.14, dport: 80 }) })
+```
+
+## Enrich the 'open' event
 
 BUT! you can see that the first state transition does not get the IPVS data, there are two important aspects:
 - the `Close->SynSent` event, _for some reason_, is triggered BEFORE the source port assignment; why?? it's CLEARLY not sent a SYN packet with source port =0.
-- the state transition is triggered BEFORE the backend selection, which again, makes no sense, how do you send a SYN packet when you don't know the real address??
+- the state transition is triggered BEFORE the backend selection, which makes _some_ sense 
+    - the syn packet is not actually sent, but the backend will only be chosen once a connection establishment is attempted
 
 there's this comment that states this is intended
 
@@ -378,16 +460,14 @@ pub fn tcp_connect(ctx: ProbeContext) -> u32 {
     info!(
         ctx,
         "after hash; getting key {}:{} {}:{} for state CLOSE->SYNSENT",
-        key.saddr,
-        key.sport,
-        key.vaddr,
-        key.vport,
+        key.saddr, key.sport, key.vaddr, key.vport,
     );
     0
 }
 ```
 and we get
 
+FIXME logs
 ```text
 getting key 192.168.0.185:0 1.2.3.4:80 for state Close->SynSent
 Ignoring TCP conn not going to IPVS
@@ -401,45 +481,6 @@ so, we now can get the `Close->SynSent` event with a source port, but it still h
 
 we can only use this event for timing information on further events
 
-so far we've been printing events to stdout, but that's not too useful, we want to apply some logic and take action based on these events, so we need to send them to userspace
-
-aya makes this extremely easy --
-
-
-
-## NEXT -> send events to userspace
-```rust
-fn push_tcp_event<C: EbpfContext>(ctx: &C, evt: &TcpSocketEvent) {
-    unsafe {
-        #[allow(static_mut_refs)]
-        TCP_EVENTS.output(ctx, evt, 0);
-    }
-}
-```
-
-In `blah` and `blah` we were logging the TCP events, we now construct a `TcpSocketEvent` instance and push it through the perf buffer
-```rust
-let ev = TcpSocketEvent {
-  // ...
-};
-push_tcp_event(ctx, &ev);
-```
-
-in `tcp_connect` we have a bit of a special case -- we don't receive the old and new states, but by definition they **must** be `Close` and `SynSent` respectively.
-
-Log the results _in userspace_:
-
-```
-got ev Some(TcpSocketEvent { oldstate: Close      , newstate: SynSent    , src: 192.168.0.185, sport: 46780, dst: 1.2.3.4, dport: 80 })
-got ev Some(TcpSocketEvent { oldstate: SynSent    , newstate: Established, src: 192.168.0.185, sport: 46780, dst: 1.2.3.4, dport: 80 })
-got ev Some(TcpSocketEvent { oldstate: Established, newstate: FinWait1   , src: 192.168.0.185, sport: 46780, dst: 1.2.3.4, dport: 80 })
-got ev Some(TcpSocketEvent { oldstate: FinWait1   , newstate: FinWait2   , src: 192.168.0.185, sport: 46780, dst: 1.2.3.4, dport: 80 })
-got ev Some(TcpSocketEvent { oldstate: FinWait2   , newstate: Close      , src: 192.168.0.185, sport: 46780, dst: 1.2.3.4, dport: 80 })
-```
-
-which is great, but we didn't yet define the IPVS side of the data on `TcpSocketEvent`
-
-## THEN -> pass also the Option<Service>
 
 ## THEN -> identify local close and remote close via rcv_reset
 ## THEN -> find timeout before they happen with retrans

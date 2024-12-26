@@ -21,5 +21,5 @@ echo 'watching...'
 while true; do
 	inotifywait -q -e MODIFY $DIR_TO_WATCH $DIR_TO_WATCH/assets/*.drawio generate.py
 	venv/bin/python generate.py dev $FILTER
-	sleep 0.1
+	sleep 0.3 || break
 done

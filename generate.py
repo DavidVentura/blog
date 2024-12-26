@@ -655,4 +655,4 @@ if __name__ == '__main__':
         for tag in tags:
             generate_tag_index(tag)
         generate_sitemap(tags)
-        generate_index()
+    generate_index()
