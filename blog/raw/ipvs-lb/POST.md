@@ -541,6 +541,8 @@ At the beginning, we configured the IPVS service with two addresses, one of whic
 
 If we try to connect and trace the events, this is what we get:
 
+FIXME not 3 seconds but 135
+
 ```rust
 23:25:51 TcpSocketEvent { oldstate: Close,   newstate: SynSent, /* ... */ }
 23:25:54 TcpSocketEvent { oldstate: SynSent, newstate: Close,
@@ -558,73 +560,59 @@ We could track at which time the connection opened and whether there were no sta
 
 Or!
 
-We could actually track the packet retransmits and mark the backend as unhealthy _before the timeout_. In this case, `curl` has good defaults (3 second timeout for a connection) but a lot of software _doesn't_, and it may hang forever.
+We could actually track the packet retransmits and mark the backend as unhealthy _before the timeout_, as a lot of software will just hang forever.
 
-
-## THEN -> identify local close and remote close via rcv_reset
-
---- 
-crux of the ebpf impl, svc being Option is because the trace of `inet_sock_set_state` happens _before_ a source port is assigned!
-this _sucks_.. but.. we can cheat a little bit, by tracing _any function_ that receives a useful context, while the tcp lock is held,
-we can get access to the late-initialized sourceport; in this case, `tcp_connect` is a perfect function for that.
-
-
-So, in summary, if we trace the IPVS connection establishment, we can enrich further TCP socket transitions with the IPVS Destination (instead of just Service address)
-
-And, if we can push TCP state changes with Service+Destinations to userspace, we can decide what to do.
-
-Something like this
+The implementation closely follows the previous ones,
 ```rust
-info!("Waiting for Ctrl-C...");
-let mut watcher = ConnectionWatcher::new()?;
-let mut rx = watcher.get_events().await?;
-while let Some(i) = rx.recv().await {
-    println!("{:?} = {:?}", i, i.interpret());
+#[tracepoint]
+pub fn tcp_retransmit_skb(ctx: TracePointContext) -> Result<i64> {
+    let evt_ptr = ctx.as_ptr() as *const trace_event_raw_tcp_event_sk_skb;
+    let evt = unsafe { evt_ptr.as_ref().ok_or(1i64)? };
+    let state: TcpState = evt.state.into();
+    // We only care about connection opening, to detect timeouts
+    if let TcpState::SynSent = state {
+        let key = tcp_key_from_sk_skb(evt);
+        let v = unsafe { IPVS_TCP_MAP.get(&key) }.copied();
+        if v.is_none() {
+            // Not IPVS related, we don't care
+            return Ok(0);
+        }
+        let evt = TcpSocketEvent {
+            oldstate: TcpState::SynSent,
+            newstate: TcpState::SynSent,
+            // ...
+        };
+        push_tcp_event(ctx, &evt);
+    }
+    Ok(0)
+    }
 }
-signal::ctrl_c().await?;
-info!("Exiting...");
 ```
 
+There is only one interesting thing here, we do not care about the retransmits for any connection which is not in `SynSent` state, those connections are already established -- maybe we _could_ care, in a way, to detect hosts going offline, but it's not necessary for now.
 
-TODO: client side vs server side interrupt, by tcp_receive_reset
 
-which has all the upsides of the userspace connection proxy, and none of the downsides (beyond any sanity lost while trying to coerce `aya` + the eBPF verifier into letting me access valid pointers)
+```bash
+$ curl 1.2.3.4
+00:26:11 TcpSocketEvent { oldstate: Close,   newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: None }
+00:26:12 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: None }
+...
+00:27:19 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: None }
+00:28:27 TcpSocketEvent { oldstate: SynSent, newstate: Close,   src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 80 }) }
 
-### On `kprobe`s and testing
+curl: (28) Failed to connect to 1.2.3.4 port 80 after 135807 ms: Couldn't connect to server
+```
+
+## But, who closed the connection?
+
+As the last item, we want to find out which side closes the connection -- if the _client_ closes the connection, we do not want to mark the backend as unhealthy!
+
+TODO: `tcp_rcv_reset`
+
+## On `kprobe`s and testing
 <small>
 Aside: Using a `kprobe` is not ideal, because tracepoints are stable interfaces and maintained by the kernel developers, while kprobes are "probing points" which we can use, but there are no stability guarantees.
 No stability guarantees across kernel versions means that we get to add integration testing for each supported version
 
 TODO maybe use this as a footnote for firetest.
 </small>
-
-
----
-
-This precludes having a static set of proxies, as the location may be a problem
-
-Client [France] -> Proxy [Lithuania] -> Server [France] 
-
-would be a problem
-
-we want to minimize latency, hops, and single points of failure.
-
-The solution I "came up with" is to mimic the `Service` concept in Kubernetes, which boils down to: have dedicated "virtual" IPs, which point to the "correct" backend for every client
-
-To make networking simple, these IPs are never actually used as destinations over the wire, instead, the packets are rewritten before leaving the "Client" machine.
-
-This is done with IPVS (explanation), which can rewrite destination addresses before they leave the wire
-
-```
-ipvsadm something add
-```
-
-## Compared to alternatives
-
-Centralized proxy:
-* :X:
-
-
-
-## Downsides
-- Every **Client** needs to have the IPVS daemon
