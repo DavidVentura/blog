@@ -81,8 +81,8 @@ Can we do better?
 
 On the previous example, the proxy software _could_ have issues which would impact the data plane, and we should avoid that if possible.
 
-What we can do instead, is move the "proxying" of the data to kernelspace, by using [IPVS (IP Virtual Server)](), which is a Linux feature
-that allows for [Layer-4]() (so, TCP and UDP) "load balancing"
+What we can do instead, is move the "proxying" of the data to kernelspace, by using [IPVS (IP Virtual Server)](http://www.linuxvirtualserver.org/software/ipvs.html), which is a Linux feature
+that allows for [Layer-4](https://en.wikipedia.org/wiki/Transport_layer) (so, TCP and UDP) "load balancing"
 
 The way IPVS works is by rewriting destinations on IP packets before they are sent to the network.
 
@@ -100,7 +100,7 @@ For example, "Service1" can be defined as:
     - Real IP: 4.4.4.4; Port: 8888
 
 
-The IPVS rule definitions are kernel datastructures, these can be updated via [netlink](); to do so, we need a userspace component
+The IPVS rule definitions are kernel datastructures, these can be updated via [netlink](https://docs.kernel.org/userspace-api/netlink/intro.html); to do so, we need a userspace component
 (eg: `ipvsadm`) but this component is _specifically_ constrained to the control plane.
 
 The main advantage over the userspace proxy is that there's no "software to upgrade or restart" (well, the kernel, but those upgrades are disruptive anyway)
@@ -132,7 +132,7 @@ async fn handle_events(mut events: EventStream) {
 
 So.. let's build it!
 
-For this project, we'll be using [Aya](), which is a library that simplifies writing eBPF code in Rust.
+For this project, we'll be using [Aya](https://aya-rs.dev/), which is a library that simplifies writing eBPF code in Rust.
 
 <small> All the examples in this post are summarized, the repo is [here](https://github.com/DavidVentura/ipvs-tcp-from-scratch).</small>
 
@@ -395,7 +395,7 @@ This information starts looking useful
 
 so far we've been printing events to stdout, but that's not too useful, we want to apply some logic and take action based on these events, so we need to send them to userspace
 
-`aya` makes this extremely easy, by providing a [PerfEventArray](), we can pass data to userspace through a per-cpu ring buffer
+`aya` makes this extremely easy, by providing a [PerfEventArray](https://docs.rs/aya/latest/aya/maps/perf/struct.PerfEventArray.html), we can pass data to userspace through a per-cpu ring buffer
 
 ```rust
 #[map]
@@ -594,25 +594,152 @@ There is only one interesting thing here, we do not care about the retransmits f
 
 ```bash
 $ curl 1.2.3.4
-00:26:11 TcpSocketEvent { oldstate: Close,   newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: None }
-00:26:12 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: None }
+00:26:11 TcpSocketEvent { oldstate: Close,   newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 80 }) }
+00:26:12 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 80 }) }
+00:26:13 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 80 }) }
 ...
-00:27:19 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: None }
+00:27:19 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 80 }) }
 00:28:27 TcpSocketEvent { oldstate: SynSent, newstate: Close,   src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 80 }) }
 
 curl: (28) Failed to connect to 1.2.3.4 port 80 after 135807 ms: Couldn't connect to server
 ```
 
+I think tracing retransmits has the _potential_ to cause some performance degradation, but I'm not sure how to measure it. On most cases, we either do 1 if (state == `SynSent`) or 1 if and a hash lookup.
+
 ## But, who closed the connection?
 
-As the last item, we want to find out which side closes the connection -- if the _client_ closes the connection, we do not want to mark the backend as unhealthy!
+As the last item, we want to clarify a bit of an edge-case: the distinction between a client that gives up before the connection is established, and a client getting a connection refused.
 
-TODO: `tcp_rcv_reset`
+In the connection refused case:
+```text
+14:15:58 TcpSocketEvent { oldstate: Close, newstate: SynSent, ... }
+14:15:58 TcpSocketEvent { oldstate: SynSent, newstate: Close, ... }
+```
+
+In the "give up" case:
+```text
+14:15:49 TcpSocketEvent { oldstate: Close,   newstate: SynSent, ... }
+14:15:50 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, ... }
+14:15:51 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, ... }
+14:15:53 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, ... }
+14:15:53 TcpSocketEvent { oldstate: SynSent, newstate: Close,   ... }
+```
+
+The client gave up after 4 seconds, apart from timing, we can't tell these apart -- if the client would give up in less than 1 second (the default TCP retransmit window in linux), we would not see the retransmit events.
+
+To differentiate between these, we can hook into the path that processes a `RST` from the remote: the `tcp_receive_reset` tracepoint.
+
+```rust
+#[tracepoint]
+pub fn tcp_receive_reset(ctx: TracePointContext) -> i64 {
+    let evt_ptr = ctx.as_ptr() as *const trace_event_raw_tcp_event_sk;
+    let evt = unsafe { evt_ptr.as_ref().ok_or(1i64)? };
+    let key = tcp_key_from_raw_tcp_event_sk(&evt);
+    let v = unsafe { IPVS_TCP_MAP.get(&key) }.copied();
+    if v.is_none() {
+        return Ok(0);
+    }
+    let mut v = v.unwrap();
+    v.received_rst = true;
+    if IPVS_TCP_MAP.insert(&key, &v, 0).is_err() {
+        info!(ctx, "Failed to insert key");
+        return Err(1);
+    }
+    Ok(0)
+}
+```
+
+Comparing to the previous examples, the close transition:
+```rust
+TcpSocketEvent { oldstate: SynSent, newstate: Close, ...,
+                 ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 1234, received_rst: false }) }
+```
+and 
+```rust
+TcpSocketEvent { oldstate: SynSent, newstate: Close, ...,
+                 ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 1234, received_rst: true }) }
+```
 
 ## On `kprobe`s and testing
-<small>
-Aside: Using a `kprobe` is not ideal, because tracepoints are stable interfaces and maintained by the kernel developers, while kprobes are "probing points" which we can use, but there are no stability guarantees.
-No stability guarantees across kernel versions means that we get to add integration testing for each supported version
+I had some reservations before when using a `kprobe`, this is because there are no stability guarantees for them, in contrast to tracepoints, which are stable interfaces and maintained by the kernel developers.
 
-TODO maybe use this as a footnote for firetest.
-</small>
+As we have no stability guarantees across kernel versions, _we_ need to provide them, so we get to add integration testing for each supported version
+
+I've [written](https://blog.davidv.dev/posts/abusing-firecracker/#running-tests) a little bit about [firetest](https://github.com/DavidVentura/firetest) before, and now is a great time to put it in use:
+
+We can write a.. rather involved test to validate the expected behavior, let's walk through it:
+
+```rust
+#[tokio::test]
+async fn trace_ipvs_connection_accepted() {
+    let conf = setup_ipvs();
+    setup_tcp_test(
+        Some(conf.accept_port_dest),
+        Some(conf.accept_port),
+        |mut rx, server_addr| async move {
+```
+We first set up some necessary IPVS rules, which have 3 services: `Accept`, `Drop`, `Refuse`, to test different scenarios; then during `setup_tcp_test` we create a TCP server & client, the client immediately connects to the server through IPVS.
+
+```rust
+            let event = rx.recv().await.unwrap();
+            assert_eq!(event.oldstate, TcpState::Close);
+            assert_eq!(event.newstate, TcpState::SynSent);
+            assert_eq!(event.dport, conf.accept_port); // Destination port, as seen by the client
+
+            // On TCP Open we don't know what service it will map to yet
+            assert_eq!(event.svc, None);
+            assert_eq!(event.interpret(), Some(Event::Open));
+```
+We received the first event, which is the `Close->SynSent` transition, we can interpret this event as `Open`ing the connection.
+
+```rust
+            let event = rx.recv().await.unwrap();
+            assert_eq!(event.oldstate, TcpState::SynSent);
+            assert_eq!(event.newstate, TcpState::Established);
+            assert_eq!(event.dport, conf.accept_port); // Destination port, as seen by the client
+
+            // When the connection is Established, we know it maps to the actual destination port
+            assert!(event.svc.is_some());
+            let svc = event.svc.unwrap();
+            assert_eq!(svc.dport, conf.accept_port_dest);
+            assert_eq!(svc.dport, server_addr.port());
+            assert_eq!(svc.received_rst, false);
+            assert_eq!(event.interpret(), None);
+```
+We received the second event, the connection is now `Established` and we can peek into the IPVS data. Interpreting this event yields nothing.
+
+```rust
+            // client closes connection
+            let event = rx.recv().await.unwrap();
+            assert_eq!(event.oldstate, TcpState::Established);
+            assert_eq!(event.newstate, TcpState::CloseWait);
+        },
+    )
+    .await
+    .unwrap();
+}
+```
+
+Finally, we get the last event, which marks the connection as closed from the server side.
+
+Running the test, it will spawn a virtual machine and run the binary inside:
+```bash
+$ cargo test --config 'target."cfg(all())".runner="firetest"
+running 4 tests
+test trace_direct_connection ... ok
+test trace_ipvs_connection_accepted ... ok
+test trace_ipvs_connection_not_responding ... ok
+test trace_ipvs_connection_refused ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.54s
+```
+
+This way we can validate the IPVS setup, connections, etc, without mucking around with the runner machine (though we do need to be in the `kvm` group).
+
+---
+
+References:
+1. [eBPF docs](https://docs.ebpf.io/)
+1. [Aya docs](https://aya-rs.dev/book/programs/probes)
+1. [Aya crate docs](https://docs.rs/aya/latest/aya)
+1. [TCP Tracepoints](https://www.brendangregg.com/blog/2018-03-22/tcp-tracepoints.html)
