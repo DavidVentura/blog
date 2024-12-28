@@ -142,7 +142,7 @@ Linux (none) 6.7.3 #225 Mon Sep 30 07:41:27 UTC 2024 x86_64 GNU/Linux
 ```
 A more interesting example, running `cargo test` (the resulting binaries) in these VMs:
 
-```
+```text
 $ ./firetest target/x86_64-unknown-linux-musl/debug/deps/integration_test-8b86d294da2872d3
 running 4 tests
 test trace_direct_connection ... ok

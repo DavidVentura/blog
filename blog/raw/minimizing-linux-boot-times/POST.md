@@ -83,7 +83,7 @@ Kernel panic - not syncing: Requested init /goinit failed (error ENOEXEC).
 ```
 
 The file itself had the executable bit set in the filesystem, so it must be something else; after enabling `CONFIG_IA32_EMULATION` I got a "way better" result:
-```
+```text
 futexwakeup addr=0x815ba50 returned -38
 SIGSEGV: segmentation violation
 PC=0x8077e12 m=2 sigcode=1
@@ -114,7 +114,7 @@ It turns out that the `futex` syscall is gated behind `CONFIG_COMPAT_32BIT_TIME`
 
 After re-enabling `CONFIG_COMPAT_32BIT_TIME`, the Go program works
 
-```
+```text
 [    0.004453] EXT4-fs (vda): write access unavailable, skipping orphan cleanup
 Hello Go!
 [    0.005732] Kernel panic - not syncing: Attempted to kill init! exitcode=0x00000500
@@ -131,7 +131,7 @@ ip=172.16.0.2::172.16.0.1:255.255.255.0:hostname:eth0:off
 ``` 
 
 It's alive!
-```
+```text
 $ bash start-vm.sh 
 $ ping 172.16.0.2
 PING 172.16.0.2 (172.16.0.2) 56(84) bytes of data.
