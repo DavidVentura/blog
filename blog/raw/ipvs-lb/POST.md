@@ -148,7 +148,13 @@ which is triggered every time a TCP connection changes state.
 First, we need to define `TcpSocketEvent` which will hold, you guessed it, socket data from the traced events.
 
 <div class="aside">
-As eBPF programs run within the kernel, we need to use <code>#![no_std]</code> to avoid using standard library features which aren't available in kernel space
+As eBPF programs run within the kernel, we can't rely on any kernel features (eg: memory allocation, filesystem access)
+and we can express this restriction by disabling the standard library with <code>#![no_std]</code>.
+
+<p>
+This doesn't mean that we can't use anything -- a significant amount of features do not require any of these features, and are
+implemented under `core`.
+</p>
 </div>
 
 
@@ -156,13 +162,16 @@ As eBPF programs run within the kernel, we need to use <code>#![no_std]</code> t
 #![no_std]
 use core::net::Ipv4Addr;
 
+pub enum TcpState {
+    Established = 1,
+    SynSent = 2,
+    // ...
+}
 pub struct TcpSocketEvent {
-    pub oldstate: TcpState, // Map TCP state definitions (1-12) to an enum
+    pub oldstate: TcpState,
     pub newstate: TcpState,
-    pub src: Ipv4Addr,
-    pub sport: u16,
-    pub dst: Ipv4Addr,
-    pub dport: u16,
+    pub src: SocketAddrV4,
+    pub dst: SocketAddrV4,
 }
 ```
 
@@ -171,28 +180,54 @@ To handle the tracepoint data nicely, we will cast the `TracePointContext` to a 
 ```rust
 #[tracepoint]
 pub fn inet_sock_set_state(ctx: TracePointContext) -> i64 {
-    let evt_ptr = ctx.as_ptr() as *const trace_event_raw_inet_sock_set_state;
-    let evt = unsafe { evt_ptr.as_ref().ok_or(1i64)? };
-    // Only interested in tracing TCP
-    if evt.protocol != IPPROTO_TCP {
-        return 0;
-    }
-    let ev: TcpSocketEvent = make_ev_from_raw(evt);
-    if let Some(ev) = make_ev_from_raw(&ctx, evt) {
+    if let Some(ev) = make_ev_from_raw(&ctx) {
         let os_name: &'static str = ev.oldstate.into();
         let ns_name: &'static str = ev.newstate.into();
         info!(
             &ctx,
             "TCP connection {}:{}->{}:{} changed state {}->{}",
-            ev.src, ev.sport, ev.dst, ev.dport, os_name, ns_name
+            *ev.src.ip(),
+            ev.src.port(),
+            *ev.dst.ip(),
+            ev.dst.port(),
+            os_name,
+            ns_name
         );
     }
     Ok(0)
 }
+fn make_ev_from_raw(ctx: &TracePointContext) -> Option<TcpSocketEvent> {
+    let evt_ptr = ctx.as_ptr() as *const trace_event_raw_inet_sock_set_state;
+    let evt = unsafe { evt_ptr.as_ref()? };
+    if evt.protocol != IPPROTO_TCP {
+        return None;
+    }
+    match evt.family {
+        AF_INET => Family::IPv4,
+        AF_INET6 => {
+            // not supporting IPv6 for now
+            return None;
+        }
+        other => {
+            info!(ctx, "unknown family {}", other);
+            return None;
+        }
+    };
+
+    let ev = TcpSocketEvent {
+        oldstate: evt.oldstate.into(),
+        newstate: evt.newstate.into(),
+        src: SocketAddrV4::new(evt.saddr.into(), evt.sport),
+        dst: SocketAddrV4::new(evt.daddr.into(), evt.dport),
+    };
+    Some(ev)
+}
 ```
 
-Which may look daunting, but most aya-based examples look like this one, for me the biggest hurdle was figuring out:
 
+Which may look daunting, but most aya-based examples look like this one, where we first convert the "raw" data from the kernel to a convenient struct while validating some preconditions (eg: IPv4, TCP), from that point, code is fairly straight forward.
+
+For me the biggest hurdle while getting started was figuring out:
 
 1. Which tracepoints are available?
   - You can list them at `/sys/kernel/debug/tracing/events`
@@ -200,6 +235,7 @@ Which may look daunting, but most aya-based examples look like this one, for me 
   - Reading kernel source, searching for `TRACE_EVENT(<tracepoint name>`
 1. How to generate bindings for the needed types?
   - `aya-tool generate <event>` will give you a Rust module, but you need to fiddle with the name (eg: prefix it with `trace_event_`)
+  - `bindgen` TODO
 
 
 On the userspace side, we need to connect our tracing function (`inet_sock_set_state`) to the kernel tracepoint,
@@ -278,12 +314,9 @@ Reading the `ip_vs_conn_new` source, we know that we get 3 parameters:
 Let's make a struct to hold the data
 ```rust
 pub struct IpvsParam {
-    saddr: Ipv4Addr, // TCP source address
-    sport: u16,      // TCP source port
-    vaddr: Ipv4Addr, // TCP dest address (virtual)
-    vport: u16,      // TCP dest port (virtual)
-    daddr: Ipv4Addr, // TCP dest address (real)
-    dport: u16,      // TCP dest port (real)
+    src: SocketAddrV4,
+    vdest: SocketAddrV4,
+    rdest: SocketAddrV4,
 }
 ```
 And hook into the function
@@ -297,9 +330,12 @@ pub fn ip_vs_conn_new(ctx: ProbeContext) -> u32 {
     info!(
         ctx,
         "{}:{} -> virtual={}:{} real={}:{}",
-        param.saddr, param.sport,
-        param.vaddr, param.vport,
-        param.daddr, param.dport
+        *param.src.ip(),
+        param.src.port(),
+        *param.vdest.ip(),
+        param.vdest.port(),
+        *param.rdest.ip(),
+        param.rdest.port()
     );
 }
 ```
@@ -344,24 +380,14 @@ which we can use to link both events together.
 
 Let's create the type to represent the connection identifier:
 
-TODO: use `SocketAddrV4` and define TcpKey as `source: SocketAddrV4, vdest: SocketAddrV4`, ditch IpvsDest.
-
 ```rust
 struct TcpKey {
-    saddr: IpAddr, // TCP source address
-    sport: u16,    // TCP source port
-    vaddr: IpAddr, // TCP dest address (virtual)
-    vport: u16,    // TCP dest port  (virtual)
+    src: SocketAddrV4,
+    dst: SocketAddrV4,
 }
 ```
 
-and define the destination tuple as its own type:
-```rust
-pub struct IpvsDest {
-    pub daddr: IpAddr,
-    pub dport: u16,
-}
-```
+we will represent the destination as `SocketAddrV4`.
 
 Now we can update our `TcpSocketEvent` to use the `TcpKey`:
 ```rust
@@ -372,7 +398,7 @@ pub struct TcpSocketEvent {
 }
 ```
 
-And we no longer need `IpvsParam`, as it can now be represented as a pair of `(TcpKey, IpvsDest)`.
+And we no longer need `IpvsParam`, as it can now be represented as a pair of `(TcpKey, SocketAddrV4)`.
 
 We can use `TcpKey` to link these events together by storing the backend information when IPVS makes a backend sleection,
 and look it up during subsequent TCP state changes.
@@ -382,7 +408,7 @@ First, we declare a special [HashMap](https://docs.rs/aya/latest/aya/maps/hash_m
 
 ```rust
 #[map]
-static IPVS_TCP_MAP: HashMap<TcpKey, IpvsDest> = HashMap::with_max_entries(1024, 0);
+static IPVS_TCP_MAP: HashMap<TcpKey, SocketAddrV4> = HashMap::with_max_entries(1024, 0);
 ```
 
 We store the backend selection during `ip_vs_conn_new`
@@ -393,12 +419,11 @@ IPVS_TCP_MAP.insert(key, value, 0).unwrap()
 and look it up during `inet_sock_set_state`:
 ```rust
 let key: TcpKey = make_key_from_raw(&ctx, evt);
-let ipvs_data: Option<IpvsDest> = IPVS_TCP_MAP.get(&key);
+let ipvs_data: Option<SocketAddrV4> = IPVS_TCP_MAP.get(&key);
 ```
 
 <div class="aside">
 or.. can we? The verifier was <i>not happy</i> about this change:
-
 ```text
 Error: the BPF_PROG_LOAD syscall failed. Verifier output: last insn is not an exit or jmp
 verification time 9 usec
@@ -414,13 +439,15 @@ A simple change of
 +IPVS_TCP_MAP.insert(key, value, 0).is_ok()
 ```
 
+<p>
 fixes the issue.
+</p>
 </div>
 
 
 If we observe the events now, we can see the real IP after the connection is established
 ```bash
-TCP connection 192.168.0.185:55264->1.2.3.4:80 (real unknown)          changed state Close->SynSent
+TCP connection 192.168.0.185:0    ->1.2.3.4:80 (real unknown)          changed state Close->SynSent
 IPVS mapping inserted 192.168.0.185:55264 1.2.3.4:80
 TCP connection 192.168.0.185:55264->1.2.3.4:80 (real 93.184.215.14:80) changed state SynSent->Established
 TCP connection 192.168.0.185:55264->1.2.3.4:80 (real 93.184.215.14:80) changed state Established->FinWait1
@@ -457,7 +484,7 @@ let ev = TcpSocketEvent {
 push_tcp_event(ctx, &ev);
 ```
 
-While we are doing this, we need to extend `TcpSocketEvent` with an `ipvs_dest: Option<IpvsDest>` field, which we can populate with the values we got from `IPVS_TCP_MAP`.
+While we are doing this, we need to extend `TcpSocketEvent` with an `ipvs_dest: Option<SocketAddrV4>` field, which we can populate with the values we got from `IPVS_TCP_MAP`.
 
 After setting this up, along with an async poller for the buffer (see [repo]() for details), we can... log the results? _but in userspace_!
 
@@ -468,12 +495,13 @@ for ev in rx.recv() {
 }
 ```
 
+FIXME TcpKey
 ```text
 got ev TcpSocketEvent { oldstate: Close,       newstate: SynSent,     src: 192.168.0.185, sport:     0, dst: 1.2.3.4, dport: 80, ipvs_dest: None }
-got ev TcpSocketEvent { oldstate: SynSent,     newstate: Established, src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 93.184.215.14, dport: 80 }) }
-got ev TcpSocketEvent { oldstate: Established, newstate: FinWait1,    src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 93.184.215.14, dport: 80 }) }
-got ev TcpSocketEvent { oldstate: FinWait1,    newstate: FinWait2,    src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 93.184.215.14, dport: 80 }) }
-got ev TcpSocketEvent { oldstate: FinWait2,    newstate: Close,       src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 93.184.215.14, dport: 80 }) }
+got ev TcpSocketEvent { oldstate: SynSent,     newstate: Established, src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 93.184.215.14, dport: 80 }) }
+got ev TcpSocketEvent { oldstate: Established, newstate: FinWait1,    src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 93.184.215.14, dport: 80 }) }
+got ev TcpSocketEvent { oldstate: FinWait1,    newstate: FinWait2,    src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 93.184.215.14, dport: 80 }) }
+got ev TcpSocketEvent { oldstate: FinWait2,    newstate: Close,       src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 93.184.215.14, dport: 80 }) }
 ```
 
 ## Enrich the 'open' event
@@ -500,7 +528,7 @@ by reading `tcp_v4_connect`, we can [see](https://github.com/torvalds/linux/blob
 - _After_ the call to `inet_hash_connect` (which assigns the source port, if necessary)
 - With the `struct sock*` as argument
 
-Which makes it a _perfect_ target for introspection! Well, almost, we still need to use `kprobe` as there is no tracepoint.
+Which makes it a _perfect_ target for introspection! Well, _almost perfect_ as we still need to use `kprobe` because there is no tracepoint.
 
 
 Tracing it is similar to what we've been doing so far
@@ -521,10 +549,7 @@ pub fn tcp_connect(ctx: ProbeContext) -> u32 {
     let ev = TcpSocketEvent {
         oldstate: TcpState::Close,
         newstate: TcpState::SynSent,
-        src: key.saddr,
-        sport: key.sport,
-        dst: key.vaddr,
-        dport: key.vport,
+        key,
         ipvs_dest: None,
     };
     push_tcp_event(ctx, &ev);
@@ -537,10 +562,7 @@ and we get
 got ev TcpSocketEvent {
     oldstate: Close,
     newstate: SynSent,
-    src: 192.168.2.144,
-    sport: 43920,
-    dst: 1.2.3.4,
-    dport: 80,
+    key: TcpKey { src: 1.2.3.4:37830, dst: 192.168.2.145:80 },
     ipvs_dest: None
 }
 ```
@@ -559,7 +581,7 @@ What happens when IPVS selects an unresponsive backend? If we try to connect and
 23:25:51 TcpSocketEvent { oldstate: Close,   newstate: SynSent, /* ... */ }
 23:28:06 TcpSocketEvent { oldstate: SynSent, newstate: Close,
                           /* ... */
-                          ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 80 }) }
+                          ipvs_dest: Some(SocketAddrV4 { daddr: 192.168.2.100, dport: 80 }) }
 ```
 
 There was no data transmitted for 135 seconds, after which, `curl` decided to close the connection:
@@ -574,7 +596,26 @@ Or!
 
 We could actually track the packet retransmits and mark the backend as unhealthy _before the timeout_, as a lot of software will just hang for unreasonable amounts of time.
 
-Linux provides the `tcp_retransmit_skb` tracepoint for this exact use case:
+First, we'll need to refactor `TcpSocketEvent` to account for events which are not just "TCP state changed":
+
+```diff
++pub enum Event {
++    StateChange { old: TcpState, new: TcpState },
++    ConnectRetrans,
++}
+ pub struct TcpSocketEvent {
+-    pub oldstate: TcpState,
+-    pub newstate: TcpState,
+     pub key: TcpKey,
++    pub event: Event,
+     pub ipvs_dest: Option<SocketAddrV4>,
+ }
+```
+
+FIXME phrasing
+
+Then, we can look at the actual tracing, and Linux provides the `tcp_retransmit_skb` tracepoint for this exact use case 
+
 ```rust
 #[tracepoint]
 pub fn tcp_retransmit_skb(ctx: TracePointContext) -> Result<i64> {
@@ -590,10 +631,9 @@ pub fn tcp_retransmit_skb(ctx: TracePointContext) -> Result<i64> {
             return Ok(0);
         }
         let evt = TcpSocketEvent {
-            oldstate: TcpState::SynSent,
-            newstate: TcpState::SynSent,
-            // Bit of a hack, maybe I should be using an enum for the events..
-            // ...
+            key,
+            event: Event::ConnectRetrans,
+            ipvs_dest: v,
         };
         push_tcp_event(ctx, &evt);
     }
@@ -602,18 +642,19 @@ pub fn tcp_retransmit_skb(ctx: TracePointContext) -> Result<i64> {
 }
 ```
 
-There is only one interesting thing here, we do not care about the retransmits for any connection which is not in `SynSent` state,
-those connections are already established -- maybe we _could_ care, in a way, to detect hosts going offline, but it's not necessary for now.
+There is only one interesting thing here: we only care about retransmits in `SynSent` state,
+other states mean that the connection is already established -- maybe we _could_ care, to detect hosts going offline, but it's not necessary for now.
 
 
+FIXME TcpKey
 ```bash
 $ curl 1.2.3.4
-00:26:11 TcpSocketEvent { oldstate: Close,   newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 80 }) }
-00:26:12 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 80 }) }
-00:26:13 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 80 }) }
+00:26:11 TcpSocketEvent { oldstate: Close,   newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 192.168.2.100, dport: 80 }) }
+00:26:12 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 192.168.2.100, dport: 80 }) }
+00:26:13 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 192.168.2.100, dport: 80 }) }
 ...
-00:27:19 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 80 }) }
-00:28:27 TcpSocketEvent { oldstate: SynSent, newstate: Close,   src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 80 }) }
+00:27:19 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 192.168.2.100, dport: 80 }) }
+00:28:27 TcpSocketEvent { oldstate: SynSent, newstate: Close,   src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 192.168.2.100, dport: 80 }) }
 
 curl: (28) Failed to connect to 1.2.3.4 port 80 after 135807 ms: Couldn't connect to server
 ```
@@ -632,11 +673,11 @@ In the connection refused case:
 
 In the "give up" case:
 ```text
-14:15:49 TcpSocketEvent { oldstate: Close,   newstate: SynSent, ... }
-14:15:50 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, ... } # Retransmit
-14:15:51 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, ... } # Retransmit
-14:15:53 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, ... } # Retransmit
-14:15:53 TcpSocketEvent { oldstate: SynSent, newstate: Close,   ... }
+14:15:49 TcpSocketEvent { event: StateChange { old: Close, new: SynSent }, ... }
+14:15:50 TcpSocketEvent { event: ConnectRetrans, ... }
+14:15:51 TcpSocketEvent { event: ConnectRetrans, ... }
+14:15:53 TcpSocketEvent { event: ConnectRetrans, ... }
+14:15:53 TcpSocketEvent { event: StateChange { old: Close, new: SynSent },  ... }
 ```
 
 While timing can help distinguish these cases (the refused connection fails immediately), this isn't reliable - if a client has a short timeout,
@@ -647,41 +688,40 @@ To differentiate between these, we can hook into the path that processes a `RST`
 ```rust
 #[tracepoint]
 pub fn tcp_receive_reset(ctx: TracePointContext) -> i64 {
-    let evt_ptr = ctx.as_ptr() as *const trace_event_raw_tcp_event_sk;
-    let evt = unsafe { evt_ptr.as_ref().ok_or(1i64)? };
-    let key = tcp_key_from_raw_tcp_event_sk(&evt);
-    let v = unsafe { IPVS_TCP_MAP.get(&key) }.copied();
-    if v.is_none() {
-        return Ok(0);
-    }
-    let mut v = v.unwrap();
-    v.received_rst = true;
-    if IPVS_TCP_MAP.insert(&key, &v, 0).is_err() {
-        info!(ctx, "Failed to insert key");
-        return Err(1);
+    if let Some(key) = tcp_key_from_raw_tcp_event_sk(ctx) {
+        let v = unsafe { IPVS_TCP_MAP.get(&key) }.copied();
+        if v.is_none() {
+            return Ok(0);
+        }
+        let ev = TcpSocketEvent {
+            key,
+            event: Event::ReceivedReset,
+            ipvs_dest: v,
+        };
+        push_tcp_event(ctx, &ev);
     }
     Ok(0)
 }
 ```
 
-Comparing to the previous examples, the close transition:
+Comparing to the previous examples, the client close event:
 ```rust
-TcpSocketEvent { oldstate: SynSent, newstate: Close, ...,
-                 ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 1234, received_rst: false }) }
+TcpSocketEvent { event: StateChange { old: SynSent, new: Close }, ... }
 ```
-and 
+and the server refused event
 ```rust
-TcpSocketEvent { oldstate: SynSent, newstate: Close, ...,
-                 ipvs_dest: Some(IpvsDest { daddr: 192.168.2.100, dport: 1234, received_rst: true }) }
+TcpSocketEvent { event: ReceivedReset, ... }
 ```
 
 ## On `kprobe`s and testing
 
 I had some reservations before when using `kprobe`s, as there are no stability guarantees for them,
-_we_ need to provide the guarantees! Meaning that we get to add integration testing for each supported version, yay.
+_we_ need to provide the guarantees! Meaning that we get to add integration testing for each supported kernel version, yay.
 
-I've [written](https://blog.davidv.dev/posts/abusing-firecracker/#running-tests) a little bit about [firetest](https://github.com/DavidVentura/firetest) (a tool to run a binary inside a vm)
+I've [written](https://blog.davidv.dev/posts/abusing-firecracker/#running-tests)[^firetest] a little bit about [firetest](https://github.com/DavidVentura/firetest) (a tool to run a binary inside a vm)
 before, and now is a great time to put it in use:
+
+[^firetest]: The examples are even the same! Just don't compare the publication dates.
 
 We can write a.. rather involved test to validate the expected behavior, let's walk through it:
 
