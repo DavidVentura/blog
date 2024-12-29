@@ -251,9 +251,7 @@ program.load()?;
 program.attach("sock", "inet_sock_set_state")?;
 ```
 
-
-
-If we run this program and perform a `curl`, we get a very nice output ([try it!](https://github.com/DavidVentura/ipvs-tcp-from-scratch/commit/0e14243fd98ccb05bacbdab7f0ad8261fa1f8d84)):
+If we run this program and perform a `curl`, we get a very nice output ([try it!](https://github.com/DavidVentura/ipvs-tcp-from-scratch/commit/177e4388e19ac163e63290126697a13c7498a41d)):
 ```bash
 $ tracer & curl -s example.com
 TCP connection 192.168.2.144:0    ->93.184.215.14:80 changed state Close      -> SynSent
@@ -486,7 +484,7 @@ push_tcp_event(ctx, &ev);
 
 While we are doing this, we need to extend `TcpSocketEvent` with an `ipvs_dest: Option<SocketAddrV4>` field, which we can populate with the values we got from `IPVS_TCP_MAP`.
 
-After setting this up, along with an async poller for the buffer (see [repo]() for details), we can... log the results? _but in userspace_!
+After setting this up, along with an async poller for the buffer (see [repo](https://github.com/DavidVentura/ipvs-tcp-from-scratch/commit/b0de4c4ede4faf08b30a86b3e8f5021097b2ebfd#diff-1456b484c642ad36a3582bc2542b90cfd63c111bf00489ecf63f685df7a81ae9R84) for details), we can... log the results? _but in userspace_!
 
 ```rust
 let mut rx = watch_tcp_events(events).await.unwrap();
