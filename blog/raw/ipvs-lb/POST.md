@@ -235,7 +235,7 @@ For me the biggest hurdle while getting started was figuring out:
   - Reading kernel source, searching for `TRACE_EVENT(<tracepoint name>`
 1. How to generate bindings for the needed types?
   - `aya-tool generate <event>` will give you a Rust module, but you need to fiddle with the name (eg: prefix it with `trace_event_`)
-  - `bindgen` TODO
+  - Some structs are not generated (`ip_vs_pe`, `ip_vs_conn_param`), so I used `bindgen`, with a _humongous_ generated header
 
 
 On the userspace side, we need to connect our tracing function (`inet_sock_set_state`) to the kernel tracepoint,
@@ -495,13 +495,12 @@ for ev in rx.recv() {
 }
 ```
 
-FIXME TcpKey
 ```text
-got ev TcpSocketEvent { oldstate: Close,       newstate: SynSent,     src: 192.168.0.185, sport:     0, dst: 1.2.3.4, dport: 80, ipvs_dest: None }
-got ev TcpSocketEvent { oldstate: SynSent,     newstate: Established, src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 93.184.215.14, dport: 80 }) }
-got ev TcpSocketEvent { oldstate: Established, newstate: FinWait1,    src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 93.184.215.14, dport: 80 }) }
-got ev TcpSocketEvent { oldstate: FinWait1,    newstate: FinWait2,    src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 93.184.215.14, dport: 80 }) }
-got ev TcpSocketEvent { oldstate: FinWait2,    newstate: Close,       src: 192.168.0.185, sport: 49622, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 93.184.215.14, dport: 80 }) }
+got ev TcpSocketEvent { oldstate: Close,       newstate: SynSent,     key: TcpKey { src: 192.168.2.145:0,     dst: 1.2.3.4:80 }, ipvs_dest: None }
+got ev TcpSocketEvent { oldstate: SynSent,     newstate: Established, key: TcpKey { src: 192.168.2.145:56078, dst: 1.2.3.4:80 }, ipvs_dest: Some(93.184.215.14:80) }
+got ev TcpSocketEvent { oldstate: Established, newstate: FinWait1,    key: TcpKey { src: 192.168.2.145:56078, dst: 1.2.3.4:80 }, ipvs_dest: Some(93.184.215.14:80) }
+got ev TcpSocketEvent { oldstate: FinWait1,    newstate: FinWait2,    key: TcpKey { src: 192.168.2.145:56078, dst: 1.2.3.4:80 }, ipvs_dest: Some(93.184.215.14:80) }
+got ev TcpSocketEvent { oldstate: FinWait2,    newstate: Close,       key: TcpKey { src: 192.168.2.145:56078, dst: 1.2.3.4:80 }, ipvs_dest: Some(93.184.215.14:80) }
 ```
 
 ## Enrich the 'open' event
@@ -646,15 +645,14 @@ There is only one interesting thing here: we only care about retransmits in `Syn
 other states mean that the connection is already established -- maybe we _could_ care, to detect hosts going offline, but it's not necessary for now.
 
 
-FIXME TcpKey
 ```bash
 $ curl 1.2.3.4
-00:26:11 TcpSocketEvent { oldstate: Close,   newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 192.168.2.100, dport: 80 }) }
-00:26:12 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 192.168.2.100, dport: 80 }) }
-00:26:13 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 192.168.2.100, dport: 80 }) }
-...
-00:27:19 TcpSocketEvent { oldstate: SynSent, newstate: SynSent, src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 192.168.2.100, dport: 80 }) }
-00:28:27 TcpSocketEvent { oldstate: SynSent, newstate: Close,   src: 192.168.2.144, sport: 60780, dst: 1.2.3.4, dport: 80, ipvs_dest: Some(SocketAddrV4 { daddr: 192.168.2.100, dport: 80 }) }
+00:26:11 TcpSocketEvent { key: TcpKey { dst: 192.168.2.145:43630, dst: 1.2.3.4:80 }, event: StateChange { old: Close, new: SynSent }, ipvs_dest: None }
+00:26:12 TcpSocketEvent { key: TcpKey { src: 192.168.2.145:43630, dst: 1.2.3.4:80 }, event: ConnectRetrans, ipvs_dest: Some(192.168.2.100:80) }
+00:26:13 TcpSocketEvent { key: TcpKey { src: 192.168.2.145:43630, dst: 1.2.3.4:80 }, event: ConnectRetrans, ipvs_dest: Some(192.168.2.100:80) }
+..
+00:27:19 TcpSocketEvent { key: TcpKey { src: 192.168.2.145:43630, dst: 1.2.3.4:80 }, event: ConnectRetrans, ipvs_dest: Some(192.168.2.100:80) }
+00:28:27 TcpSocketEvent { key: TcpKey { dst: 192.168.2.145:43630, dst: 1.2.3.4:80 }, event: StateChange { old: SynSent, new: Close }, ipvs_dest: Some(192.168.2.100:80) }
 
 curl: (28) Failed to connect to 1.2.3.4 port 80 after 135807 ms: Couldn't connect to server
 ```

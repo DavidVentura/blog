@@ -8,6 +8,17 @@ svg.logo-svg {
   html body {
     @apply bg-white dark:bg-gray-900;
   }
+  .aside {
+    @apply dark:bg-black/[.1] p-4 rounded border-2 border-dashed border-slate-500/[.2];
+  }
+  .aside, .aside p {
+    font-size: 0.8rem;
+    line-height: 1.2rem;
+  }
+  .aside::before {
+    content: "Aside";
+    @apply text-base font-bold block;
+  }
   .logo {
     @apply w-8 h-8 md:w-8 md:h-8 text-gray-950 dark:text-gray-200;
   }
@@ -75,7 +86,7 @@ svg.logo-svg {
   }
   #blogpost a, .webring a {
     @apply 
-    font-medium underline underline-offset-2 decoration-dotted decoration-gray-300 dark:decoration-gray-500
+    font-medium underline underline-offset-2 decoration-dotted decoration-gray-300 dark:no-underline
     text-blue-800 hover:text-blue-400 visited:text-blue-950
     dark:text-blue-400 dark:visited:text-blue-600;
   }
