@@ -1,7 +1,7 @@
 ---
 date: 2024-12-30
 title: Implementing a client side IPVS-based load balancer
-tags: load-balancing
+tags: load-balancing, ipvs, ebpf, rust, linux
 description: eBPF fun for the whole family
 slug: ipvs-lb
 ---
@@ -328,7 +328,7 @@ pub fn ip_vs_conn_new(ctx: ProbeContext) -> u32 {
 }
 ```
 
-If we trace a connection again, we may get lucky and hit the good backend:
+If we trace a connection again, we may get lucky and hit the good backend ([try it!](https://github.com/DavidVentura/ipvs-tcp-from-scratch/commit/a5be73e7550ffda9bf1cfe6352764705e01324fc)):
 ```text
 TCP  connection 192.168.2.144:0->1.2.3.4:80 changed state Close->SynSent
 
@@ -429,7 +429,7 @@ fixes the issue.
 </div>
 
 
-If we observe the events now, we can see the real IP after the connection is established
+If we observe the events now, we can see the real IP after the connection is established ([try it!](https://github.com/DavidVentura/ipvs-tcp-from-scratch/commit/646131f79f7dcb84991f09b5514dca05dc5d75f9))
 ```bash
 TCP connection 192.168.0.185:0    ->1.2.3.4:80 (real unknown)          changed state Close->SynSent
 IPVS mapping inserted 192.168.0.185:55264 1.2.3.4:80
@@ -471,7 +471,7 @@ And replace the logging events:
 
 While we are doing this, we need to extend `TcpSocketEvent` with an `ipvs_dest: Option<SocketAddrV4>` field, which we can populate with the values we got from `IPVS_TCP_MAP`.
 
-After setting this up, along with an async poller for the buffer (see [repo](https://github.com/DavidVentura/ipvs-tcp-from-scratch/commit/b0de4c4ede4faf08b30a86b3e8f5021097b2ebfd#diff-1456b484c642ad36a3582bc2542b90cfd63c111bf00489ecf63f685df7a81ae9R84) for details), we can... log the results? _but in userspace_!
+After setting this up, along with an async poller for the buffer (see the [repo](https://github.com/DavidVentura/ipvs-tcp-from-scratch/commit/b0de4c4ede4faf08b30a86b3e8f5021097b2ebfd#diff-1456b484c642ad36a3582bc2542b90cfd63c111bf00489ecf63f685df7a81ae9R84) for details), we can... log the results? _but in userspace_!
 
 ```rust
 let mut rx = watch_tcp_events(events).await.unwrap();
@@ -480,7 +480,7 @@ for ev in rx.recv() {
 }
 ```
 
-and running it:
+and running it ([try it!](https://github.com/DavidVentura/ipvs-tcp-from-scratch/commit/b0de4c4ede4faf08b30a86b3e8f5021097b2ebfd)):
 ```text
 [u] TcpSocketEvent { oldstate: Close,       newstate: SynSent,     key: TcpKey { src: 192.168.2.145:0,     dst: 1.2.3.4:80 }, ipvs_dest: None }
 [u] TcpSocketEvent { oldstate: SynSent,     newstate: Established, key: TcpKey { src: 192.168.2.145:56078, dst: 1.2.3.4:80 }, ipvs_dest: Some(93.184.215.14:80) }
@@ -530,7 +530,7 @@ pub fn tcp_connect(ctx: ProbeContext) -> u32 {
     Ok(0)
 }
 ```
-and we get
+and we get ([try it!](https://github.com/DavidVentura/ipvs-tcp-from-scratch/commit/fe706f44afba2f1bbff99424e3efaf075c14f2db))
 
 ```text
 [u] TcpSocketEvent {
@@ -615,6 +615,7 @@ pub fn tcp_retransmit_skb(ctx: TracePointContext) -> Result<i64> {
 There is only one interesting thing here: we only care about retransmits in `SynSent` state,
 other states mean that the connection is already established -- maybe we _could_ care, to detect hosts going offline, but it's not necessary for now.
 
+When running again ([try it!](https://github.com/DavidVentura/ipvs-tcp-from-scratch/commit/354dce6a8e42823c5ef69f66ab8f067bb974fedf)):
 
 ```bash
 $ curl 1.2.3.4
@@ -671,7 +672,7 @@ pub fn tcp_receive_reset(ctx: TracePointContext) -> i64 {
 }
 ```
 
-Comparing to the previous examples, the client close event:
+Comparing to the previous examples, the client close event ([try it!](https://github.com/DavidVentura/ipvs-tcp-from-scratch/commit/912bded9120b50fd6a8e74292905b9cec640217a)):
 ```rust
 TcpSocketEvent { event: StateChange { old: SynSent, new: Close }, ... }
 ```
@@ -771,6 +772,8 @@ test trace_ipvs_connection_refused ... ok
 
 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.54s
 ```
+
+The other tests are implemented [here](https://github.com/DavidVentura/ipvs-tcp-from-scratch/commit/502b3463cf792525916b24e0b0ef43ff8afeb163).
 
 This way we can validate the eBPF & userspace code across kernel versions, and without touching the state of the host machine.
 
