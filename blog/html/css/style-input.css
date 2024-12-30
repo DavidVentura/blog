@@ -71,12 +71,12 @@ svg.logo-svg {
   }
   #blogpost-content ol,
   #blogpost-content ul {
-    @apply pl-3;
+    @apply pl-3 dark:font-light;
     list-style-type: revert;
   }
   #blogpost-content > ol,
   #blogpost-content > ul {
-    @apply my-3 ml-3;
+    @apply my-3 ml-3 dark:font-light;
   }
   #blogpost-content li {
     @apply my-0.5;
