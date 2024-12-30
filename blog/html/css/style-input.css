@@ -9,7 +9,7 @@ svg.logo-svg {
     @apply bg-white dark:bg-gray-900;
   }
   .aside {
-    @apply dark:bg-black/[.1] p-4 rounded border-2 border-dashed border-slate-500/[.2];
+    @apply dark:bg-black/[.1] p-4 rounded border-2 border-dashed border-slate-500/[.2] dark:font-light;
   }
   .aside, .aside p {
     font-size: 0.8rem;
@@ -91,9 +91,14 @@ svg.logo-svg {
     dark:text-blue-400 dark:visited:text-blue-600;
   }
   #blogpost-content p code,
+  #blogpost-content li code,
+  #blogpost-content h2 code,
+  #blogpost-content .aside code:not(pre > *) {
+    @apply bg-gray-100 dark:bg-gray-800 break-words px-1 py-0.5 rounded;
+  }
+  #blogpost-content p code,
   #blogpost-content li code {
-    @apply font-medium px-1 py-0.5 rounded text-sm break-words
-    bg-gray-100 dark:bg-gray-800;
+    @apply font-medium text-sm;
   }
 
   #blogpost-content blockquote {
