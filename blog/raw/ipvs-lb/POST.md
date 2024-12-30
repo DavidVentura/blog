@@ -35,7 +35,7 @@ But in some cases, the distributed placement of the clients and servers ends up 
 The placement constraint alone would disqualify this solution, but on top of that, dealing with proxy crashes (software or server) 
 would require more proxies, and balancing between those.
 
-### DNS
+## DNS
 
 Using DNS for availability solves the previous issue; the data path is now as short as possible, and the cost of record lookups
 is amortized over all the connections that are established on each TTL period.
