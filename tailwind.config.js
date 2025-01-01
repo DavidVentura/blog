@@ -3,6 +3,11 @@ module.exports = {
   content: ['./blog/**/*.html', './rss_entries.html'],
   theme: {
     extend: {
+      colors: {
+        gray: {
+	  450: '#7A818A',
+	}
+      },
       fontFamily: {
         sans: [
           'ui-sans-serif',

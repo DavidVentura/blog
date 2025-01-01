@@ -51,7 +51,7 @@
                         </a>
                     </span>
                     <div class="flex flex-row gap-2 tag-holder mt-1">
-                        <span class="text-sm text-gray-500">{{post['date']}}</span>
+                        <span class="text-sm text-gray-450">{{post['date']}}</span>
                         {%-if post['tags']-%}
                            {%- for tag in post['tags'] -%}
                                <a href="/tags/{{tag}}/" class="tag">{{tag}}</a>
@@ -66,7 +66,7 @@
                     <br/>
                     If you liked this content, you may also enjoy other <a href="/blogs-i-follow.html">blogs I follow</a>.
                     <br/>
-                    There's also an <a href="/rss.xml"><img class="rss-logo" src="/images/rss.svg"> RSS feed</a>.
+                    There's also an <a href="/rss.xml"><img class="rss-logo" src="/images/rss.svg" alt="RSS logo"> RSS feed</a>.
                     </p>
                 </div>
             </main>
