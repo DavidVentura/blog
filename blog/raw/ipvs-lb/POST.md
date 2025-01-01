@@ -25,6 +25,7 @@ Let's look at the options:
 A centralized proxy (eg: nginx, HAProxy) receives connections from all the clients and distributes them among the servers;
 It's a great solution when you have control of the placement, meaning that the proxy does not drastically
 extend the path between client and server:
+
 <img src="assets/proxy-good-placement.svg" style="margin: 0px auto; width: 100%; max-width: 35rem" />
 
 But in some cases, the distributed placement of the clients and servers ends up with unnecessarily long paths, which can add hundreds of milliseconds of latency:
@@ -133,7 +134,7 @@ So.. let's build it!
 
 For this project, we'll be using [Aya](https://aya-rs.dev/), which is a library that simplifies writing eBPF code in Rust.
 
-<small> All the examples in this post are summarized, the repo is [here](https://github.com/DavidVentura/ipvs-tcp-from-scratch).</small>
+<small> All the examples in this post are summarized, in [the repo](https://github.com/DavidVentura/ipvs-tcp-from-scratch).</small>
 
 ## Researching the data path
 
@@ -773,7 +774,7 @@ test trace_ipvs_connection_refused ... ok
 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.54s
 ```
 
-The other tests are implemented [here](https://github.com/DavidVentura/ipvs-tcp-from-scratch/commit/502b3463cf792525916b24e0b0ef43ff8afeb163).
+The other tests are implemented [in the repo](https://github.com/DavidVentura/ipvs-tcp-from-scratch/commit/502b3463cf792525916b24e0b0ef43ff8afeb163).
 
 This way we can validate the eBPF & userspace code across kernel versions, and without touching the state of the host machine.
 
