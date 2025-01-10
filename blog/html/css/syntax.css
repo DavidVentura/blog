@@ -70,10 +70,17 @@
 .il { color: #666666 } /* Literal.Number.Integer.Long */
 
 @media (prefers-color-scheme: dark) {
-.nv { color: #5957fc } /* Name.Variable */
+.k { color: #f0dfac; font-weight: normal } /* Keyword */
+.kd { color: #f0dfac; font-weight: normal } /* Keyword.Declaration */
+.nc { color: #93e0e3; font-weight: normal } /* Name.Class */
+.nf { color: #93e0e3; font-weight: bold } /* Name.Function */
+.nb { color: #ec93d1 } /* Name.Builtin */
+.nv { color: unset } /* Name.Variable */
 .no { color: #a80000 } /* Name.Constant */
 .kt { color: #FFD1DC } /* Keyword.Type */
 .gd { color: #FF6961 }  /* Generic.Deleted */
 .gi { color: #77DD77 }  /* Generic.Inserted */
-.s  { color: #FF6961 } /* Literal.String */
+.s  { color: #ec93d1 } /* Literal.String */
+.cp { color: #5fd7fd } /* Comment.Preproc */
+.na { color: unset } /* Name.Attribute */
 }
