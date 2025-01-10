@@ -194,14 +194,23 @@ vmovss ...
 
 search for `vmovss`, it's an AVX instruction to do blah blah. wait. WAIT.
 
-```
-adb shell
-cat /proc/cpuinfo
+```bash
+$ adb shell cat /proc/cpuinfo
+emu64xa:/ $ 
+processor       : 0
+vendor_id       : AuthenticAMD
+cpu family      : 6
+model           : 6
+model name      : Android virtual processor
+cpuid level     : 16
+flags           : fpu de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse ss
+e2 ht syscall nx lm nopl cpuid tsc_known_freq pni ssse3 cx16 sse4_1 sse4_2 x2apic popcnt tsc_deadline_timer h
+ypervisor lahf_lm cmp_legacy abm 3dnowprefetch vmmcall 
 ```
 
-do you see it?? yeah, me neither. `avx` is not part of the supported flags for the emulator's processor!!
+do you see it?? yeah, me neither!! `avx` is **not** part of the supported flags for the emulator's processor!!
 
-## Trying to disable AVX
+## Trying to disable AVX at build time
 
 I poked _a bunch_ and couldn't get AVX to stop being part of the build
 
@@ -213,29 +222,30 @@ There was no option in Android Studio to enable this, that I could find.. but I'
 ```bash
 $ ps aux | grep qemu
 
-<very long thing>
+.../emulator/qemu/linux-x86_64/qemu-system-x86_64 -netdelay none -netspeed full -avd Medium_Phone_API_35 -qt-hide-window -grpc-use-token -idle-grpc-timeout 300 -no-snapshot-load
 ```
 
 tried to run
-```
-emulator thing
-missing lib
+```bash
+./emulator/qemu/linux-x86_64/qemu-system-x86_64 ....
+
+error while loading shared libraries: libtcmalloc_minimal.so.4: cannot open shared object file: No such file or directory
 ```
 
-found the lib in `ANDROID_SDK/emulator/...`, so added to `LD_LIBRARY_PATH`, same thing with QT, repeat, now emulator launches.
+found the lib in `ANDROID_SDK/emulator/lib64`, so added I added that to `LD_LIBRARY_PATH`, but same thing with `libQt6WebChannelAndroidEmu.so.6`, repeating the process, adding `ANDROID_SDK/emulator/lib64/qt/lib` to `LD_LIBRARY_PATH`, the emulator starts up!
 
-reading help, find out that the flag `-qemu ..` passes all its arguments to qemu, so le'ts spawn an emulator with AVX support
+Reading the emulator's `--help`, I found out that there's a flag `-qemu ..` which passes all further arguments directly to qemu, so le'ts spawn an emulator with AVX support
 
 ```bash
-export LD_LIBRARY_PATH=...
-emulator ... -qemu cpu max
+cd $ANDROID_SDK/emulator
+export LD_LIBRARY_PATH=$PWD/lib64:$PWD/lib64/qt/lib
+./qemu/linux-x86_64/qemu-system-x86_64 -netdelay none -netspeed full -avd Medium_Phone_API_35 -qt-hide-window -grpc-use-token -idle-grpc-timeout 300 -no-snapshot-load -qemu -cpu "max"
 ```
 
 once it starts up
 ```bash
-adb shell
-grep avx /proc/cpuinfo
-<results>
+$ adb shell grep -c avx /proc/cpuinfo
+6
 ```
 
 okay... let's try the app now
