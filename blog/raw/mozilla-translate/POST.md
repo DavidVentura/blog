@@ -448,34 +448,229 @@ val elapsed = measureTimeMillis {
 ```
 
 
-aaaand
+aaaand the translation immediately aborts the program:
 
-```
-    ABORT("Marian must be compiled with a BLAS library");
+```text
+ABORT("Marian must be compiled with a BLAS library");
 ```
 
 Gaaaaaaaaah
 
-### A despairing detour into WASM
+## CMake is the mind-killer
 
+Reading [marian-dev's CMakeLists.txt](https://github.com/marian-nmt/marian-dev/blob/master/CMakeLists.txt),
+there are a few options for {^BLAS|Basic Linear Algebra Subprograms} libraries, the default is `MKL`, Intel's optimized library
+for x86-64, which probably has the best performance, but I'd rather only have to deal with one library for both x86-64 and aarch64.
 
-### Back out of WASM
+How to figure out why this library isn't being linked/found though?? well, the code that `ABORT`ed before looks like this:
 
-
-- Add pcre2 flag local
-- pathie fix `minSdk = 28 // iconv requirements from pathie-cpp`
-- fuckit clone openblas in android SDK sysroot
-- fuckit clone superlu in android SDK sysroot
-- fuckit patch superlu
-
-it... built???
-
-```bash
-file ..
-x86
-nm | grep func
-found
+```cpp
+#if BLAS_FOUND
+    // ...
+#elif USE_ONNX_SGEMM
+    // ...
+#elif USE_RUY_SGEMM
+    // ...
+#else
+    ABORT("Marian must be compiled with a BLAS library");
+#endif
 ```
+
+and `BLAS_FOUND` is conditionally defined in `marian-dev`'s CMake file
+```cmake
+if(MKL_FOUND)
+  include_directories(${MKL_INCLUDE_DIR})
+  set(EXT_LIBS ${EXT_LIBS} ${MKL_LIBRARIES})
+  set(BLAS_FOUND TRUE)
+  add_definitions(-DBLAS_FOUND=1 -DMKL_FOUND=1)
+else(MKL_FOUND)
+  set(BLAS_VENDOR "OpenBLAS")
+  find_package(BLAS)
+  if(BLAS_FOUND)
+    include(FindCBLAS)
+    if(CBLAS_FOUND)
+      include_directories(${BLAS_INCLUDE_DIR} ${CBLAS_INCLUDE_DIR})
+      set(EXT_LIBS ${EXT_LIBS} ${BLAS_LIBRARIES} ${CBLAS_LIBRARIES})
+      add_definitions(-DBLAS_FOUND=1)
+    endif(CBLAS_FOUND)
+  endif(BLAS_FOUND)
+endif(MKL_FOUND)
+```
+
+We don't want to use `MKL`, so we need to make `find_package(BLAS)` succeed and set `BLAS_FOUND`.
+
+I don't know how to debug CMake, so I added a line to force-fail the build, instead of allowing the build to succeed and failing on runtime
+```diff
++  else(BLAS_FOUND)
++    message(FATAL_ERROR "BLAS not found, bailing")
+   endif(BLAS_FOUND)
+```
+
+which worked wonderfully, giving me a way to try things without waiting for a full build.
+
+Now, I could update the CMakeLists.txt file to include OpenBLAS
+```cmake
+add_subdirectory(third_party/OpenBLAS)
+set(BLAS_LIBRARIES "${PROJECT_BINARY_DIR}/third_party/OpenBLAS/lib/libopenblas.a" CACHE PATH "BLAS Libraries" FORCE)
+```
+
+and the build succeeded!
+
+However, on runtime, I still got
+
+```c
+ABORT("Marian must be compiled with a BLAS library");
+```
+
+turns out that, if you look at the previous requirement, it also needs to run `FindCBLAS` successfully; for this I only needed
+
+```cmake
+set(CBLAS_LIBRARIES ${BLAS_LIBRARIES} CACHE PATH "CBLAS Libraries" FORCE)
+set(CBLAS_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/third_party/OpenBLAS" CACHE PATH "CBLAS Include Directory" FORCE)
+```
+
+but now the build started failing.
+
+
+### Patching compiler complaints away
+
+
+My patience started to run out, and I got into a state of "just patch everything, make it work"
+
+<div class="aside">
+At this point I took a somewhat long detour into trying to build the library as a WASM blob,
+which is significantly easier; but when trying to embed that WASM blob in the Android side,
+I noticed how painful that is.
+
+Also, the WASM build was 2-4x slower than the native build
+</div>
+
+First, OpenBLAS' build thinks we are cross compiling (and maybe we are? it's x86-64 to x86-64 but with different ABI/sysroot/..),
+so we need to define a `TARGET` architecture:
+
+```cmake
+```cmake
+if(ANDROID_ABI STREQUAL "x86_64")
+    # thinks we are CC, so must set a TARGET
+    set(TARGET "ZEN" CACHE STRING "" FORCE)
+endif()
+```
+
+Immediately after that, I got an error I'd never seen before
+
+```text
+ error: inline assembly requires more registers than available
+  505 |     for(;n_count>23;n_count-=24) COMPUTE(24)
+      |                                  ^
+```
+
+There's some info [in this github issue](https://github.com/OpenMathLib/OpenBLAS/issues/2634), but it did not work for me.
+
+What did work was force-disabling AVX, which avoids this entire path (the file being compiled was for skylake, which I don't have).
+```cmake
+    set(NO_AVX ON CACHE BOOL "" FORCE)
+    set(NO_AVX2 ON CACHE BOOL "" FORCE)
+    set(NO_AVX512 ON CACHE BOOL "" FORCE)
+```
+
+Let's build and see what pops up next:
+
+```text
+ error: call to undeclared function 'num_cpu_avail'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  202 |   int ncpu = num_cpu_avail(3);
+      |              ^
+```
+
+whatever, this is only called in two places, and it can _easily_ be replaced with `4` , which seems like a perfectly valid number of CPUs.
+
+Next, a missing file which cannot be included:
+
+```text
+common.h:62:10: fatal error: 'config.h' file not found
+   62 | #include "config.h"
+      |          ^~~~~~~~~~
+```
+
+let's comment it out and see what breaks
+
+
+
+in OpenBLAS I started hitting issues with a macro `YIELDING` not being defined but it should be defined, per 
+```c
+#if defined(ARCH_X86_64)
+#ifndef YIELDING
+#define YIELDING        __asm__ __volatile__ ("nop;nop;nop;nop;nop;nop;nop;nop;\n");
+#endif
+#endif
+```
+
+I'm assuming `ARCH_X86_64` must be defined in `config.h`, so I reported the [issue](https://github.com/OpenMathLib/OpenBLAS/issues/5105), and generated the
+`config.h` with `#define ARCH_X86_64`, because adding this to CMakeLists.txt did not work
+
+```cmake
+set(ARCH_X86_64 ON CACHE BOOL "" FORCE) # required for defining YIELDING
+```
+
+The build progresses a bit further, but fails again
+```
+intgemm.cc:58:20: error: use of undeclared identifier '__get_cpuid_max'
+   58 |   unsigned int m = __get_cpuid_max(0, 0);
+      |                    ^
+```
+
+`__get_cpuid_max` seems to not be defined in Android's `cpuid.h`, but as [the ABI](https://developer.android.com/ndk/guides/abis#86-64) guarantees up to SSE4.1, we can just patch it
+
+```diff
+-#if defined(WASM)
++#if defined(WASM) || defined(__ANDROID__)
+   return CPUType::SSSE3;
+```
+
+and... it built??
+
+taking 2 seconds tu translate 2 words though
+
+let's build in release mode?
+
+```
+ error: use of undeclared identifier 'GEMM_MULTITHREAD_THRESHOLD'
+   91 |   if ( MN < 115200L * GEMM_MULTITHREAD_THRESHOLD )
+      |                       ^
+```
+
+needed to add `#define ZEN` in `config.h`
+
+tests started failing, needed to comment them out
+```
+ if (NOT ONLY_CBLAS)
+  # Build test and ctest
+  #add_subdirectory(test)
+ endif()
+ if (BUILD_TESTING AND NOT BUILD_WITHOUT_LAPACK)
+         #add_subdirectory(lapack-netlib/TESTING)                                                                                                                                                                                         
+  endif()                                                                                                                                                                                                                                 
+endif()                                                                                                                                                                                                                                   
+  if(NOT NO_CBLAS)                                                                                                                                                                                                                        
+   if (NOT ONLY_CBLAS)                                                                                                                                                                                                                    
+           #add_subdirectory(ctest)                                                                                                                                                                                                       
+   endif()                                                                                                                                                                                                                                
+  endif()                                                                                                                                                                                                                                 
+  if (CPP_THREAD_SAFETY_TEST OR CPP_THREAD_SAFETY_GEMV)                                                                                                                                                                                   
+          #add_subdirectory(cpp_thread_test)                                                                                                                                                                                              
+  endif()
+```
+
+`marian-dev/src/3rd_party/sentencepiece/third_party/absl/flags/flag.cc` has undefined `PACKAGE_STRING` and `VERSION`, but `flag.cc` is not used anywhere! why is it being built? well, that's for somebody else to answer
+now I'll just `#define` these two
+
+ error: call to undeclared function 'pthread_cancel';
+marian-dev hardcodes threads, but can't link pthread in android
+
+  else(COMPILE_WASM)                   
+    set(CMAKE_CXX_FLAGS                 "-std=c++11 -pthread ${CMAKE_GCC_FLAGS} -fPIC ${DISABLE_GLOBALLY} -march=${BUILD_ARCH} ${INTRINSICS} ${BUILD_WIDTH}")
+
+- something about superlu makes it faster?
+- or is superlu for the auto lang detect??
 
 ---
 
@@ -487,4 +682,3 @@ one feature that is very nice in google trnslate is auto-detecting source langua
 
 firefox and chrome seem to use [compact language detector](https://github.com/CLD2Owners/cld2/tree/master)
 per [MDN](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/i18n/detectLanguage)
-
