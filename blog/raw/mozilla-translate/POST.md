@@ -82,7 +82,6 @@ Only three of those files are actually important to me:
 
 `bergamot.cpp`, an adaptor from "Java calling convention" to "CPP calling convention" 
 ```cpp
-
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_example_bergamot_NativeLib_stringFromJNI(
         JNIEnv* env,
@@ -209,7 +208,7 @@ which will make the variable not be overwritten by options declared further down
 with this change, the build progressed quite a bit further (and melted my PC again) and got to some non-CMake errors, I consider this a resounding victory.
 
 <div class="aside">
-I am defintely confused at having a project to <i>split sentences</i>, and I was doubly confused by having to fiddle with build time issues
+I am definitely confused at having a project to <i>split sentences</i>, and I was doubly confused by having to fiddle with build time issues
 for <i>regexes</i> of all things.
 <br/>
 Seems like things I take for granted in <i>reasonable languages</i> are, for some reason, harder in C++
@@ -376,7 +375,7 @@ but it depends on shared libraries that are not part of the system, typical.
 
 I found the lib in `ANDROID_SDK/emulator/lib64`, so added I added the path to `LD_LIBRARY_PATH` and hit the same error with `libQt6WebChannelAndroidEmu.so.6`, repeating the process, adding `ANDROID_SDK/emulator/lib64/qt/lib` to `LD_LIBRARY_PATH`, the emulator starts up!
 
-Now, we just need to convince this `qemu` wrapper to enable AVX on the guest. Reading the emulator's `--help`, I found out that there's a flag `-qemu ..` which passes all further arguments directly to qemu, so le'ts spawn an emulator with AVX support
+Now, we just need to convince this `qemu` wrapper to enable AVX on the guest. Reading the emulator's `--help`, I found out that there's a flag `-qemu ..` which passes all further arguments directly to qemu, so let's spawn an emulator with AVX support
 
 ```bash
 cd $ANDROID_SDK/emulator
@@ -555,8 +554,6 @@ per [MDN](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions
 
 For this, I needed to write another Java to CPP wrapper:
 ```cpp
-
-
 extern "C" JNIEXPORT jobject JNICALL
 Java_com_example_bergamot_LangDetect_detectLanguage(
         JNIEnv* env,
