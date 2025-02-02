@@ -14,8 +14,7 @@ This new feature was super useful for me, and I started wondering if I could als
 
 
 I did some research and found out that Mozilla publishes the [firefox-translation-models on GitHub](https://github.com/mozilla/firefox-translations-models/tree/main), and that
-there's a piece of software called [bergamot-translator](https://github.com/browsermt/bergamot-translator) which can run these models, by wrapping [marian-nmt](https://marian-nmt.github.io).
-
+there's a piece of software called [bergamot-translator](https://github.com/browsermt/bergamot-translator) which can run these models on-device, by wrapping [marian-nmt](https://marian-nmt.github.io).
 
 With some basic idea of the software landscape, I tried it out
 
@@ -24,7 +23,7 @@ With some basic idea of the software landscape, I tried it out
 `bergamot-translator` is very straight-forward to build
 
 ```bash
-$ git clone
+$ git clone git@github.com:browsermt/bergamot-translator.git
 $ mkdir build
 $ sudo apt install libpcre2-dev libopenblas-dev
 $ cmake ..
@@ -210,6 +209,13 @@ which will make the variable not be overwritten by options declared further down
 
 with this change, the build progressed quite a bit further (and melted my PC again) and got to some non-CMake errors, I consider this a resounding victory.
 
+<div class="aside">
+I am defintely confused at having a project to <i>split sentences</i>, and I was doubly confused by having to fiddle with build time issues
+for <i>regexes</i> of all things.
+<br/>
+Seems like things I take for granted in <i>reasonable languages</i> are, for some reason, harder in C++
+</div>
+
 ### Missing intrinsics
 
 Within the `faiss` library, there are multiple errors about undefined intrinsics, for example:
@@ -259,11 +265,11 @@ In the end, I found out that `iconv_` functions are defined on Android SDK versi
 +     minSdk = 28
 ```
 
-Bumping the `minSdk` will make the app supported on 92% of devices, instead of 97% per [apilevels](https://apilevels.com/), but I don't want to spend more time figuring this out.
+Bumping the `minSdk` will make the app supported on 92% of devices, instead of 97% per [apilevels](https://apilevels.com/) (as of February, 2025), but I don't want to spend more time figuring this out.
 
 with this change, the library built?? I'm shocked it was only these errors
 
-## Runtime hell
+## Runtime fun
 
 The library built, the app starts and... shuts down, with this stacktrace
 
@@ -324,7 +330,10 @@ now when running `disas` we get a better view of the issue:
     0x710923dc403c <+28>: popq   %rbp
     0x710923dc403d <+29>: retq
 ```
-searching online for [vmovss](https://www.felixcloutier.com/x86/movss), it's an AVX instruction to move an `f32` around. wait. WAIT.
+searching online for [vmovss](https://www.felixcloutier.com/x86/movss), it's an AVX[^avx] instruction to move an `f32` around. wait. WAIT.
+
+SIGILL is an illegal instruction; who said we could use it? Let's check
+[^avx]: AVX (Advanced Vector Extensions) is a set of CPU instructions for performing calculations on multiple pieces of data simultaneously ("SIMD").
 
 ```bash
 $ adb shell cat /proc/cpuinfo
@@ -393,9 +402,7 @@ We start the emulator and are greeted by a most beautiful sight:
 
 Now we just need to get the app to do something.
 
-## Struggling to do basic tasks on Android
-
-Or, "How I struggled _a bunch_ to perform what should be absolutely trivial tasks."
+## A basic android app
 
 Now that the app was launching, I copied the [example bergamot-translator application](https://github.com/browsermt/bergamot-translator/blob/main/app/bergamot.cpp) to this project.
 
@@ -403,7 +410,7 @@ The example application needs some yaml (🤢) with paths to the models, and obv
 
 How do you even get a file to the emulator?? `adb push` didn't have access to the app's paths, and the app didn't have access to the "general storage" (/storage/emulated/0/...)
 
-In the end, it was easier to implement some wacky code to download the files straight from the Github repo (.\_.) if they are not present on disk
+In the end, it was easier to download the files straight from the Github repo if they are not present on disk `(._.)`
 
 ```kotlin
 val base = "https://media.githubusercontent.com/media/mozilla/firefox-translations-models/main/models/prod"
@@ -412,14 +419,15 @@ val model = "model.esen.intgemm.alphas.bin"
 val vocab = "vocab.esen.spm"
 val lex = "lex.50.50.esen.s2t.bin"
 val files = arrayOf(model, vocab, lex)
-val dataPath = baseContext.getExternalFilesDir("bin")!!
+val dataPath = File(baseContext.filesDir, "bin")
+dataPath.mkdirs()
 
 lifecycleScope.launch {
     files.forEach { f ->
-        val file = File(dataPath.absolutePath + "/" + f)
+        val file = File(dataPath, f)
         if (!file.exists()) {
             val url = "${base}/${lang}/${f}.gz"
-            val success = downloadAndDecompress(url, file)
+            downloadAndDecompress(url, file)
         }
     }
 }
@@ -456,11 +464,9 @@ ABORT("Marian must be compiled with a BLAS library");
 
 Gaaaaaaaaah
 
-## CMake is the mind-killer
-
 Reading [marian-dev's CMakeLists.txt](https://github.com/marian-nmt/marian-dev/blob/master/CMakeLists.txt),
-there are a few options for {^BLAS|Basic Linear Algebra Subprograms} libraries, the default is `MKL`, Intel's optimized library
-for x86-64, which probably has the best performance, but I'd rather only have to deal with one library for both x86-64 and aarch64.
+there are a few supported matrix multiplication libraries; while the default is `MKL`, Intel's optimized library
+for x86-64, I'd rather use a single library on both x86-64 and aarch64.
 
 How to figure out why this library isn't being linked/found though?? well, the code that `ABORT`ed before looks like this:
 
@@ -476,209 +482,156 @@ How to figure out why this library isn't being linked/found though?? well, the c
 #endif
 ```
 
-and `BLAS_FOUND` is conditionally defined in `marian-dev`'s CMake file
-```cmake
-if(MKL_FOUND)
-  include_directories(${MKL_INCLUDE_DIR})
-  set(EXT_LIBS ${EXT_LIBS} ${MKL_LIBRARIES})
-  set(BLAS_FOUND TRUE)
-  add_definitions(-DBLAS_FOUND=1 -DMKL_FOUND=1)
-else(MKL_FOUND)
-  set(BLAS_VENDOR "OpenBLAS")
-  find_package(BLAS)
-  if(BLAS_FOUND)
-    include(FindCBLAS)
-    if(CBLAS_FOUND)
-      include_directories(${BLAS_INCLUDE_DIR} ${CBLAS_INCLUDE_DIR})
-      set(EXT_LIBS ${EXT_LIBS} ${BLAS_LIBRARIES} ${CBLAS_LIBRARIES})
-      add_definitions(-DBLAS_FOUND=1)
-    endif(CBLAS_FOUND)
-  endif(BLAS_FOUND)
-endif(MKL_FOUND)
-```
-
-We don't want to use `MKL`, so we need to make `find_package(BLAS)` succeed and set `BLAS_FOUND`.
-
-I don't know how to debug CMake, so I added a line to force-fail the build, instead of allowing the build to succeed and failing on runtime
-```diff
-+  else(BLAS_FOUND)
-+    message(FATAL_ERROR "BLAS not found, bailing")
-   endif(BLAS_FOUND)
-```
-
-which worked wonderfully, giving me a way to try things without waiting for a full build.
-
-Now, I could update the CMakeLists.txt file to include OpenBLAS
-```cmake
-add_subdirectory(third_party/OpenBLAS)
-set(BLAS_LIBRARIES "${PROJECT_BINARY_DIR}/third_party/OpenBLAS/lib/libopenblas.a" CACHE PATH "BLAS Libraries" FORCE)
-```
-
-and the build succeeded!
-
-However, on runtime, I still got
-
-```c
-ABORT("Marian must be compiled with a BLAS library");
-```
-
-turns out that, if you look at the previous requirement, it also needs to run `FindCBLAS` successfully; for this I only needed
-
-```cmake
-set(CBLAS_LIBRARIES ${BLAS_LIBRARIES} CACHE PATH "CBLAS Libraries" FORCE)
-set(CBLAS_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/third_party/OpenBLAS" CACHE PATH "CBLAS Include Directory" FORCE)
-```
-
-but now the build started failing.
-
-
-### Patching compiler complaints away
-
-
-My patience started to run out, and I got into a state of "just patch everything, make it work"
+So we "just" need to `set(USE_RUY_SGEMM ON)` and this error is gone.
 
 <div class="aside">
-At this point I took a somewhat long detour into trying to build the library as a WASM blob,
-which is significantly easier; but when trying to embed that WASM blob in the Android side,
-I noticed how painful that is.
-
-Also, the WASM build was 2-4x slower than the native build
+I wasted many hours (and a bit over 1000 words) patching BLAS to compile for x86-64, before giving up and trying RUY.
+<br/>
+<br/>
+Guess what? The RUY backend works perfectly on x86-64, so I got to delete my patches and the rambling.
 </div>
 
-First, OpenBLAS' build thinks we are cross compiling (and maybe we are? it's x86-64 to x86-64 but with different ABI/sysroot/..),
-so we need to define a `TARGET` architecture:
 
-```cmake
-```cmake
-if(ANDROID_ABI STREQUAL "x86_64")
-    # thinks we are CC, so must set a TARGET
-    set(TARGET "ZEN" CACHE STRING "" FORCE)
-endif()
-```
-
-Immediately after that, I got an error I'd never seen before
+After the matrix multiplication library finished building, there was one last error:
 
 ```text
- error: inline assembly requires more registers than available
-  505 |     for(;n_count>23;n_count-=24) COMPUTE(24)
-      |                                  ^
+error: call to undeclared function 'pthread_cancel';
 ```
 
-There's some info [in this github issue](https://github.com/OpenMathLib/OpenBLAS/issues/2634), but it did not work for me.
+Turns out that marian-dev hardcodes thread usage for non-WASM builds; but there's an intentionally [limited](https://android.googlesource.com/platform/bionic/+/master/docs/status.md)
+`pthread` API on Android. [Removing `-pthread` from CFLAGS](https://github.com/browsermt/marian-dev/pull/112) was sufficient to complete the build succesfully.
 
-What did work was force-disabling AVX, which avoids this entire path (the file being compiled was for skylake, which I don't have).
-```cmake
-    set(NO_AVX ON CACHE BOOL "" FORCE)
-    set(NO_AVX2 ON CACHE BOOL "" FORCE)
-    set(NO_AVX512 ON CACHE BOOL "" FORCE)
+With the translation library finally working on Android, we can focus on actually making this useful by building a proper Android application.
+
+# Making an app
+
+This was the "easiest" part, mostly because I "auto-generated" a generic layout:
+
+<center>
+<picture>
+  <source style="max-width: 400px" media="(prefers-color-scheme: dark)" srcset="assets/app-dark.png" />
+  <img style="max-width: 400px" src="assets/app1.png" />
+</picture>
+</center>
+
+and just had to hook up the `Translate` button to `libbergamot`.
+
+This is _fine_ but there are two features which are _super_ nice for a translator app
+
+## Translating text on other apps
+
+Since [Android 6.0](https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT) it's been possible for apps to offer
+actions on text selection, and it's super easy to do, just need to add this blob in `AndroidManifest.xml`
+
+```xml
+<intent-filter
+    android:icon="@mipmap/ic_launcher"
+    android:label="@string/translate_text">
+    <action android:name="android.intent.action.PROCESS_TEXT" />
+    <action android:name="android.intent.action.PROCESS_TEXT_READONLY" />
+    <category android:name="android.intent.category.DEFAULT" />
+    <data android:mimeType="text/plain" />
+</intent-filter>
 ```
 
-Let's build and see what pops up next:
+and you get a 'Translate' button on any text you highlight:
+
+<center>
+<picture>
+  <source style="max-width: 600px" media="(prefers-color-scheme: dark)" srcset="assets/process_text_dark.png" />
+  <img style="max-width: 600px" src="assets/process_text_light.png" />
+</picture>
+</center>
+
+which will open the app and pre-populate `Intent.ACTION_PROCESS_TEXT` with the highlighted text.
+
+## Detecting input language
+
+A _very_ nice feature in Google Translate is auto-detecting source language, so that only one language choice is required (target language).
+
+I did some research, and both Firefox and Chrome seem to use [Compact Language Detector](https://github.com/CLD2Owners/cld2/tree/master)
+per [MDN](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/i18n/detectLanguage).
+
+For this, I needed to write another Java to CPP wrapper:
+```cpp
+
+
+extern "C" JNIEXPORT jobject JNICALL
+Java_com_example_bergamot_LangDetect_detectLanguage(
+        JNIEnv* env,
+        jobject /* this */,
+        jstring text) {
+    const char* c_text = env->GetStringUTFChars(text, nullptr);
+
+    jclass resultClass = env->FindClass("com/example/bergamot/DetectionResult");
+    jmethodID constructor = env->GetMethodID(resultClass, "<init>", "(Ljava/lang/String;ZI)V");
+
+    DetectionResult result = detectLanguage(c_text);
+    jstring j_language = env->NewStringUTF(result.language.c_str());
+    jobject j_result = env->NewObject(resultClass, constructor, j_language, result.isReliable, result.confidence);
+    env->ReleaseStringUTFChars(text, c_text);
+    return j_result;
+}
+```
+
+but note that the output is not a scalar (before, the output was a `String`), it is a `DetectionResult`, which is defined as:
+
+```kotlin
+data class DetectionResult(
+    val language: String,
+    val isReliable: Boolean,
+    val confidence: Int
+)
+```
+
+running this code, worked... in debug mode!
+
+In release mode, instead, I got:
 
 ```text
- error: call to undeclared function 'num_cpu_avail'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
-  202 |   int ncpu = num_cpu_avail(3);
-      |              ^
+ JNI DETECTED ERROR IN APPLICATION:
+   JNI NewStringUTF called with pending exception java.lang.NoSuchMethodError:
+     no non-static method "Lcom/example/bergamot/DetectionResult;.<init>(Ljava/lang/String;ZI)V"
 ```
 
-whatever, this is only called in two places, and it can _easily_ be replaced with `4` , which seems like a perfectly valid number of CPUs.
+Turns out that the `DetectionResult` class was not being used anywhere in Java land, so it got pruned out of the build.
 
-Next, a missing file which cannot be included:
-
+Adding 
 ```text
-common.h:62:10: fatal error: 'config.h' file not found
-   62 | #include "config.h"
-      |          ^~~~~~~~~~
+-keep class com.example.bergamot.DetectionResult { *; }
 ```
 
-let's comment it out and see what breaks
+to `proguard-rules.pro` made the class be kept in the bundle, and the app now works.
+
+<center>
+<video controls>
+  <source style="max-width: 400px" type="video/webm" media="(prefers-color-scheme: dark)" src="assets/magic_dark.webm" />
+  <source style="max-width: 400px" type="video/webm" src="assets/magic_light.webm" />
+</video>
+</center>
+
+# Results
+
+Translation is pretty fast, a blob of 252 English words took 489ms to translate to Spanish. It seems like there's a lower bound of ~200ms.
+
+The app ends up being ~16MB, without any language model. ~13MB are due to the shared libraries.
+
+The models themselves need to be downloaded separately (within the app) and are about 40MB each, though `marian-dev` seems to support compressed models (gzip), it would be good to test out the performance difference.
+
+Translation quality wise, the models are _good_, but they fall short of Google Translate and Claude/ChatGPT.
+
+It's also important to note that not many languages are supported; [The models repo](https://github.com/mozilla/firefox-translations-models/tree/main) lists 20 languages
+with bidirectional support and 7 languages which only translate one way.
+
+You can find the app [on GitHub](https://github.com/DavidVentura/firefox-translator); I'll try to upload it to F-Droid.
 
 
+# Miscellaneous ranting
 
-in OpenBLAS I started hitting issues with a macro `YIELDING` not being defined but it should be defined, per 
-```c
-#if defined(ARCH_X86_64)
-#ifndef YIELDING
-#define YIELDING        __asm__ __volatile__ ("nop;nop;nop;nop;nop;nop;nop;nop;\n");
-#endif
-#endif
-```
-
-I'm assuming `ARCH_X86_64` must be defined in `config.h`, so I reported the [issue](https://github.com/OpenMathLib/OpenBLAS/issues/5105), and generated the
-`config.h` with `#define ARCH_X86_64`, because adding this to CMakeLists.txt did not work
-
-```cmake
-set(ARCH_X86_64 ON CACHE BOOL "" FORCE) # required for defining YIELDING
-```
-
-The build progresses a bit further, but fails again
-```
-intgemm.cc:58:20: error: use of undeclared identifier '__get_cpuid_max'
-   58 |   unsigned int m = __get_cpuid_max(0, 0);
-      |                    ^
-```
-
-`__get_cpuid_max` seems to not be defined in Android's `cpuid.h`, but as [the ABI](https://developer.android.com/ndk/guides/abis#86-64) guarantees up to SSE4.1, we can just patch it
-
-```diff
--#if defined(WASM)
-+#if defined(WASM) || defined(__ANDROID__)
-   return CPUType::SSSE3;
-```
-
-and... it built??
-
-taking 2 seconds tu translate 2 words though
-
-let's build in release mode?
-
-```
- error: use of undeclared identifier 'GEMM_MULTITHREAD_THRESHOLD'
-   91 |   if ( MN < 115200L * GEMM_MULTITHREAD_THRESHOLD )
-      |                       ^
-```
-
-needed to add `#define ZEN` in `config.h`
-
-tests started failing, needed to comment them out
-```
- if (NOT ONLY_CBLAS)
-  # Build test and ctest
-  #add_subdirectory(test)
- endif()
- if (BUILD_TESTING AND NOT BUILD_WITHOUT_LAPACK)
-         #add_subdirectory(lapack-netlib/TESTING)                                                                                                                                                                                         
-  endif()                                                                                                                                                                                                                                 
-endif()                                                                                                                                                                                                                                   
-  if(NOT NO_CBLAS)                                                                                                                                                                                                                        
-   if (NOT ONLY_CBLAS)                                                                                                                                                                                                                    
-           #add_subdirectory(ctest)                                                                                                                                                                                                       
-   endif()                                                                                                                                                                                                                                
-  endif()                                                                                                                                                                                                                                 
-  if (CPP_THREAD_SAFETY_TEST OR CPP_THREAD_SAFETY_GEMV)                                                                                                                                                                                   
-          #add_subdirectory(cpp_thread_test)                                                                                                                                                                                              
-  endif()
-```
-
-`marian-dev/src/3rd_party/sentencepiece/third_party/absl/flags/flag.cc` has undefined `PACKAGE_STRING` and `VERSION`, but `flag.cc` is not used anywhere! why is it being built? well, that's for somebody else to answer
-now I'll just `#define` these two
-
- error: call to undeclared function 'pthread_cancel';
-marian-dev hardcodes threads, but can't link pthread in android
-
-  else(COMPILE_WASM)                   
-    set(CMAKE_CXX_FLAGS                 "-std=c++11 -pthread ${CMAKE_GCC_FLAGS} -fPIC ${DISABLE_GLOBALLY} -march=${BUILD_ARCH} ${INTRINSICS} ${BUILD_WIDTH}")
-
-- something about superlu makes it faster?
-- or is superlu for the auto lang detect??
-
----
-
-Some AI generated code later, I have a basic app that works:
-
-screenshot
-
-one feature that is very nice in google trnslate is auto-detecting source language, so only one choice is needed
-
-firefox and chrome seem to use [compact language detector](https://github.com/CLD2Owners/cld2/tree/master)
-per [MDN](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/i18n/detectLanguage)
+- I wouldn't wish CMake on my enemies
+- Android studio should be burned to the ground
+    - Buttons that sometimes take SECONDS to be responsive
+    - Randomly uses 1200% CPU, I assume indexing some files
+    - Needing to click 'Sync' every time I modify `CMakeLists.txt` -- if it can show me a pop-up, it can sync the file itself!
+    - Sometimes an internal process would get stuck spinning with CPU at 100% -- only solution is to restart the IDE
+- I actually had to scavenge some RAM from another computer, with 32GiB my machine kept running out of memory
