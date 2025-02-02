@@ -1,9 +1,8 @@
 ---
-title: Using translation models on mobile
+title: Using local translation models on Android
 date: 2025-01-10
-tags: 
+tags: android, rant
 description: Implementing a "Google Translate" app with local models for Android, and losing my sanity along the way
-incomplete: true
 slug: mobile-translator
 ---
 
@@ -66,7 +65,7 @@ cloud storage for downloads, but those are stale.
 With the models on hand, I could pipe some data through `bergamot-translator`:
 
 ```bash
-echo "Hola mundo" | ./bergamot-translator
+echo "Hola mundo" | ./bergamot-translator --model-config-paths config.yml
 Hello world
 ```
 
@@ -614,9 +613,9 @@ to `proguard-rules.pro` made the class be kept in the bundle, and the app now wo
 
 Translation is pretty fast, a blob of 252 English words took 489ms to translate to Spanish. It seems like there's a lower bound of ~200ms.
 
-The app ends up being ~16MB, without any language model. ~13MB are due to the shared libraries.
+The app ends up being ~15MB, without any language model. ~12MB are due to the shared libraries.
 
-The models themselves need to be downloaded separately (within the app) and are about 40MB each, though `marian-dev` seems to support compressed models (gzip), it would be good to test out the performance difference.
+The models themselves need to be downloaded separately (within the app) and are about 40MB each, though `marian-dev` _seems_ to support compressed models (gzip), it would be good to test out the performance difference.
 
 Translation quality wise, the models are _good_, but they fall short of Google Translate and Claude/ChatGPT.
 
