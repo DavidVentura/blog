@@ -267,8 +267,8 @@ svg.logo-svg {
   :target > * {
     @apply font-bold dark:text-gray-300;
   }
-}
 
+}
 
 @tailwind components;
 @tailwind utilities;

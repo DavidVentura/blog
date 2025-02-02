@@ -1,6 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ['./blog/**/*.html', './rss_entries.html'],
+  darkMode: ['variant', ['@media (prefers-color-scheme: light) { :root:has(#theme-toggle:checked) & }',
+			 '@media (prefers-color-scheme: light) { &:has(#theme-toggle:checked) }',
+                         '@media (prefers-color-scheme: dark)  { :root:has(#theme-toggle:not(:checked)) & }',
+                         '@media (prefers-color-scheme: dark)  { &:has(#theme-toggle:not(:checked)) }',
+  ]],
   theme: {
     extend: {
       colors: {
