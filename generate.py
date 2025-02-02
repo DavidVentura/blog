@@ -442,7 +442,8 @@ def copy_relative_assets(html, assets_dir, post_dir):
 
     # Videos
     for source in html.find_all('source'):
-        src = source.attrs['src']
+        src = source.attrs.get('src') or source.attrs.get('srcset')
+        assert src is not None
         if src.startswith('/') or src.startswith('http'):
             continue
         og_file = post_dir / src
