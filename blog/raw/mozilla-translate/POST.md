@@ -509,8 +509,8 @@ This was the "easiest" part, mostly because I "auto-generated" a generic layout:
 
 <center>
 <picture>
-  <source style="max-width: 400px" media="(prefers-color-scheme: dark)" srcset="assets/app-dark.png" />
-  <img style="max-width: 400px" src="assets/app1.png" />
+  <source style="width: 20rem; max-width: 100%" media="(prefers-color-scheme: dark)" srcset="assets/app-dark.png" />
+  <img    style="width: 20rem; max-width: 100%" src="assets/app1.png" />
 </picture>
 </center>
 
@@ -538,8 +538,8 @@ and you get a 'Translate' button on any text you highlight:
 
 <center>
 <picture>
-  <source style="max-width: 600px" media="(prefers-color-scheme: dark)" srcset="assets/process_text_dark.png" />
-  <img style="max-width: 600px" src="assets/process_text_light.png" />
+  <source style="width: 30rem; max-width: 100%" media="(prefers-color-scheme: dark)" srcset="assets/process_text_dark.png" />
+  <img    style="width: 30rem; max-width: 100%" src="assets/process_text_light.png" />
 </picture>
 </center>
 
@@ -604,9 +604,9 @@ Adding
 to `proguard-rules.pro` made the class be kept in the bundle, and the app now works.
 
 <center>
-<video controls>
-  <source style="max-width: 400px" type="video/webm" media="(prefers-color-scheme: dark)" src="assets/magic_dark.webm" />
-  <source style="max-width: 400px" type="video/webm" src="assets/magic_light.webm" />
+<video style="width: 20rem; max-width: 100%" controls>
+  <source type="video/webm" media="(prefers-color-scheme: dark)" src="assets/magic_dark.webm" />
+  <source type="video/webm" src="assets/magic_light.webm" />
 </video>
 </center>
 
