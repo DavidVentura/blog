@@ -11,6 +11,10 @@ svg.logo-svg {
   .warning {
     @apply text-black bg-amber-100 dark:bg-amber-100/[.05] dark:text-amber-100 p-4 rounded border border-solid border-amber-300;
   }
+  .warning::before {
+    content: attr(data-type);
+    @apply text-base font-bold block;
+  }
   .aside {
     @apply dark:bg-black/[.1] p-4 rounded border-2 border-dashed border-slate-500/[.2] dark:font-light;
   }

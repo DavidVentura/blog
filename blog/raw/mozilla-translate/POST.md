@@ -1,6 +1,6 @@
 ---
 title: Using local translation models on Android
-date: 2025-01-10
+date: 2025-02-02
 tags: android, rant
 description: Implementing a "Google Translate" app with local models for Android, and losing my sanity along the way
 slug: mobile-translator
@@ -125,7 +125,7 @@ So, let's go build this `libbergamot`
 
 ## The descent into CMake madness
 
-<div class="warning">
+<div class="warning" data-type="Disclaimer">
 I have absolutely no idea what I'm doing when it comes to C++, CMake or Android, so likely my struggles are user error.
 </div>
 
@@ -381,7 +381,9 @@ Now, we just need to convince this `qemu` wrapper to enable AVX on the guest. Re
 ```bash
 cd $ANDROID_SDK/emulator
 export LD_LIBRARY_PATH=$PWD/lib64:$PWD/lib64/qt/lib
-./qemu/linux-x86_64/qemu-system-x86_64 ... -no-snapshot-load -qemu -cpu "max"
+./qemu/linux-x86_64/qemu-system-x86_64 ... \
+    -no-snapshot-load -qemu \
+    -cpu "max"
 ```
 once it starts up
 ```bash
@@ -390,14 +392,12 @@ success
 ```
 
 <div class="aside">
-The <code>-no-snapshot-load</code> flag was important -- otherwise the <code>AVX</code> instructions would work _sometimes_. It seems like <code>/proc/cpuinfo</code> is not updated if the emulator boots a "snapshot" (fair, maybe it's a RAM dump)... but even then, why would the instructions <code>SIGILL</code> if the CPU supports them? Maybe there's something specific the kernel has to do at boot time to enable AVX?
+The <code>-no-snapshot-load</code> flag was important -- otherwise the <code>AVX</code> instructions would work <i>sometimes</i>. It seems like <code>/proc/cpuinfo</code> is not updated if the emulator boots a "snapshot" (fair, maybe it's a RAM dump)... but even then, why would the instructions <code>SIGILL</code> if the CPU supports them? Maybe there's something specific the kernel has to do at boot time to enable AVX?
 </div>
 
 
 We start the emulator and are greeted by a most beautiful sight:
-<center>
-![](assets/running.png)
-</center>
+<center> <img style="width: 30rem; max-width: 100%" src="assets/running.png" /> </center>
 
 Now we just need to get the app to do something.
 
@@ -407,7 +407,7 @@ Now that the app was launching, I copied the [example bergamot-translator applic
 
 The example application needs some yaml (🤢) with paths to the models, and obviously, the app will need to be able to read the models from disk.
 
-How do you even get a file to the emulator?? `adb push` didn't have access to the app's paths, and the app didn't have access to the "general storage" (/storage/emulated/0/...)
+How do you even get a file to the emulator?? `adb push` didn't have access to the app's paths, and the app didn't have access to the "general storage" (`/storage/emulated/0/...`)
 
 In the end, it was easier to download the files straight from the Github repo if they are not present on disk `(._.)`
 
@@ -517,7 +517,7 @@ and just had to hook up the `Translate` button to `libbergamot`.
 
 This is _fine_ but there are two features which are _super_ nice for a translator app
 
-## Translating text on other apps
+## Translating directly from other apps
 
 Since [Android 6.0](https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT) it's been possible for apps to offer
 actions on text selection, and it's super easy to do, just need to add this blob in `AndroidManifest.xml`
@@ -533,7 +533,9 @@ actions on text selection, and it's super easy to do, just need to add this blob
 </intent-filter>
 ```
 
-and you get a 'Translate' button on any text you highlight:
+and you get a 'Translate' button on any[^thunderbird] text you highlight:
+
+[^thunderbird]: Except on Thunderbird, [apparently](https://github.com/thunderbird/thunderbird-android/issues/8778). For that one you can "Share" the text to the app.
 
 <center>
 <picture>
@@ -633,4 +635,6 @@ You can find the app [on GitHub](https://github.com/DavidVentura/firefox-transla
     - Randomly uses 1200% CPU, I assume indexing some files
     - Needing to click 'Sync' every time I modify `CMakeLists.txt` -- if it can show me a pop-up, it can sync the file itself!
     - Sometimes an internal process would get stuck spinning with CPU at 100% -- only solution is to restart the IDE
+    - Sometimes "paste" stops working?? You need to copy something inside Android Studio for it to start working again
+    - Working without Vim mode is pain
 - I actually had to scavenge some RAM from another computer, with 32GiB my machine kept running out of memory
