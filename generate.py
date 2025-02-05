@@ -116,13 +116,15 @@ class PostMetadata:
 
     @staticmethod
     def from_text(text: str) -> 'PostMetadata':
-        return PostMetadata.from_dict(md.convert(text).metadata)
+        # TODO: this should do metadata only, not `convert`
+        return PostMetadata.from_dict(convert(text).metadata)
 
     @staticmethod
     @lru_cache
     def from_path(fname, with_series=True) -> 'PostMetadata':
         with open(fname, 'r') as fd:
-            return PostMetadata.from_dict(md.convert(fd.read()).metadata, with_series)
+            # TODO: this should do metadata only, not `convert`
+            return PostMetadata.from_dict(convert(fd.read()).metadata, with_series)
 
     @staticmethod
     def from_dict(d, with_series=True) -> 'PostMetadata':
