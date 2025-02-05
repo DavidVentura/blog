@@ -608,9 +608,29 @@ to `proguard-rules.pro` made the class be kept in the bundle, and the app now wo
 </video>
 </center>
 
-# Results
+## On speed
 
-Translation is pretty fast, a blob of 252 English words took 489ms to translate to Spanish. It seems like there's a lower bound of ~200ms.
+A 252-word English text takes 489ms to translate to Spanish; but even single words take ~100ms, why is that?
+
+Here's a flamegraph from a similar[^similar] machine:
+
+[^similar]: An ARM devboard with an S922X CPU running Linux&emdash;I didn't want to figure out how to run perf on Android
+
+<a href="assets/flamegraph.svg"><img style="width: 100%" src="assets/flamegraph.svg" /></a>
+
+The green areas highlight what I think are "initialization costs", loading models and preparing the translation pipeline. These currenttly happen on every translation request, which explains the fixed overhead.
+
+By caching the initialized models on the C++ side (an `std::unordered_map<std::string, std::shared_ptr<TranslationModel>>` the performance increased dramatically:
+
+- Initial load: still ~100ms
+- Subsequent translations:
+  - Short phrases (1-3 words): 5ms
+  - Medium text (50-100 words): 20ms
+  - Long text (200+ words): 80+ms
+
+With this speedup, it's reasonable to enable translation on "real time" (as the user is typing), which makes for a nicer experience.
+
+## Results
 
 The app ends up being ~15MB, without any language model. ~12MB are due to the shared libraries.
 
@@ -624,7 +644,7 @@ with bidirectional support and 7 languages which only translate one way.
 You can find the app [on GitHub](https://github.com/DavidVentura/firefox-translator); I'll try to upload it to F-Droid.
 
 
-# Miscellaneous ranting
+## Miscellaneous ranting
 
 - I wouldn't wish CMake on my enemies
 - Android studio should be burned to the ground
