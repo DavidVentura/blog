@@ -610,7 +610,7 @@ to `proguard-rules.pro` made the class be kept in the bundle, and the app now wo
 
 ## On speed
 
-A 252-word English text takes 489ms to translate to Spanish; but even single words take ~100ms, why is that?
+A 252-word English text takes 489ms to translate to Spanish; but even single words take ~250ms, why is that?
 
 Here's a flamegraph from a similar[^similar] machine:
 
@@ -618,7 +618,7 @@ Here's a flamegraph from a similar[^similar] machine:
 
 <a href="assets/flamegraph.svg"><img style="width: 100%" src="assets/flamegraph.svg" /></a>
 
-The green areas highlight what I think are "initialization costs", loading models and preparing the translation pipeline. These currenttly happen on every translation request, which explains the fixed overhead.
+The green areas highlight what I think are "initialization costs", loading models and preparing the translation pipeline. These currently are executed on _every_ translation request, which explains the fixed overhead.
 
 By caching the initialized models on the C++ side (an `std::unordered_map<std::string, std::shared_ptr<TranslationModel>>` the performance increased dramatically:
 
