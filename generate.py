@@ -513,6 +513,18 @@ def main(filter_name: Optional[str]):
             anchor = html.new_tag("a", href=f'#{header.attrs["id"]}', **{"data-header":"1"})
             header.wrap(anchor)
 
+        # lint pass
+        bad = False
+        if r.date.year >= 2024:
+            for anchor in html.find_all('a'):
+                if 'here' in anchor.text.lower() and 'coherency' not in anchor.text.lower():
+                    print(anchor.text)
+                    print(anchor.parent.text)
+                    bad = True
+        if bad:
+            print("bad anchor text on ", r.get_slug())
+            sys.exit(1)
+
         # TODO: this should also be considered for 'newer'??
         build_relative_assets(post_dir)
         copy_relative_assets(html, assets_dir, post_dir)
