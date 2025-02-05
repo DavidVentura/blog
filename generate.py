@@ -115,16 +115,31 @@ class PostMetadata:
         return slug
 
     @staticmethod
+    def _parse_meta(text: str) -> dict[str, str]:
+        started = False
+        meta = {}
+        for line in text.splitlines():
+            line = line.strip()
+            if line != '---':
+                if started:
+                    k, _, v = line.partition(':')
+                    meta[k] = v.strip()
+                continue
+            if not started:
+                started = True
+            else:
+                # done parsing the first block
+                break
+        return meta
+    @staticmethod
     def from_text(text: str) -> 'PostMetadata':
-        # TODO: this should do metadata only, not `convert`
-        return PostMetadata.from_dict(convert(text).metadata)
+        return PostMetadata.from_dict(PostMetadata._parse_meta(text))
 
     @staticmethod
     @lru_cache
     def from_path(fname, with_series=True) -> 'PostMetadata':
         with open(fname, 'r') as fd:
-            # TODO: this should do metadata only, not `convert`
-            return PostMetadata.from_dict(convert(fd.read()).metadata, with_series)
+            return PostMetadata.from_dict(PostMetadata._parse_meta(fd.read()), with_series)
 
     @staticmethod
     def from_dict(d, with_series=True) -> 'PostMetadata':
@@ -172,9 +187,9 @@ def embed_mermaid(relpath, text, r: PostMetadata):
         os.makedirs(bdir, exist_ok=True)
         new_fname = f'{bdir}/{bname}.svg'
         if os.path.isfile(new_fname) and newer(new_fname, [full_fname, 'mermaid.css']):
-            print('skipping', new_fname, 'nwer', full_fname)
             # do not regenerate the same files if the sources were 
             # not modified
+            pass
         else:
             command = ['./node_modules/.bin/mmdc',
                        '-p', '.puppeteerrc.json',
@@ -484,6 +499,9 @@ def main(filter_name: Optional[str]):
         md_str = embed_mermaid(post_dir, md_str, r)
         md_str = populate_tooltips(md_str)
         _files_to_embed = files_to_embed(post_dir, md_str)
+        # convert pass runs after modification of source markdown
+        # so we need to convert it again (once for metadata), if any of the above
+        # modify the text
         body = convert(md_str)
 
         header = generate_header(r)
