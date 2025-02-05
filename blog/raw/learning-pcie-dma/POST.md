@@ -441,7 +441,7 @@ And whenever writing patterns to the underlying device, we can see the display c
 
 That's it for now, next time, we _may_ look at multiple DMA engines, zero-copy DMA and/or becoming a _real_ GPU.
 
-You can find the source [here](https://github.com/DavidVentura/pci-device).
+You can find the source in [the Github repo](https://github.com/DavidVentura/pci-device).
 
 
 ## References:

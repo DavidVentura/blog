@@ -2,7 +2,7 @@
 title: Using local translation models on Android
 date: 2025-02-02
 tags: android, rant
-description: Implementing a "Google Translate" app with local models for Android, and losing my sanity along the way
+description: ...and losing my sanity along the way
 slug: mobile-translator
 ---
 

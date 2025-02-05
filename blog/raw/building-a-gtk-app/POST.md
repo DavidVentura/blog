@@ -35,7 +35,7 @@ Lessons learned:
 
 
 Here's a very minimal example app that takes all of these into account, this is what I'd have liked to see as a "starting point" on the tutorials I've read.
-You can find the source code [here](https://github.com/DavidVentura/blog/tree/master/blog/raw/building-a-gtk-app/).
+You can find the source code in [the Github repo](https://github.com/DavidVentura/blog/tree/master/blog/raw/building-a-gtk-app/).
 
 The `resources.xml` file has to be compiled with `glib-compile-resources resources.xml --target resources`
 

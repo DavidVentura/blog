@@ -370,7 +370,7 @@ int fd = openat(AT_FDCWD, devpath, O_RDWR | O_EXCL | O_DIRECT);
 // fd is 4
 ```
 
-To inform the `md` driver about the array composition we need to populate a struct `mdu_array_info_t`, [defined here](https://github.com/torvalds/linux/blob/v6.10/include/uapi/linux/raid/md_u.h#L73), with information gathered from the superblock (defined above as `ArrayInfo` and `DeviceInfo`), which we read from the block devices.
+To inform the `md` driver about the array composition we need to populate a struct `mdu_array_info_t`, [defined in md\_u.h](https://github.com/torvalds/linux/blob/v6.10/include/uapi/linux/raid/md_u.h#L73), with information gathered from the superblock (defined above as `ArrayInfo` and `DeviceInfo`), which we read from the block devices.
 
 With this information, we can build the  which only requires basic information for the array (RAID level, disk count, present disks, etc).
 
@@ -387,7 +387,7 @@ const mdu_array_info_t array_info = {
 ioctl(4, SET_ARRAY_INFO, &array_info);
 ```
 
-Then, for each disk, we have to populate a struct `mdu_disk_info_t`, [defined here](https://github.com/torvalds/linux/blob/v6.10/include/uapi/linux/raid/md_u.h#L112); this struct is even more basic than the previous one.
+Then, for each disk, we have to populate a struct `mdu_disk_info_t`, [defined in md\_u.h](https://github.com/torvalds/linux/blob/v6.10/include/uapi/linux/raid/md_u.h#L112); this struct is even more basic than the previous one.
 
 ```c
 const mdu_disk_info_t disk_info = {
@@ -518,7 +518,7 @@ which made me think "Just a couple of bytes? Surely the rest of the boot stack i
 
 I was so naive.
 
-I ended up spending about a week in this rabbit hole, of which about 3 days were reading Kernel, GRUB and util-linux code, and somehow I ended up re-implemeting `mdadm` ([here](https://github.com/davidventura/device-mapper), at a PoC stage) to make sure I understood it, the rest of the time was "thinking"/"processing" and writing this post.
+I ended up spending about a week in this rabbit hole, of which about 3 days were reading Kernel, GRUB and util-linux code, and somehow I ended up re-implemeting `mdadm` ([Github repository](https://github.com/davidventura/device-mapper), at a PoC stage) to make sure I understood it, the rest of the time was "thinking"/"processing" and writing this post.
 
 I wanted to go into filesystems (both `FAT` for ESP and `ext4` for rootfs), but it seemed larger than everything else combined and I'm a chicken after all.
 [The docs](https://ext4.wiki.kernel.org/index.php/Ext4_Disk_Layout) are "fairly clear".

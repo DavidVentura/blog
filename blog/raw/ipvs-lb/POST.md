@@ -1,6 +1,6 @@
 ---
 date: 2024-12-30
-title: Implementing a client side IPVS-based load balancer
+title: Making a client side IPVS-based load balancer
 tags: load-balancing, ipvs, ebpf, rust, linux
 description: eBPF fun for the whole family
 slug: ipvs-lb
@@ -142,7 +142,7 @@ To maintain high availability, we want to remove unhealthy backends from the cli
 
 Linux provides a mechanism called [tracepoints](https://docs.kernel.org/trace/tracepoints.html) - predefined hooks in kernel code that we can use to observe (and modify!) system behavior.
 
-In this case, we're interested in the `inet_sock_set_state` tracepoint ([defined here](https://github.com/torvalds/linux/blob/v6.12/include/trace/events/sock.h#L141)),
+In this case, we're interested in the `inet_sock_set_state` tracepoint ([defined in sock.h](https://github.com/torvalds/linux/blob/v6.12/include/trace/events/sock.h#L141)),
 which is triggered every time a TCP connection changes state.
 
 First, we need to define `TcpSocketEvent` which will hold, you guessed it, socket data from the traced events.

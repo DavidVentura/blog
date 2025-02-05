@@ -466,7 +466,7 @@ def test_time_changes():
 ```
 
 
-You can find the source code [here](https://github.com/davidVentura/tpom).
+You can find the source code in [the Github repo](https://github.com/davidVentura/tpom).
 
 [^1]: [dumpelf](https://linux.die.net/man/1/dumpelf) is great for understanding ELF
 [^2]: this is just an example, `grep` has its own vDSO with its own status

@@ -2,7 +2,7 @@
 date: 2024-07-13
 title: A skeptic's first contact with Kubernetes
 tags: kubernetes
-description: A journey into Kubernetes: key concepts from a systems engineer's perspective, with a detour to yaml-template-hell.
+description: Key concepts & much deserved YAML ranting
 slug: first-contact-with-k8s
 ---
 

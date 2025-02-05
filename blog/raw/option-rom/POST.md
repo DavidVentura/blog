@@ -199,7 +199,7 @@ EFI_DRIVER_BINDING_PROTOCOL gGpuVideoDriverBinding = {
 };
 ```
 
-_As UEFI code is quite verbose, all code samples are abbreviated, find sources [here](https://github.com/DavidVentura/pci-device/tree/master/OptionRom)_
+_As UEFI code is quite verbose, all code samples are abbreviated, the sources are [in the Github repo](https://github.com/DavidVentura/pci-device/tree/master/OptionRom)_
 
 Then imlpement the `Supported()` function to determine which PCI devices work with this driver:
 

@@ -289,7 +289,7 @@ When applying the flag, the duration of the `ioctl` calls goes down consistently
 
 I didn't really know of any tools to measure boot times precisely, I'd have loved to somehow get a flamegraph of where time is being spent during boot (and early boot!). All of the analysis I did on these was basically achieved by placing prints and measuring time it took to get to them.
 
-The scripts used to run, measure & graph the VM startup times live [here](https://github.com/DavidVentura/blog/tree/master/blog/raw/minimizing-linux-boot-times), along with the data used to generate them.
+The scripts used to run, measure & graph the VM startup times live in the [Github repo](https://github.com/DavidVentura/blog/tree/master/blog/raw/minimizing-linux-boot-times), along with the data used to generate them.
 
 
 

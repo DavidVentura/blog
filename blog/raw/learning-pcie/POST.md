@@ -114,7 +114,7 @@ To create a PCI-e device in QEMU, we only need to provide a few things:
 * A function to register our device
 * Init/realize functions
 
-We can create a `gpu.c` file in `hw/misc` (slightly abbreviated, find the file [here](https://github.com/DavidVentura/blog/tree/master/blog/raw/learning-pcie/minimal-listing.c)):
+We can create a `gpu.c` file in `hw/misc` (slightly abbreviated, find the file in [the Github repo](https://github.com/DavidVentura/blog/tree/master/blog/raw/learning-pcie/minimal-listing.c)):
 ```c
 #define TYPE_PCI_GPU_DEVICE "gpu"
 #define GPU_DEVICE_ID 		0x1337
@@ -217,7 +217,7 @@ First, define the memory region and create some memory to operate on
   };
 ```
 
-Then when the device is instantiated (realized), we need to register the memory region & tell QEMU what to do with read/write operations (find the file [here](https://github.com/DavidVentura/blog/tree/master/blog/raw/learning-pcie/02-with-memory-region.c)):
+Then when the device is instantiated (realized), we need to register the memory region & tell QEMU what to do with read/write operations (find the file in [the Github repo](https://github.com/DavidVentura/blog/tree/master/blog/raw/learning-pcie/02-with-memory-region.c)):
 
 ```c
 static uint64_t gpu_mem_read(void *opaque, hwaddr addr, unsigned size) {
