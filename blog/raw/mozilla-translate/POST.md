@@ -614,7 +614,7 @@ A 252-word English text takes 489ms to translate to Spanish; but even single wor
 
 Here's a flamegraph from a similar[^similar] machine:
 
-[^similar]: An ARM devboard with an S922X CPU running Linux&emdash;I didn't want to figure out how to run perf on Android
+[^similar]: An ARM devboard with an S922X CPU running Linux - I didn't want to figure out how to run perf on Android
 
 <a href="assets/flamegraph.svg"><img style="width: 100%" src="assets/flamegraph.svg" /></a>
 
