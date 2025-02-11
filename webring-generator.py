@@ -93,19 +93,14 @@ def parse_blog_meta(entry) -> BlogMeta | None:
         return None
     if 'davidv.dev' in xml_url:
         return None
-    # test
-    if 'adamch' not in xml_url:
-        #return None
-        pass
+    if 'haterade' in xml_url:
+        # non-tech related, still fun
+        return None
 
     details = fetch_feed_details(xml_url)
     if not details:
         return None
 
-    #description = details.get('desc', '').strip() or 'N/A'
-    #if len(description) > 100:
-    #    description = description[:100] + "..."
-    #description = html.escape(description)
     url = details.get('url', '')
     last_post_url = details['last_post_url']
     last_post_title = details['last_post_title']
