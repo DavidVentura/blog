@@ -8,3 +8,8 @@
     - pico8-console 
     - pico8-performance
     - building-a-compiler
+- name: Updating my network setup
+  posts: 
+    - espressobin
+    - network_monitoring
+    - network_segregation

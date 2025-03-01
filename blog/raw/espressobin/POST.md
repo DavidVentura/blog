@@ -1,8 +1,10 @@
 ---
-title: Network update part 1: Custom router with espressobin
+title: Custom router with espressobin
+slug: network-update-part-1-custom-router-with-espressobin
 date: 2018-04-30
 tags: networking
 description: 
+series: Updating my network setup
 ---
 I wanted to replace my pfSense VM with a dedicated router so I could take my homelab offline without losing internet connectivity, so I bought an Espressobin
 

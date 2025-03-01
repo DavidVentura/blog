@@ -1,8 +1,10 @@
 ---
-title: Network update part 3: Network segregation
+title: Segregating my home network
+slug: network-update-part-3-network-segregation
 date: 2018-05-20
 tags: networking, homelab
 description: 
+series: Updating my network setup
 ---
 After adding a [fancy router](/network-update-part-1-custom-router-with-espressobin.html) to my setup and adding some [monitoring](/network-update-part-2-monitoring-the-network-with-netflow-influxdb-and-grafana.html) I decided I could segregate my network, as the current state was just bunching everything on the common VLAN.
 
