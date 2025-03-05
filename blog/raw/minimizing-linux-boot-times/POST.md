@@ -291,5 +291,4 @@ I didn't really know of any tools to measure boot times precisely, I'd have love
 
 The scripts used to run, measure & graph the VM startup times live in the [Github repo](https://github.com/DavidVentura/blog/tree/master/blog/raw/minimizing-linux-boot-times), along with the data used to generate them.
 
-
-
+Boot time is measured with Firecracker's `--boot-timer` option; this option attaches an MMIO device, so that userland programs can communicate when they start, by writing to a specific address (`0xd0000000`).

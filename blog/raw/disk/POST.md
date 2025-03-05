@@ -61,7 +61,7 @@ BIOS is very simple but also _quite_ limited. Having only 16 bytes of informatio
 
 ### UEFI
 
-Given the limitations of BIOS, Intel started UEFI [in ~2005](https://en.wikipedia.org/wiki/UEFI#History)[^started[^started]], which _did_ overcome all of these limitations, but also became a _massive beast_[^beast] .
+Given the limitations of BIOS, Intel started UEFI [in ~2005](https://en.wikipedia.org/wiki/UEFI#History)[^started], which _did_ overcome all of these limitations, but also became a _massive beast_[^beast] .
 
 [^started]: they actually started EFI "in the 1990s" but it didn't really take off
 [^beast]: The [specification](https://uefi.org/sites/default/files/resources/UEFI_Spec_2_10_Aug29.pdf) is 2145 pages, and mentions things like "bytecode virtual machine", "HTTP Boot", "Bluetooth", "Wi-Fi", "IPsec".
