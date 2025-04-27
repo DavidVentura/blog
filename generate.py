@@ -157,7 +157,7 @@ class PostMetadata:
 
     @property
     def full_url(self) -> str:
-        return f'{BLOG_URL}posts/{self.get_slug()}'
+        return f'{BLOG_URL}posts/{self.get_slug()}/'
 
 def debug(*msg):
     if DEBUG:
@@ -372,6 +372,13 @@ def get_style_for_diagrams() -> str:
       path[stroke="#000000"] {
         stroke: var(--light-arrow) !important;
       }
+      /* ellipse fill */
+      ellipse[fill="rgb(0, 0, 0)"] {
+        fill: var(--light-arrow) !important;
+      }
+      ellipse[stroke="rgb(0, 0, 0)"] {
+        stroke: var(--light-arrow) !important;
+      }
 
       /* default white bg */
       rect[fill="#ffffff"] {
@@ -579,9 +586,11 @@ def generate_feed():
 
 
 def make_rss_entry(feed, item: PostMetadata):
+    # Should've used ATOM ._. no unique id
     fe = feed.add_entry()
     url = item.full_url
-    fe.id(url)
+    fe.id(url.rstrip('/'))  # started with no trailing slash, need to keep it to prevent
+    # duplicating feeds everywhere
     tstamp = datetime.combine(item.date, datetime.min.time())
     tstamp = pytz.timezone("Europe/Amsterdam").localize(tstamp)
     fe.link(href=url)
