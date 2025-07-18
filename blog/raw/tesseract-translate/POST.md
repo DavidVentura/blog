@@ -1,27 +1,28 @@
 ---
-title: Adding image support to the local translator
-date: 2025-07-16
+title: Adding OCR support to the local translator
+date: 2025-07-20
 tags: android
 description: we have Google translate at home
 slug: mobile-translator-ocr
+series: On-device translation for Android
 ---
 
 [Some months ago](/posts/mobile-translator), I made a simple offline-only [translator app](https://github.com/DavidVentura/firefox-translator) using [Mozilla's models](https://github.com/mozilla/firefox-translations-models/tree/main).
 
-I decided to add the capability to translate images, similar to Google translate.
+I wanted to add the capability to translate images, similar to Google translate, so here we are.
 
-First, I did some research, and found that the most popular libraries for OCR are [Tesseract](https://github.com/tesseract-ocr/tesseract) and [EasyOCR](https://github.com/JaidedAI/EasyOCR). I immediately discarded EasyOCR because it's python (maybe there's a way to run the models without python?) and because it has much higher resource requirements; I'm not sure that the average phone (or mine, even) can handle it.
+I started with some basic research, and found that the most popular libraries for OCR are [Tesseract](https://github.com/tesseract-ocr/tesseract) and [EasyOCR](https://github.com/JaidedAI/EasyOCR). I _immediately_ discarded EasyOCR because it's Python (maybe there's a way to run the models without Python? Unclear) and because it has much higher resource requirements; I'm not sure that the average phone can handle it.
 
 Luckily, this time I didn't need to go down the CMake death spiral[^spiral], as there's [Tesseract4Android](https://github.com/adaptech-cz/Tesseract4Android), which already takes care of the build & generating bindings for Java.
 
 [^spiral]: Couldn't resist a _little_ bit of cursed, so I made [a PR](https://github.com/adaptech-cz/Tesseract4Android/pull/76/files) for Tesseract4Android
-I didn't document the process as I was going along, so I won't be too detailed, and the code blocks are "synthesized" from the current codebase.
+I didn't document the process as I was going along, so this post won't be too detailed, and the code blocks are "synthesized" from the current codebase.
 
-First, an easy starting point, a screenshot of some news article:
+Let's pick an easy starting point, a screenshot of some news article, in some undecipherable language:
 
 <center> <img style="width: 20rem; max-width: 100%" src="assets/original.png" /> </center>
 
-We can use `Tesseract4Android` to get all the text in the image with `getUTFText`
+We can use `Tesseract4Android` to get all the text in the image with `getUTF8Text`
 
 ```kotlin
 val p = File(context.filesDir, "tesseract").toPath()
@@ -40,25 +41,26 @@ println(tess.getUTF8Text())
 
 <center> <img style="width: 20rem; max-width: 100%" src="assets/OCRd.png" /> </center>
 
-this already works pretty well!
+This already works pretty well!
 
 The goal though, is to render the translation on top of the original image
 
 A reasonable starting point is to identify the lines of text within the image, and which block they belong to
 
 ```kotlin
+// Populates internal Tesseract structures, so we can use resultIterator
 tess.getHOCRText(0)
 val iter = tessInstance.resultIterator
 iter.begin()
 do {
   val boundingRect = iter.getBoundingRect(RIL_TEXTLINE)
   canvas.drawRect(boundingRect, paint)
-  if (iter.isAtFinalElement(RIL_PARA, RIL_WORD)) {
+  if (iter.isAtFinalElement(RIL_BLOCK, RIL_TEXTLINE)) {
     paint.color = nextColor
   }
-)
 } while (iter.next(RIL_TEXTLINE))
 ```
+
 <center> <img style="width: 20rem; max-width: 100%" src="assets/blocks.png" /> </center>
 
 ### Extracting text and positions
@@ -76,6 +78,8 @@ do {
     val firstWordInLine = iter.isAtBeginningOf(RIL_TEXTLINE)
     val lastWordInLine = iter.isAtFinalElement(RIL_TEXTLINE, RIL_WORD)
     val lastWordInPara = iter.isAtFinalElement(RIL_PARA, RIL_WORD)
+    val word = iter.getUTF8Text(RIL_WORD)
+    val boundingBox = iter.getBoundingRect(RIL_WORD)
     if (firstWordInLine) {
         line = TextLine(word, boundingBox)
     } else {
@@ -108,7 +112,8 @@ do {
     }
 } while (iter.next(RIL_WORD))
 ```
-Then, as a test, re-render the original text on top of each line.. let's hardcode the background as white and the text as black for now
+
+To test how well this extraction works, we can re-render the original text on top of the respective lines.. let's hardcode the background as white and the text as black for now
 
 ```kotlin
 textBlocks.forEach { textBlock ->
@@ -124,11 +129,14 @@ textBlocks.forEach { textBlock ->
 
 <center> <img style="width: 20rem; max-width: 100%" src="assets/first-rerender.png" /> </center>
 
-The alignment is off, and the font-size changes quite a bit between lines, we can average the font size for each block
+First, the alignment is off, this is because we need to consider the font's [ascent](https://developer.android.com/reference/android/graphics/Paint.FontMetrics#ascent) in its Y position; but we'll strategically ignore this for now.
+
+Second, the font-size changes quite a bit between lines, we can average the font size for each block:
+
 ```kotlin
 textBlocks.forEach { textBlock ->
     val blockPixelHeight = textBlock.lines.map { textLine -> textLine.boundingBox.height() }
-    textPaint.textSize = blockAvgPixelHeight.average().toFloat()
+    textPaint.textSize = blockPixelHeight.average().toFloat()
     textBlock.lines.forEach { line ->
         canvas.drawRect(/**/)
         canvas.drawText(/**/)
@@ -151,12 +159,11 @@ It's nice, but we can _at least_ make the blocks the same size using inter-line 
 
 
 Let's do a comparison so far
-<table>
-<tr>
-<td> <img style="width: 20rem; max-width: 100%" src="assets/original.png" /> </td>
-<td> <img style="width: 20rem; max-width: 100%" src="assets/scrolled.png" /> </td>
-</tr>
-</table>
+
+<div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+<img style="width: 20rem; max-width: 100%" src="assets/original.png" />
+<img style="width: 20rem; max-width: 100%" src="assets/scrolled.png" />
+</div>
 
 It's not _perfect_ but it's pretty good!
 
@@ -169,7 +176,7 @@ Let's move from an easy screenshot to something that's still easy, but much hard
 <center> <img style="width: 20rem; max-width: 100%" src="assets/kindle.jpg" /> </center>
 
 If we use the code we have so far with this image, we can see a few issues
-<center> <img style="width: 20rem; max-width: 100%" src="assets/kindle-test-spillover.png" /> </center>
+<center> <img style="width: 20rem; max-width: 100%" src="assets/kindle-test-spillover-cropped.jpg" /> </center>
 
 - Assuming black text on white background was fine before, but now it's really not.
 - There's some misalignment on the text vs lines
@@ -180,11 +187,9 @@ If we use the code we have so far with this image, we can see a few issues
 
 First, let's stop using `StaticLayout`, it's not good enough. We will need to manually lay the text out.
 
-A simple way to start, is to measure how many letters from the translated text we can render in each line, then do that.
+A simple way to start, is to measure how many letters from the translated text we can fit in each line with [breakText](https://developer.android.com/reference/android/graphics/Paint#breakText(char[],%20int,%20int,%20float,%20float[])), then draw them in the correct position.
 
-We can use [breakText](https://developer.android.com/reference/android/graphics/Paint#breakText(char[],%20int,%20int,%20float,%20float[])) to do this.
-
-Something like
+Something like this
 
 ```kotlin
 textBlock.lines.forEach { line ->
@@ -196,7 +201,7 @@ textBlock.lines.forEach { line ->
     canvas.drawText(
         translated,
         start,
-        endIndex,
+        translated.length,
         line.boundingBox.left.toFloat(),
         line.boundingBox.top.toFloat() - textPaint.ascent(),
         textPaint
@@ -204,9 +209,9 @@ textBlock.lines.forEach { line ->
 }
 ```
 
-would work, as long as we can guarantee that the new text will fit within the space of the original lines... which is not a given!
+would work, as long as we can guarantee that the new text will fit within the space of the original lines.
 
-But we can _make_ it fit with a very simple approach: shrink the font size until it fits.
+The property "the translated text fits in the same space as the original text" is very useful, and we can make it hold with a very simple technique: shrink the font size until the new text fits the original space.
 
 ```kotlin
 val totalBBLength = textBlock.lines.sumOf { line -> line.boundingBox.width() }
@@ -221,33 +226,7 @@ while (textPaint.measureText(translated) >= totalBBLength) {
 
 For a simple mechanism, I think that _most of the time_ you can get the background color of a line of text by sampling the image _around_ the text (not including the actual text).
 
-```kotlin
-fun getSurroundingAverageColor(bitmap: Bitmap, textBounds: Rect): Int {
-    val margin = 4
-    val sampleRegions = listOf(
-        // Left side
-        Rect(maxOf(0, textBounds.left - margin), textBounds.top, textBounds.left, textBounds.bottom),
-        // Right side
-        Rect(textBounds.right, textBounds.top, minOf(bitmap.width, textBounds.right + margin), textBounds.bottom),
-        // Top
-        Rect(textBounds.left, maxOf(0, textBounds.top - margin), textBounds.right, textBounds.top),
-        // Bottom
-        Rect(textBounds.left, textBounds.bottom, textBounds.right, minOf(bitmap.height, textBounds.bottom + margin))
-    )
-
-    val colors = mutableListOf<Int>()
-
-    for (region in sampleRegions) {
-        val pixels = IntArray(region.width() * region.height())
-        bitmap.getPixels(pixels, 0, region.width(), region.left, region.top, region.width(), region.height())
-        colors.addAll(pixels.toList())
-    }
-
-    return averageColors(colors)
-}
-```
-
-but then, how to pick the foreground color? Probably[^contrast] it will be the color with the highest contrast relative to the background we just picked, but this time, we only sample the lines of text, instead of their surroundings:
+But then, how do you pick the foreground color? Probably[^contrast] it will be the color with the highest contrast relative to the background we just picked, but this time, we only sample the lines of text, instead of their surroundings:
 
 [^contrast]: Some web designers seem focused on _minimizing_ contrast, but I guess you can't have a heuristic that always works
 
@@ -274,12 +253,12 @@ fun getColorContrast(color1: Int, bgLuminance: Float): Float {
 ```
 
 with all of this in place, it starts looking much better!
-<center> <img style="width: 25rem; max-width: 100%" src="assets/kindle-good-translation.png" /> </center>
+<center> <img style="width: 25rem; max-width: 100%" src="assets/kindle-good-translation-cropped.jpg" /> </center>
 
 The only thing missing, is word wrapping (the second sentence splits `allowing` into `allo` and `wing`); we can do this fairly trivially:
 
 1. Count how many letters we can render in this line
-2. If the last letter we can fit is not a space, render until the previous word instead.
+2. If the last letter we can fit is not a space, backtrack until the previous word.
 
 The only "tricky" thing, is that now the text may spill over the allocated area, because we are "wasting" some space at the end of each line for word-wrapping.
 
@@ -289,11 +268,9 @@ My solution for this was to consider the total available space to be 95% ¯\\\_(
 // 5% padding for word wrap
 val totalBBLength = textBlock.lines.sumOf { line -> line.boundingBox.width() } * 0.95f
 ```
-<center> <img style="width: 25rem; max-width: 100%" src="assets/kindle-word-wrap.png" /> </center>
+<center> <img style="width: 25rem; max-width: 100%" src="assets/kindle-word-wrap-cropped.jpg" /> </center>
 
-
-
-## Side quests
+## Beyond "one block per line"
 
 If multiple items are on the same line, but there are horizontal gaps between them (for example: UIs), it would render as a single line of text (without spaces).
 
@@ -304,19 +281,30 @@ The "3 characters" thing is tricky, because it uses _the current word_ for measu
 Check the header ("NOS", "Nieuws", "Sport", "Live")
 
 <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
-<img style="width: 20rem; max-width: calc(50% - 1rem)" src="assets/scrolled.png" />
+<img style="width: 20rem; max-width: calc(50% - 1rem)" src="assets/scrolled-cropped.png" />
 <img style="width: 20rem; max-width: calc(50% - 1rem)" src="assets/blocks-same-line.png" />
 </div>
 
 This conveniently also fixes the color of the "Live" button, as each block is analyzed independently for foreground/background colors.
 
+## UI Detour
 
-I also thought the UI was pretty weak, so spent some time making something a bit nicer
+At this point, the app was perfectly functional but the UI was pretty bad, so I spent some time making it a bit nicer
 
 <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
 <img style="width: 20rem; max-width: 100%" src="assets/new-ui.png" />
 <img style="width: 20rem; max-width: 100%" src="assets/new-ui-pic.png" />
 </div>
+
+## Limitations
+
+In the end, the app works _well enough_; Tesseract is limited in many ways, and it won't work with handwriting, certain fonts, or uneven lighting. Some of this is solvable with pre-processing; maybe I'll work on that in the future.
+
+## Performance
+
+As for performance, images of ~1500x2500px take about a second to run through Tesseract, and another ~300ms to translate, depending on how much text is on it.
+
+I must admit, that I'm a little bit jealous of the offline models that are present on Google Translate, and even on Mac / iOS for OCR, both are much better at detecting text and much faster; but I don't know of any open models which are better than Tesseract.
 
 ---
 
