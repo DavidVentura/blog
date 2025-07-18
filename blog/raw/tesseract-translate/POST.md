@@ -302,15 +302,21 @@ For this, I added a new heuristic: calculate whether each word is "at least 3 ch
 The "3 characters" thing is tricky, because it uses _the current word_ for measurement, and letters have different widths.. but it seems OK on my test cases.
 
 Check the header ("NOS", "Nieuws", "Sport", "Live")
-<table>
-<tr>
-<td> <img style="width: 20rem; max-width: 100%" src="assets/scrolled.png" /> </td>
-<td> <img style="width: 20rem; max-width: 100%" src="assets/blocks-same-line.png" /> </td>
-</tr>
-</table>
+
+<div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+<img style="width: 20rem; max-width: calc(50% - 1rem)" src="assets/scrolled.png" />
+<img style="width: 20rem; max-width: calc(50% - 1rem)" src="assets/blocks-same-line.png" />
+</div>
 
 This conveniently also fixes the color of the "Live" button, as each block is analyzed independently for foreground/background colors.
 
+
+I also thought the UI was pretty weak, so spent some time making something a bit nicer
+
+<div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+<img style="width: 20rem; max-width: 100%" src="assets/new-ui.png" />
+<img style="width: 20rem; max-width: 100%" src="assets/new-ui-pic.png" />
+</div>
 
 ---
 
