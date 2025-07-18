@@ -1,13 +1,13 @@
 ---
 title: Adding OCR support to the local translator
-date: 2025-07-20
-tags: android
+date: 2025-07-19
+tags: android, kotlin, ocr, tesseract
 description: we have Google translate at home
 slug: mobile-translator-ocr
 series: On-device translation for Android
 ---
 
-[Some months ago](/posts/mobile-translator), I made a simple offline-only [translator app](https://github.com/DavidVentura/firefox-translator) using [Mozilla's models](https://github.com/mozilla/firefox-translations-models/tree/main).
+In the previous post, I made a simple offline-only [translator app](https://github.com/DavidVentura/firefox-translator) using [Mozilla's models](https://github.com/mozilla/firefox-translations-models/tree/main).
 
 I wanted to add the capability to translate images, similar to Google translate, so here we are.
 
@@ -161,8 +161,8 @@ It's nice, but we can _at least_ make the blocks the same size using inter-line 
 Let's do a comparison so far
 
 <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
-<img style="width: 20rem; max-width: 100%" src="assets/original.png" />
-<img style="width: 20rem; max-width: 100%" src="assets/scrolled.png" />
+<img style="width: 20rem; max-width: calc(50% - 1rem)" src="assets/original.png" />
+<img style="width: 20rem; max-width: calc(50% - 1rem)" src="assets/scrolled.png" />
 </div>
 
 It's not _perfect_ but it's pretty good!
@@ -224,7 +224,7 @@ while (textPaint.measureText(translated) >= totalBBLength) {
 
 ### Background / foreground color detection
 
-For a simple mechanism, I think that _most of the time_ you can get the background color of a line of text by sampling the image _around_ the text (not including the actual text).
+I think that _most of the time_ you can get the background color of a line of text by sampling the image _around_ the text (not including the actual text).
 
 But then, how do you pick the foreground color? Probably[^contrast] it will be the color with the highest contrast relative to the background we just picked, but this time, we only sample the lines of text, instead of their surroundings:
 
