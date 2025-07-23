@@ -4,6 +4,7 @@ date: 2025-02-02
 tags: android, rant
 description: ...and losing my sanity along the way
 slug: mobile-translator
+series: On-device translation for Android
 ---
 
 Some time ago, Firefox [introduced](https://www.mozilla.org/en-US/firefox/118.0/releasenotes/) in-browser, on-device translation for webpages. I know that Chrome users have had this forever,

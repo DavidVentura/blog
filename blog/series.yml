@@ -1,3 +1,7 @@
+- name: On-device translation for Android
+  posts:
+    - mozilla-translate
+    - tesseract-translate
 - name: Learning about PCI-e
   posts: 
     - learning-pcie
