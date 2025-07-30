@@ -120,23 +120,23 @@ The app worked perfectly and I managed to get into the gym with it, but I was st
 $ adb shell pm list packages | grep trainmore
 package:com.mysports.branded.trainmore
 $ adb shell pm path com.mysports.branded.trainmore
-package:/data/app/~~u3zcUID1XGr2ZfGNqbGeRA==/com.mysports.branded.trainmore-XcIwZriiEGt-2yOWBdTZjg==/base.apk
-package:/data/app/~~u3zcUID1XGr2ZfGNqbGeRA==/com.mysports.branded.trainmore-XcIwZriiEGt-2yOWBdTZjg==/split_config.arm64_v8a.apk
-package:/data/app/~~u3zcUID1XGr2ZfGNqbGeRA==/com.mysports.branded.trainmore-XcIwZriiEGt-2yOWBdTZjg==/split_config.en.apk
-package:/data/app/~~u3zcUID1XGr2ZfGNqbGeRA==/com.mysports.branded.trainmore-XcIwZriiEGt-2yOWBdTZjg==/split_config.xxhdpi.apk
-$ adb pull /data/app/~~u3zcUID1XGr2ZfGNqbGeRA==/com.mysports.branded.trainmore-XcIwZriiEGt-2yOWBdTZjg==/split_config.arm64_v8a.apk
+package:/data/app/.../base.apk
+package:/data/app/.../split_config.arm64_v8a.apk
+package:/data/app/.../split_config.en.apk
+package:/data/app/.../split_config.xxhdpi.apk
+$ adb pull /data/app/.../split_config.arm64_v8a.apk
 ```
 
 I took this `split_config.arm64_v8a.apk` and fed it through [this decompiler](http://www.javadecompilers.com/apk), running `grep` on the result is promising
 
 ```bash
 $ grep -R BRANDEDAPP
-grep: split_arm64v8a/resources/lib/arm64-v8a/libapp.so: binary file matches
+grep: split_arm64v8a/.../libapp.so: binary file matches
 ```
 
 and reading the strings from the file, we can find that these values are part of the build, so, not account specific.
 ```bash
-$ strings split_arm64v8a/resources/lib/arm64-v8a/libapp.so| grep -E 'BRANDEDAPPTMB|APP_V5'
+$ strings libapp.so | grep -E 'BRANDEDAPPTMB|APP_V5'
 APP_V5
 BRANDEDAPPTMBTYDONOTDELETE-...
 ```
