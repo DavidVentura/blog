@@ -7,7 +7,9 @@ description: analyzing the Withings protocol
 incomplete: true
 ---
 
-first,get the app and pull it
+I bought a Withings ScanWatch 2, but I don't really like downloading apps on my phone -- they are usually shitty _and_ a privacy nightmare, so I set out to reverse the protocol and see if I can pull the data that I want in a nice way.
+
+To get started, install the app and pull the APK for analysis:
 
 ```bash
 adb shell pm list packages | grep -i withings
@@ -27,11 +29,9 @@ total 152M
 -rw-r--r-- 1 david david  87M Jul 29 10:38 base.apk
 ```
 
-Feed `base` and `split_config.arm64_v8a.apk` to [jadx](https://github.com/skylot/jadx).
+Then run both `base.apk` and `split_config.arm64_v8a.apk` through [jadx](https://github.com/skylot/jadx) (we ignore `.en.apk` and `xxhdpi.apk` because they only contain language data and images/videos respectively).
 
-(`.en` has language data and `xxhdpi` has images/videos)
-
-from `arm64_v8a` we can get the native libs
+In the `arm64_v8a.apk`, we can find the native libraries
 
 ```bash
 arm64-v8a$ ls -lhSr
@@ -57,8 +57,8 @@ total 12M
 4.8M libbarhopper_v3.so
 ```
 
-
-and when decompiling `base` we can get a large part of the protocol (`wpp`) implementation at com/withings/comm/wpp/i.java
+## Poking through the protocol declaration
+and when decompiling `base` we can get a large part of the protocol (`wpp`) implementation at `com/withings/comm/wpp/i.java`
 
 ```java
 public byte readByte(ByteBuffer byteBuffer)
@@ -74,7 +74,7 @@ public void writeIntArray(ByteBuffer byteBuffer, int[] iArr)
 
 ```
 
-and a treasure trove of constants at com/withings/comm/wpp/generated/Wpp.java
+and a treasure trove of constants at `com/withings/comm/wpp/generated/Wpp.java`
 
 ```java
 short CMD_ADC = 523;
@@ -214,49 +214,59 @@ int SIZE_SIZE = 2;
 int TYPE_SIZE = 2;
 ```
 
-at this point, i received my watch, and can proceed to sniff some traffic
-
-<div class="aside">
-<p>
-a long time ago, i used to tap on settings 'enable HCI log filter', which would dump packet captures to /sdcard/somefile.log, and i'd manually transmit the file and look at it on wireshark
-
-</p>
-<p>
-well, on my updated phone, it seems like the file is stored in an annoying place and i need (?) to do `adb bugreport report` which takes forever
-
-</p>
-<p>
-this led me to do some research and find https://github.com/mauricelam/btsnoop-extcap which is amazing: a plugin that live-streams the data captured by the phone into wireshark
-</p>
-</div>
-
-
-this is me enabling long press
-```
-0000   01 09 89 00 09 09 a1 00 01 06 01 00 00 00
-```
-and disabling long press
-
-```
-0000   01 09 89 00 09 09 a1 00 01 00 01 00 00 00
+implying that the cleaned up wire types are
+```java
+WppMessage = {
+    byte version;  // or protocol
+    short command; // channel info (2 bits) | Command ID (14 bits) 
+    List<WppObject> objects;
+}
+WppObject = {
+    short type;
+    short length;
+    byte[] value;
+}
 ```
 
-the 10th byte goes from `06` to `00`
+## Traffic analysis
+
+Around this point, I received my watch, and started looking at the live traffic with the amazing [btsnoop-extcap](https://scalews.withings.net/cgi-bin/association?action=getbyaccountid), which
+lets Wireshark access your phone's live capture through ADB.
+
+
+The first step to analyze a protocol is to capture some data and get a feel for the format, so here are some packets:
+
+Enabling the 'long press' feature:
+```
+01 09 89 00 09 09 a1 00 01 06 01 00 00 00
+```
+
+Disabling the 'long press' feature:
+```
+01 09 89 00 09 09 a1 00 01 00 01 00 00 00
+                           ^^ only this byte changed
+```
 
 this is fantastic: no encryption, no nonces, just a nice protocol.
 
-now, with enabled shortcut, set it to 'Start a breathe session'
+Now, with the 'long press' feature enabled, enabled this is setting it to 'Start a breathe session'
 ```
-0000   01 09 89 00 09 09 a1 00 01 05 01 00 00 00
+01 09 89 00 09 09 a1 00 01 05 01 00 00 00
 ```
-start the stopwatch
+and this is setting it to 'Start the stopwatch'
 ```
-0000   01 09 89 00 09 09 a1 00 01 06 01 00 00 00
+01 09 89 00 09 09 a1 00 01 06 01 00 00 00
+                           ^^ changed
 ```
 
-these values (5, 6) match `com/withings/comm/wpp/generated/object/ShortcutAction.java`
+these values (`05`, `06`) match `com/withings/comm/wpp/generated/object/ShortcutAction.java`
+```java
+short BREATH = 5;
+short STOPWATCH = 6;
+// ...
+```
 
-in there, we can also find `getType` is `2465` (== `0x9a1`) and `getDataSize` is `1`.
+in that file, we can also find the function `getType()` which just returns `2465` (== `0x9a1`) and `getDataSize()` which just returns `1`.
 
 which means we know
 ```
@@ -264,20 +274,22 @@ which means we know
                                   ^^ payload
                             ^^^^^ data size (big endian)
                       ^^^^^ type (big endian)
-                ^^^^^ payload len (guess, big endian)
+                ^^^^^ payload len (big endian)
           ^^^^^ CMD_SHORTCUT_SET (2441 == 0x0989)
         ^^ PROTOCOL (guess)
 ```
 
 and we have 4 bytes at the end (`0x1000000), and no idea what those are.. for now they are static.
 
-now auto-brightness off
+
+Let's do this again to see if the pattern holds up, by turning auto-brightness off
 ```
-0000   01 09 41 00 06 09 37 00 02 01 64
+01 09 41 00 06 09 37 00 02 01 64
 ```
 and on
 ```
-0000   01 09 41 00 06 09 37 00 02 00 64
+01 09 41 00 06 09 37 00 02 00 64
+                           ^^
 ```
 
 let's try to decode again
@@ -309,14 +321,45 @@ and to ~50%
 
 so this shows that the last byte ranges from 0 to 100 (`0x64`), regardless of whether auto-brightness is enabled or not
 
-manually decoding these is a pain, so let's make a wireshark dissector
+### Automated packet dissecting
 
-The payload
-```
-0000   01 09 92 00 09 09 a1 00 01 06 01 00 00 00
+Manually decoding each packet is a pain, we can make a dissector to follow the patterns that we guessed and see if they hold up.
+
+There's not a lot of magic in a dissector, it's a Lua program that takes a packet in, decides whether to handle it or not, and decodes the bytes.
+
+Here's a little part of the dissector
+```lua
+protocol = buffer(0,1):uint()
+command_raw = buffer(1,2):uint()
+payload_len = buffer(3,2):uint()
+
+command = bit.band(command_raw, COMMAND_MASK)
+channel = bit.rshift(bit.band(command_raw, CHANNEL_MASK), 14)
+
+command_name = commands_by_id[command]
+offset = 5
+
+while offset < payload_len do
+    obj_type = buffer(offset,2):uint()
+    obj_size = buffer(offset+2,2):uint()
+
+    type_name = type_names[obj_type]
+    if obj_type == types_by_name.TYPE_SHORTCUT_ACTION then
+        action_val = data_buffer(0,1):uint()
+        action_name = shortcut_actions[action_val]
+        action_label = "Action: " .. action_name .. " (" .. action_val .. ")"
+        obj_subtree:add(buffer(offset+4, 1), action_label)
+    end
+end
 ```
 
-now shows in wireshark as
+if you place your dissector in `~/.local/lib/wireshark/plugins/` and hit `CTRL-SHIFT-L` in WireShark, then the packets will be decoded, and the payload
+
+```
+01 09 92 00 09 09 a1 00 01 06 01 00 00 00
+```
+
+will now show as
 
 ```
 Withings Proprietary Protocol
@@ -331,11 +374,10 @@ Withings Proprietary Protocol
         Object Size: 0
 ```
 
-with this in place, it's a bit easier to update the dissector, hit CTRL-SHIFT-L and reload the dissector, watching whether the new decoded values make sense
+Now it's just a matter of spending a few hours adding a ridiculous amount of constants and trivial destructuring.
 
-[insert multiple hours of adding support for different commands/types]
 
-there's some _weird_ stuff in here, first I thought it was some conversion factor that I don't understand, but.. even the app and watch disagree?
+During those hours, I found some _weird_ stuff, first I thought it was some conversion factor that I don't understand, but.. even the app and watch disagree?
 
 <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
 <img style="max-width: calc(40% - 1rem)" src="assets/watch_calories.jpg" />
@@ -356,21 +398,14 @@ As for distance, my packet captures don't match up with what the phone/app show
 
 I don't know why this is off, but 0.91&ndash;0.92 is _awfully close_ to the yard:meter ratio (0.9144), so the dissector shows both the raw value and one coming from "yards".
 
---- 
 
-i haven't yet seen the actual _data_ from the watch (heartrate)
+Other interesting stuff:
 
+- Data about the user (name, height, weight, preferred units, etc) is sent _every time_ the app is used
+- The current time is set _every time_ the app is used (isn't it a _watch_??)
+- The phone send "images" to the watch?! I assume they are icons (metadata says 32x32 or 8x8), but I did not understand the format yet
 
-some interesting stuff:
-
-- distance may be in yards?? need to confirm.
-- data about the user is sent every time the app is used (age, weight, height)
-- the time is set every time the app is used (isn't it a _watch_??)
-- you can send images to the watch ?! need to understand the format
-- large packets seem.. incomplete. need to understand how they work
-
-
-sometimes the packets are too long for the MTU and get fragmented
+Sometimes the packets are too long for the MTU and get fragmented
 ```
 Bluetooth Attribute Protocol
     [Expert Info (Warning/Protocol): Packet size exceed current ATT_MTU]
@@ -381,25 +416,25 @@ Bluetooth Attribute Protocol
     Handle: 0x0013
 ```
 
-so the dissector needs to be able to understand this, and concatenate the packets
+so the dissector needs to be able to understand this, and concatenate the packets.
 
-i thought that wireshark had support for automatic reassembling of fragmented PDU, but i couldn't make it work. maybe it only works for things on top of TCP?
+I _thought_ that WireShark had support for automatic reassembling of fragmented PDU, but I couldn't make it work; I even followed the [ONE EXAMPLE](https://wiki.wireshark.org/uploads/__moin_import__/attachments/Lua/Examples/fpm.lua) they have in the docs.
 
-manually accumulate bytes until a full packet is formed
+I found some comments implying that the automatic reassembly depends on the lower level transport, and comments saying that it works fine _for TCP_.
+
+My solution was to manually accumulate bytes in a buffer until the required amount is present, it's not nice, but it seems to work fine.
+
+
+## Connecting to the watch
 
 connection process is mutual authentication
 
--> CMD_PROBE
-<- CMD_PROBE_CHALLENGE { TYPE_PROBE_CHALLENGE { mac addr, challenge data } }
--> CMD_PROBE_CHALLENGE { TYPE_PROBE_CHALLENGE_RESPONSE { answer } TYPE_PROBE_CHALLENGE { mac addr, challenge data } }
-<- CMD_PROBE { TYPE_PROBE_CHALLENGE_RESPONSE { answer } TYPE_PROBE_REPLY { name, mac, ... } }
-[normal comms]
+{embed-mermaid assets/mutual-auth.mermaid}
 
-
-in full
-
+<details>
+<summary>Click here if you prefer to see the mutual auth in packet format</summary>
 Start comm
-```
+```bash
 Command: 0x0101 (CMD_PROBE)
  TYPE_APP_PROBE
      OS: ANDROID (1)
@@ -410,7 +445,7 @@ Command: 0x0101 (CMD_PROBE)
 ```
 
 get challenge
-```
+```bash
 Command: 0x0128 (CMD_PROBE_CHALLENGE)
  TYPE_PROBE_CHALLENGE
      MAC Address: a4:7e:fa:44:xx:xx
@@ -418,7 +453,7 @@ Command: 0x0128 (CMD_PROBE_CHALLENGE)
 ```
 
 reply & send challenge
-```
+```bash
 Command: 0x0128 (CMD_PROBE_CHALLENGE)
  TYPE_PROBE_CHALLENGE_RESPONSE
      Answer Data: ECC5AF489073ED62879E0184E4DE411A4B36A10A
@@ -428,7 +463,7 @@ Command: 0x0128 (CMD_PROBE_CHALLENGE)
 ```
 
 receive final response
-```
+```bash
 Command: 0x0101 (CMD_PROBE)
  TYPE_PROBE_CHALLENGE_RESPONSE
      Answer Data: 93692C1AF192832A453B228CE435F691754CF04F
@@ -440,16 +475,20 @@ Command: 0x0101 (CMD_PROBE)
  TYPE_FACTORY_STATE
      Object Data: 00
 ```
+</details>
 
-```
+
+In this flow, there's an "answer" to the challenge, and we need to figure out how it's calculated
+```bash
 $ grep -R setAnswer
 wpp/generated/object/ProbeChallengeResponse.java:    public ProbeChallengeResponse setAnswer(byte[] bArr) {
 grep: base/resources/classes6.dex: binary file matches
 grep: base/resources/classes3.dex: binary file matches
 ```
 
-decompile classes3.dex and...
-```
+This is promising, we can decompile `classes3.dex` with jadx check what matches:
+
+```java
 private static ProbeChallengeResponse a(ProbeChallenge probeChallenge, String str) {
     byte[] bArrDigest;
     ByteBuffer byteBufferAllocate = ByteBuffer.allocate(...);
@@ -468,7 +507,9 @@ private static ProbeChallengeResponse a(ProbeChallenge probeChallenge, String st
 }
 ```
 
-but of course.. what is `str` here? we can follow the call-graph a bit and find some mac-address based lookup, with a lovely exception if that's not found
+Seems simple enough: `SHA1(challenge + mac + str)`, but.. what is `str` here?
+
+We can follow the call-graph a bit and find some mac-address based lookup, with a lovely exception if that's not found
 ```java
 public class NoKlSecretProvidedException extends IOException {
     public NoKlSecretProvidedException() {
@@ -485,10 +526,10 @@ public void initWithAssociation(Association association) {
     setKlSecret(association.klSecret); // <--
 ```
 
+so: it's _some value_ that we receive during association (pairing?), and store, keyed by the device's (watch's) MAC address.
 
-i got the secret key from a previous capture; where the phone _told_ the watch what the key would be
 
-(censored because i don't know if it's sensitive)
+I got the secret key from a previous capture (censored because i don't know if it's sensitive); where the phone _told_ the watch what the key would be
 
 ```
 Command: 0x0134 (CMD_ASSOCIATION_KEYS_SET)
@@ -498,7 +539,10 @@ TYPE_ADV_KEY
     Secret: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 ```
 
-so i can run
+What's the point of the phone telling the watch the key, then asking the watch to confirm it has it? The only thing I can think of, is that `CMD_ASSOCIATION_KEYS_SET` can only be done
+shortly after pairing..
+
+To verify the algorithm, we can run this script:
 ```
 challenge = "3FE94B29BD69F0A3FE2B0B18401941CF" # from watch
 mac = "a4:7e:fa:44:xx:xx" # from watch
@@ -509,13 +553,11 @@ response = hashlib.sha1(combined).hexdigest().upper()
 print(f"Response:       {response}")                                                                            
 ```
 
-and... get `ECC5AF489073ED62879E0184E4DE411A4B36A10A` back?? this was very lucky! things like casing,
-or removal of `:` from the mac address, can take a while to figure out blindly.
+and... get `ECC5AF489073ED62879E0184E4DE411A4B36A10A` back.. which is the expected value!
 
-pending:
-- gatt analysis
-- how does CMD_ASSOCIATION_KEYS_SET get sent on initial pair? maybe only during pairing window
+I felt _very lucky_ getting this in one go, I usually waste a lot of time getting things like casing, or string formatting (ie: removal of `:` from the mac address) correctly.
 
+## Some BLE stuff
 
 Withings service UUID
 `00001101-0000-1000-8000-00805F9B34FB` on `sources/on/i.java`
@@ -573,7 +615,7 @@ WPM = withings protocl manager
 WSM = withings sleep monitor
 
 ---
-API
+## Poking at the API
 
 I installed [HTTP Toolkit]() and saw that _of course_ there are dozens of requests sent to a few domains on every click.
 
