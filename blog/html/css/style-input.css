@@ -71,7 +71,7 @@ svg.logo-svg {
   }
   /* newer images are at /posts/.. */
   #blogpost-content img[src^="/images/"] {
-    @apply dark:brightness-50
+    @apply dark:brightness-75
   }
   p {
     @apply my-3 text-base dark:font-light;
