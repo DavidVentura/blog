@@ -7,12 +7,15 @@ if [[ $(find "blog/html/blogs-i-follow.html" -mtime +1 -print) ]]; then
     echo 'Re-generating webring'
     venv/bin/python webring-generator.py >/dev/null
 fi
-pnpm run tailwind
+if [[ "./blog/html/css/style-input.css" -nt "./blog/html/css/style-2025-09-19.css" ]]; then
+    echo "Regenerating css"
+    pnpm run tailwind
+fi
 
 grep -r live.js blog/html/ && echo -e "Dev mode found in blogs, aborting - run \ngrep -rl live.js blog/html/\n to check" && exit 1
-dot blog/raw/bookworm/architecture.dot -Tpng > blog/html/images/bookworm-architecture.png
 
-echo 'syncing'
-rsync -ar blog/html/ root@blog.davidv.dev:/var/www/blog-devops
-rsync -ar blog/html/ root@la.blog.davidv.dev:/var/www/blog-devops
-echo 'synced'
+if [[ "blog/raw/bookworm/architecture.dot" -nt "blog/html/images/bookworm-architecture.png" ]]; then
+    dot blog/raw/bookworm/architecture.dot -Tpng > blog/html/images/bookworm-architecture.png
+fi
+
+bash sync.sh
