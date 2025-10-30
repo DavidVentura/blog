@@ -642,7 +642,7 @@ Translation quality wise, the models are _good_, but they fall short of Google T
 It's also important to note that not many languages are supported; [The models repo](https://github.com/mozilla/firefox-translations-models/tree/main) lists 20 languages
 with bidirectional support and 7 languages which only translate one way.
 
-You can find the app [on GitHub](https://github.com/DavidVentura/firefox-translator); I'll try to upload it to F-Droid.
+You can find the app [on GitHub](https://github.com/DavidVentura/firefox-translator); and on [F-Droid](https://f-droid.org/en/packages/dev.davidv.translator/).
 
 
 ## Miscellaneous ranting
