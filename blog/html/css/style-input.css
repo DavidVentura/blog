@@ -136,8 +136,24 @@ svg.logo-svg {
   }
 
 
+  /* force tables to scroll on mobile */
+  @media (max-width: 640px) {
+    table {
+      display: block;
+      overflow-x: auto;
+      width: fit-content;
+      max-width: 100%;
+      margin: 0px auto;
+    }
+  }
+
+  @media (min-width: 640px) {
+    table {
+      @apply w-full;
+    }
+  }
   table {
-    @apply w-full table-auto text-sm text-left my-4 border border-gray-200 dark:border-gray-800;
+    @apply table-auto text-sm text-left my-4 border border-gray-200 dark:border-gray-800;
   }
 
   table th {
