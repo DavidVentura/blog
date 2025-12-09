@@ -1,23 +1,23 @@
 ---
 title: Postgres server as a library
-date: 2025-12-08
-tags: postgres, no-effort
+date: 2025-12-09
+tags: postgres
 slug: postgres-library
 description: global state was a mistake
 ---
 
-I feel like I just woke up from a fever dream, I've spent a large chunk of the last 72 hours reading the Postgres codebase.
+I feel like I just woke up from a fever dream. I've spent a large chunk of my waking hours over the last 3 days deep in the Postgres codebase.
 
 Why would you do that to yourself, you may ask. Well, I recently found out about [pglite](https://pglite.dev/), a project to build Postgres as a WASM(+WASI) blob
 and use it as a library.
 
 The thing is, I am weirdly driven by cursed projects and spite.
 
-My love of cursedness had made me into a WASM fan (LEB128 in an ISA? what could be more cursed than that!), but sometimes there's such a thing as too cursed, even for me. When they implemented variable-length-instructions for a _virtual ISA_, I joined the WASM-haters-club.
+My love of cursedness made me into a WASM fan (LEB128 in an ISA? what could be more cursed than that!), but sometimes there's such a thing as too cursed, even for me. When they implemented variable-length-instructions for a _virtual ISA_, I joined the WASM-haters-club.
 
 I have a much longer, much more concrete WASM rant in me, but it'll require some effort to write down, so now is not the time.
 
-Back to Postgres and pglite -- if they can build it in WASM, then _surely_ it is possible to build Postgres as a regular library (shared/static) and use it. I know nothing about postgres internals, but jumping in feet first has never gone wrong before.
+Back to Postgres and pglite—if they can build Postgres in WASM, then _surely_ it is possible to build it as a regular library (shared/static) and use it. I know nothing about postgres internals, but jumping in feet first has never gone wrong before.
 
 ## Building postgres statically
 
@@ -47,25 +47,25 @@ and finally add some timezone object files into the archive:
 ar rcs libpostgres_server.a src/timezone/localtime.o src/timezone/pgtz.o src/timezone/strftime.o
 ```
 
-This gives a ~100MB static file with 875 object files inside, _probably_ a lot of them are unused, but that's ok.
+This gives a ~100MB static file with 875 object files inside, a lot of them are unused, but that's ok.
 
 ## Analyzing Postgres startup
 
-Postgres is usually compiled to a binary (`postgres`) which runs as a server and dispatches incoming connections into some kind of internal event loop, which performs some IO and calculations, and gives an answer back.
+Postgres is usually compiled to a binary (`postgres`) which runs as a server and dispatches incoming connections to a `fork()`ed process, which handles client's queries.
 
-_Surely_ it should possible to bypass the whole server/connection dance and just execute the query code directly.
+_Surely_ it should be possible to bypass the whole server/connection dance and just execute the query code directly.
 
-Around here is where about 16 hours of my weekend disappeared. What I thought would be "just call some function" became "read through all paths of postgres initialization behavior and see how it affects global state".
+Around this point is where about 16 hours of my weekend disappeared. What I thought would be "just call some function" became "read through all paths of postgres initialization behavior and see how it affects global state".
 
-Why? Because even though postgres is one of the pieces of technology keeping the world together, its started as a university project 30~35 years ago, and it shows. There is _significant_ global state, seemingly everything I touched wanted to read or write from it.
+Why? Because even though postgres is one of the pieces of technology keeping the world together, it started as a university project 30&ndash;35 years ago, and it shows. There is _significant_ global state, seemingly everything I touched wanted to read or write from it.
 
-I assume that because a bunch of state is global, the architecture of Postgres relies on `fork()` to execute parts of code that need to temporarily modify the global state.
+I assume that because a bunch of state is global, Postgres relies on `fork()` to execute parts of code that need to temporarily modify the global state.
 
 
 
 It turns out that postgres has [single user mode](https://www.postgresql.org/docs/current/app-postgres.html#APP-POSTGRES-SINGLE-USER) which does exactly this, all we need to do is somehow call this code directly.
 
-The plan is to emulate single-user mode by performing some amount of setup, then querying the DB directly via the [Server Programming Interface](https://www.postgresql.org/docs/8.1/spi.html)
+The plan is to emulate single-user mode by performing _some_ amount of setup, then querying the DB directly via the [Server Programming Interface](https://www.postgresql.org/docs/8.1/spi.html).
 
 ## Initializing Postgres
 
@@ -123,34 +123,19 @@ pg_embedded_init_internal(const char *data_dir, const char *dbname, const char *
 										   "MessageContext",
 										   ALLOCSET_DEFAULT_SIZES);
 
-	/*
-	 * Perform an empty transaction to finalize SPI setup.
-	 * This ensures the system is ready for query execution.
-	 */
-	StartTransactionCommand();
-	if (SPI_connect() != SPI_OK_CONNECT)
-	{
-		snprintf(pg_error_msg, sizeof(pg_error_msg), "SPI_connect failed");
-		AbortCurrentTransaction();
-		return -1;
-	}
-	SPI_finish();
-	CommitTransactionCommand();
 
 	pg_initialized = true;
 	return 0;
 }
 ```
 
-TODO: shared plpgsql lib
-
 ## Running queries
 
 With Postgres' global state more or less matching what the query executor expects, we should be able to run queries via SPI now.
 
-There are _some_ preconditions that I mostly guessed at, either via reading code, reading error messages when lucky or backtraces in GDB when unlucky.
+There are _some_ preconditions that I guessed at, either via reading code, reading error messages when lucky or backtraces in GDB when unlucky.
 
-The summarized code for the query executor looks like this (you don't get to shame my memory allocation "strategy" at this point in time)
+The summarized code for the query executor looks like this (no shaming my memory allocation "strategy" at this point)
 
 ```c
 pg_result * pg_embedded_exec(const char *query) {
@@ -234,13 +219,13 @@ pg_result * pg_embedded_exec(const char *query) {
 
 ## Executing non-queries
 
-I did trivially implement transactions but that's just error-handling that wraps `StartTransactionCommand`/`CommitTransactionCommand`/`AbortCurrentTransaction`.
+I implemented transactions, which are just trivial wrappers for `StartTransactionCommand`/`CommitTransactionCommand`/`AbortCurrentTransaction` with some error handling.
 
 I didn't implement `prepare` or `execute_plan`. Maybe next time.
 
 ## Using the library
 
-Having a static library, it's trivial very use to call from some C code:
+Having a static library, it's trivial to use it from some C code:
 
 ```c
 pg_embedded_init(datadir, "postgres", "postgres");
@@ -254,12 +239,12 @@ pg_embedded_free_result(result);
 
 and we can compile it with
 ```bash
-musl-gcc -static \           
+musl-gcc -static \
     -I "$POSTGRES_ROOT/src/include" \
     -I "$POSTGRES_ROOT/src/backend/embedded" \
-    test_embedded.c \        
-    "$STATIC_LIB" \          
-    -o test_embedded         
+    test_embedded.c \
+    "$STATIC_LIB" \
+    -o test_embedded
 ```
 
 but there are a few undefined symbols when linking:
@@ -272,12 +257,12 @@ src/backend/tcop/postgres.c:3864:(.text.process_postgres_switches+0x106): undefi
 collect2: error: ld returned 1 exit status
 ```
 
-these symbols are dead code, but I just hacked a bunch of stuff and `#include`d `.c` files, so the symbols are required.
+these symbols are dead code, but it's a symptom of my hacky approach of `#include`ing `.c` files.
 
 It's OK, we can make stubs:
 ```c
 const char *progname = "postgres_embedded";
-int optreset = 0; 
+int optreset = 0;
 DispatchOption parse_dispatch_option(const char *name) {
     return 0;
 }
@@ -305,48 +290,52 @@ Data:
   Row 0: PostgreSQL 19devel on x86_64-pc-linux-musl, compiled by x86_64-linux-gnu-gcc (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0, 64-bit
 ```
 
+So far so good, but will this work when called from other languages? Are there any sneaky libc/stdlib dependencies?
 
 ## Creating bindings
 
-So far so good, but will this work when called from other languages? Are there any sneaky libc/stdlib dependencies?
+We can generate Rust bindings very easily with `bindgen` (pointing to the pre-built static file):
 
-We can try it out very easily with rust+bindgen (pointing to the pre-built static file), but it's not happy:
+```rust
+println!("cargo:rustc-link-search=native={}", postgres_dir);
+println!("cargo:rustc-link-lib=static=postgres");
 
-```text
-error: linking with `cc` failed: exit status: 1
-  |
-  = note:  "cc" "-m64" "/tmp/rustciM53nE/symbols.o" ... "-nodefaultlibs"
-  = note: some arguments are omitted. use `--verbose` to show all linker arguments
-  = note: rust-lld: error: undefined symbol: sigsetjmp
-          >>> referenced by pgembedded.c:100 (src/backend/embedded/pgembedded.c:100)
-          >>>               pgembedded.o:(pg_embedded_init_internal) in archive target/debug/deps/libtest_pgemb-b6c92dbb1b302a71.rlib
-          >>> referenced by pgembedded.c:416 (src/backend/embedded/pgembedded.c:416)
-          >>>               pgembedded.o:(pg_embedded_exec) in archive target/debug/deps/libtest_pgemb-b6c92dbb1b302a71.rlib
-          >>> referenced by pgembedded.c:592 (src/backend/embedded/pgembedded.c:592)
-          >>>               pgembedded.o:(pg_embedded_begin) in archive target/debug/deps/libtest_pgemb-b6c92dbb1b302a71.rlib
-          >>> referenced 48 more times
-          collect2: error: ld returned 1 exit status
+println!("cargo:rerun-if-changed={}/libpostgres.a", postgres_dir);
+println!(
+    "cargo:rerun-if-changed={}/src/backend/embedded/pgembedded.h",
+    postgres_dir
+);
+
+let bindings = bindgen::Builder::default()
+    .header(format!(
+        "{}/src/backend/embedded/pgembedded.h",
+        postgres_dir
+    ))
+    .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+    .wrap_unsafe_ops(true)
+    .generate()
+    .expect("Unable to generate bindings");
+
+let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+bindings
+    .write_to_file(out_path.join("bindings.rs"))
+    .expect("Couldn't write bindings!");
 ```
 
-so here `-nodefaultlibs` means that we don't have `sigsetjmp` which is provided by the stdlib, but we can stub it out
-```c
-int sigsetjmp(sigjmp_buf env, int savemask) {
-    (void) savemask;
-    return setjmp(env);
-}
-```
-
+and it just works
 ```bash
 $ cargo build --release --target x86_64-unknown-linux-musl
 $ ldd ./target/x86_64-unknown-linux-musl/release/safe_example
         statically linked
-$ $ ls -lh ./target/x86_64-unknown-linux-musl/release/safe_example
+$ ls -lh ./target/x86_64-unknown-linux-musl/release/safe_example
 12M ./target/x86_64-unknown-linux-musl/release/safe_example
 ```
 
+Did I mention that I love `bindgen`?
+
 ## Adding some thin wrappers for the bindings
 
-The bindings prove that things work, but if you write this rust code
+The bindings prove that things work, but if you write this Rust code
 
 ```rust
 let query = CString::new("SELECT version()").unwrap();
@@ -372,24 +361,26 @@ for row in result.rows() {
 }
 ```
 
-obviously this is not very idiomatic, and this API forces allocations, which could be avoided with some brain power.
+It's still not very idiomatic, but it shows promise that it _could_ be.
+
+Given how I wrote the C "API", results force unnecessary allocation to avoid dealing with data lifetimes, but this could be fixed with some brain power.
 
 
 ## Creating a db cluster on disk
 
-While this library works, it requires an existing "cluster" -- a set of files on disk. The classic way you get a database cluster is by running `initdb`.
+While this library works, it requires an existing "cluster"—a set of files on disk. The classic way you get a database cluster is by running `initdb`.
 
 Up to this point, I'd probably spent around 6 hours messing with postgres, and thought surely, _surely_, writing an empty cluster to disk can't be _that_ hard.
 
-I was pretty wrong. I spent the next ~12 hours trying to make this work and got _kind_ of a database on disk, but I've not yet made it work.
+I was pretty wrong. I spent the next ~16 hours trying to make this work and got _kind_ of a database on disk, but I've not yet made it work.
 
-My current database passes some checks, but then bails on 
+My current database passes some checks, but then bails on
 
 ```text
 FATAL:  pre-existing shared memory block (key 35794584, ID 1605763) is still in use
 ```
 
-so some more work is needed.
+because I am not cleaning up some unknown global state between mode transitions.
 
 Why is this so hard? I think that Postgres global state is the answer. There are a few different 'modes' in which the postgres binary can run, and they modify this state.
 
@@ -411,19 +402,19 @@ execve(["./initdb", "-L", "asd", "pgdata4", "--wal-segsize=1", "--locale=C", "--
 
 so, it calls `postgres -V` to check versions match with itself, then it starts postgres 4 separate times, to operate on the files on disk
 
-- in `check` mode
-- in `check` mode
+- in `check` mode, with 1k shared buffers
+- in `check` mode, with 16k shared buffers
 - in `boot` mode
 - in `single` mode
 
 
 ### Cursed cluster bootstrap
 
-Within the cluster bootstrapping process, I found some interesting stuff.
+Within the cluster bootstrapping process, I found out that there's a catalog file (`postgres.bki`, 12K lines) that defines tables, indices, etc. This catalog file is parsed line by line, gets some tokens replaced, then is interpreted.
 
-There's a catalog file (`postgres.bki`, 12K lines) that defines tables, indices, etc. This catalog file is parsed line by line, gets some tokens replaced, then is interpreted.
+Why is it this way? If the `bki` file is tied to the postgres version, _surely_ this could be handled during the build process?
 
-Why is it this way? if the `bki` file is tied to the postgres version, _surely_ this could be handled during the build process?
+In the follow-up stages of the bootstrap process, I found out that the `plpgsql` extension is _mandatory_—if an extension is mandatory, why is it an extension? Shouldn't it be part of postgres?
 
 After this bootstrap, more of the initial template needs to be populated, and it's done via these SQL files:
 
@@ -432,5 +423,66 @@ After this bootstrap, more of the initial template needs to be populated, and it
  - src/backend/catalog/system\_views.sql
  - src/backend/catalog/information\_schema.sql
 
-I'm not entirely sure if using SQL to bootstrap the database is cursed or genius, so I'll let it slide. However, what I'm sure about is that requiring these files to be present on the host filesystem is crazy. Users are not expected to modify them, 
-and it's an internal bringup detail. Why are they not bundled in the binary?
+I'm not entirely sure if using SQL to bootstrap the database is cursed or genius, so I'll let it slide. However, requiring these files on the host filesystem is definitely crazy.
+Users are not expected to modify them, and it's an internal bringup detail. Why are they not bundled in the binary?
+
+## Benchmarks
+
+I ran two benchmarks from [pglite's list](https://pglite.dev/benchmarks), both on postgres-lib and on sqlite.
+
+For the "durable" settings, I set:
+- Postgres: `{ fsync: true, synchronous_commit: true, full_page_writes: true }`
+- sqlite: `PRAGMA synchronous = ON`
+
+and for "non-durable" I set them all to false/off.
+
+Because it was easier to write, I wrote the Postgres benchmark in Rust, using the 'idiomatic' bindings.
+
+|Benchmark|DB|durable|non durable|
+|---------|--|--------|----------|
+|Insert 1k rows       |Sqlite  |1158ms|4ms|
+|Insert 1k rows       |Postgres|240ms|10ms|
+|Insert 25k rows in TX|Sqlite  |56ms|3ms|
+|Insert 25k rows in TX|Postgres|158ms|149ms|
+
+
+Postgres seems... slower than I expected. I used `strace` to see if there was anything obvious and found that _every_ query emits an `madvise(MADV_FREE)` syscall.
+
+To validate these numbers, I re-wrote the Postgres benchmark in C (with musl), and the syscall-per-query disappeared; I assume it's related to the extra allocations that I'm doing to cross the FFI boundary.
+
+
+|Benchmark|DB|Language|durable|non durable|
+|---------|----|--|--------|----------|
+|Insert 1k rows       |Sqlite  |N/A |1158ms|4ms|
+|Insert 1k rows       |Postgres|Rust|240ms|10ms|
+|Insert 1k rows       |Postgres|C   |235ms|9ms|
+|Insert 25k rows in TX|Sqlite  |N/A |56ms|3ms|
+|Insert 25k rows in TX|Postgres|Rust|158ms|149ms|
+|Insert 25k rows in TX|Postgres|C   |130ms|130ms|
+
+
+Compared to the numbers I got on [pglite's web benchmark](https://pglite.dev/benchmarks), the **non**-durable versions of these benchmarks are about 3x faster. Keep in mind that this compares completely different environments (browser WASM vs native program).
+
+## Wrapping up
+
+While writing this post, I wanted to check whether there was a hidden `fork` inside my library, making all of this moot; so I ran the test binary under strace.
+
+- Good news: no `fork()`
+- Bad news: I found 1000 `dup(2)` calls, followed by 1000 `close(fd)` calls.
+
+Turns out that `count_usable_fds` checks how many FDs it's able to open by.. opening as many as it can. Sure, it's defensive programming. It's also dumb that this is necessary.
+
+## Summary
+
+It's possible to build postgres statically, and with the use of some careful wrappers, use postgres as a library. Bindings for different languages are easy to build, but managing lifetimes in an idiomatic way is more complex.
+
+There are downsides to the current proof of concept, but it's possible to fix them with more work:
+- `initdb` does not work—use the `initdb` binary or ship a bundled tarball with an empty cluster
+- Unloading the db poisons the global state—need to implement re-initialization
+- There's dead code in the final artifact—due to importing `.c` files
+
+Some features are not implemented:
+- Loading of dynamic extensions
+- Prepared statements
+
+There is a fundamental limitation with this approach, the library is single-threaded only, so you can't execute concurrent queries.
