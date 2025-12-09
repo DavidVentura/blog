@@ -108,7 +108,7 @@ This page should now load much faster; establishing a TLS connection requires 3&
 
 I use [Caddy](https://github.com/caddyserver/caddy) as my HTTP server, which will by default, ask [Let's Encrypt](https://letsencrypt.org/) for SSL certificates.
 
-I was using the [HTTP-01](https://letsencrypt.org/docs/challenge-types/#http-01-challenge) challenge, which performs a GET request to `/.well-known/acm-echallenge/<TOKEN>`, but now that doesn't work anymore &mdash; all requests get directed to the Texas server, and that server does not know about requests performed by the other two servers.
+I was using the [HTTP-01](https://letsencrypt.org/docs/challenge-types/#http-01-challenge) challenge, which performs a GET request to `/.well-known/acme-challenge/<TOKEN>`, but now that doesn't work anymore &mdash; all requests get directed to the Texas server, and that server does not know about requests performed by the other two servers.
 
 The easy option would be to change and use the [DNS-01](https://letsencrypt.org/docs/challenge-types/#dns-01-challenge) challenge, but that would require all 3 of my servers to have keys to manage my DNS records, and I don't want to trust a $10/year VPS provider with my keys.
 
