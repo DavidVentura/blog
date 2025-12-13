@@ -8,7 +8,7 @@ series: Learning about PCI-e
 ---
 
 
-In the [previous entry](/learning-pcie.html) we covered the implementation of a trivial PCI-e device, which allowed us to read and write to it, 32 bits at a time, 
+In the [previous entry](/posts/learning-pcie/) we covered the implementation of a trivial PCI-e device, which allowed us to read and write to it, 32 bits at a time, 
 by relying on manual peek/poke with a hardcoded address (`0xfe000000`) which came from copy-pasting the address of BAR0 from `lspci`.
 
 To get this address programmatically, we need to ask the PCI subsystem for the details of the memory mapping for this device.

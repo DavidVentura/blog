@@ -278,7 +278,7 @@ Tried to read 0x2 bytes at 0x0 = 0x4
 If we wanted to have multiple memory regions, we'd need to duplicate: `gpu_mem_read`, `gpu_mem_write`, `gpu_mem_ops`, then call `memory_region_init` and `pci_register_bar` with those parameters.
 
 
-That's it for now, [next time](/pcie-driver-dma.html) we are tackling DMA & a simple kernel driver.
+That's it for now, [next time](/posts/pcie-driver-dma) we are tackling DMA & a simple kernel driver.
 
 ## References
 

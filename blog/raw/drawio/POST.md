@@ -119,13 +119,65 @@ How does the drawio exporter solve this? If we peek at the generated svg we can 
 ```
 It measured the text size!
 
-### Measuring text
+### Rendering text
 
-Text rendering, as we all know, is very simple. It is composed of letters that _only_ go from left to right, and where a pair of letters is _always_ represented as the concatenation of both letters individually. RTL? No. Ligatures? _No_.
+Text rendering, as we all know, is very simple. It is composed of letters that _only_ go from left to right, and where a pair of letters is _always_ represented as the concatenation of both letters individually. RTL? No. Ligatures? _Absolutely not_.
 
-[Determining font metrics](https://usage.imagemagick.org/text/#font_info)
-<img src="assets/font.svg" style="max-width: 30rem; width: 100%; margin: 0px auto;"/>
+Reading Imagemagic's [determining font metrics](https://usage.imagemagick.org/text/#font_info), I could make some sense of [fonttools](https://github.com/fonttools/fonttools) internals and render some text.
 
+<img src="assets/homemade-font.svg" style="max-width: 30rem; width: 100%; margin: 0px auto;"/>
+
+I ended up with 3 text implementations:
+
+Using HTML text is the easiest &mdash; the browser rendering engine takes care of everything, I just need to carefully use `flex` and `transform:translate()`.
+
+The only problem, is that opening the SVG with non-CSS capable viewers will just not show anything.
+
+Next, I implemented text using SVG's `Text` element, which does no wrapping on its own; so I manually calculate the size of the bounding box & the wrapping, by analyzing the properties of each glyph (~letter) of the selected font.
+
+The only problem is that _maybe_ you don't have the selected font, and now I'll need to link it to the SVG file, if text precision is important.
+
+Last, I implemented "expanding" of text, that is, converting each letter to a set of SVG `Path`s, by parsing the points that are present on the TTF font.
+
+The only problem is that now the SVGs carry a lot of redundant information, and end up pretty large. Maybe gzipping takes care of it, maybe not.
+- 
+
+
+## Automatically routing arrows
+
+Draw.io implements a routing algorithm that, while it usually works well, can only be considered degenerate.
+
+For example:
+
+<img src="assets/examples1.svg" style="max-width: 20rem; width: 100%; margin: 0px auto;"/>
+
+Note that in this case, only the destination point (with the arrow) is pinned; the source is free to rearrange itself
+for shortest path / least collision. 
+
+Now, if you have this arrangement
+<img src="assets/normal2.svg" style="max-width: 20rem; width: 100%; margin: 0px auto;"/>
+
+And move `B` to the left
+<img src="assets/degen2.svg" style="max-width: 20rem; width: 100%; margin: 0px auto;"/>
+
+You suddenly get a loop? Why?
+
+
+I want to mirror the algorithm used here, but I have no interest in mirroring the degenerate cases -- I never depend on them.
+
+I couldn't figure out a generic solution for this, though there are some patterns:
+
+- The point of entry/exit onto the block follows a perpendicular to keep a "margin" from the shape
+- There is some kind of "midpoint" that generates a "turn"
+
+With this, I made 'special cases' for certain combinations:
+
+- A top &rlarr; bottom connection always has a margin + a midpoint; with those 5 points (origin, margin, midpoint, margin, destination), it properly renders.
+- A left &rlarr; right connection doesn't follow the midpoint
+- "L" shapes (bottom/top &rlarr; left/right) 
+
+
+To prevent these aberrations from happening, you can introduce a set of 'fixed' points manually; but the algorithm doesn't really change -- the source or destination points get a bit closer, that's it.
 
 ## References
 

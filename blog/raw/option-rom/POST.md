@@ -267,7 +267,7 @@ at this point we have a driver that registers itself as a Graphics Output (GOP) 
 
 ## Configuring the output adapter
 
-To do _something_, we need to set up the information for the output adapter (the QEMU device we implemented in [part 1](/learning-pcie.html)) in the GOP structure
+To do _something_, we need to set up the information for the output adapter (the QEMU device we implemented in [part 1](/posts/learning-pcie)) in the GOP structure
 
 ```c
 EFI_STATUS EFIAPI GopSetup(IN OUT MY_GPU_PRIVATE_DATA *Private) {
@@ -388,7 +388,7 @@ And now, for the grand reveal (_be patient_):
 
 which is _amazing_ as it shows the option ROM works with a completely unmodified UEFI.
 
-It also _may_ be a _tad_ slow, so I spent about 45 min researching and implementing DMA transfers, as we did in [the last entry](/pcie-driver-dma.html), which ended up looking something like this:
+It also _may_ be a _tad_ slow, so I spent about 45 min researching and implementing DMA transfers, as we did in [the last entry](/posts/pcie-driver-dma), which ended up looking something like this:
 
 ```diff
 @@ MyGpuBlt (

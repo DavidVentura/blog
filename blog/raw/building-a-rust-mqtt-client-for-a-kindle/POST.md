@@ -4,7 +4,7 @@ date: 2021-01-07
 tags: iot, kindle, rust, cross-compiling
 description: The never-ending rabbit hole I found while trying to build a simple MQTT client for the kindle
 ---
-I have a paperwhite kindle on which I run a very dumb python script that broadcasts its' screen events (screen on, off) over the network, it's detailed [here](/integrating-a-kindle-into-house-automation.html).
+I have a paperwhite kindle on which I run a very dumb python script that broadcasts its' screen events (screen on, off) over the network, it's detailed [here](/posts/integrating-a-kindle-into-house-automation).
 
 Recently I read [this post](https://drewdevault.com/2020/10/09/Four-principles-of-software-engineering.html) and its
 point about software simplicity made me remember the script that runs in the kindle and all the surrounding machinery that exists for it.

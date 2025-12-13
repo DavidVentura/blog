@@ -108,7 +108,7 @@ applications.
 Busybox is a set of stripped-down utilities that were designed for exactly this
 kind of use-case: a stand-alone minimal interactive system.
 
-First, you need to clone busybox from [here](git@github.com:mirror/busybox.git)
+First, you need to clone busybox from [their github repository](https://github.com/mirror/busybox)
 and statically build it with the following script
 
 ```bash

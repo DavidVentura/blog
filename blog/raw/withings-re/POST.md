@@ -557,15 +557,24 @@ and... get `ECC5AF489073ED62879E0184E4DE411A4B36A10A` back.. which is the expect
 
 I felt _very lucky_ getting this in one go, I usually waste a lot of time getting things like casing, or string formatting (ie: removal of `:` from the mac address) correctly.
 
-## Some BLE stuff
+## Actually talking to the watch
 
-Withings service UUID
-`00001101-0000-1000-8000-00805F9B34FB` on `sources/on/i.java`
+Communication with the watch happens over [Bluetooth Low-Energy (BLE)](https://en.wikipedia.org/wiki/Bluetooth_Low_Energy), the watch advertises services, which group _characteristics_ (data) and descriptors (metadata).
 
-iterate through services where the uuid contains `5749-5448` (`WITH`) `tm/b.java`
+The expected programming model would have something like:
+```
+- Service (Health)
+  - Characteristic: Heartrate
+    Value: 70
+    Descriptor: Configuration (enable/disable notifications on threshold)
+  - Characteristic: Sensor location
+    Value: 1 (wrist)
+    Descriptor: User description ("Body location")
+```
 
-then get a handle from the characteristic depending on if it contains "494E4753" (`INGS`)
+But, as far as I understand, this code is iterating through services where the UUID contains `5749-5448` (`WITH`), and returning the characteristics which contain "494E4753" (`INGS`)
 
+We can see the services/characteristics with `bluetoothctl`
 ```
 list-attributes CF:89:D9:5D:36:3F
 Primary Service service000e
@@ -602,17 +611,9 @@ Descriptor service000a/char000b/desc000d
         Client Characteristic Configuration
 ```
 
----
+I tried to develop a bit on my laptop, as speed of iteration would be much quicker, but it was _extremely_ frustrating, connection would seemingly fail every time, requiring a re-pair. In the end, it was easier to iterate directly on an android app on my phone.
 
-guesses / interesting
-```
-CMD_STORED_MEASURED_SIGNAL_GET
-```
 
-WAM = withings activity monitor
-WSD = withings service discovery
-WPM = withings protocl manager
-WSM = withings sleep monitor
 
 ---
 ## Poking at the API
@@ -634,8 +635,8 @@ Particularly curious were `/cgi-bin/association`; and not just because they seem
         "sn": "SN-a4:7e:fa:44:xx:xx",
         "macaddress": "a4:7e:fa:44:xx:xx",
         "deviceproperties": {
-          "latitude": 52,
-          "longitude": 4
+          "latitude": 52.300,
+          "longitude": 4.900
         }
       }
     }
@@ -646,6 +647,19 @@ Particularly curious were `/cgi-bin/association`; and not just because they seem
 it's:
 - leaking my watch's secret key
 - leaking my mac address (= somewhat trackable)
-- leaking my location (i didn't give the app location access, so what is this?)
+- leaking my location (manually truncated on the payload)
 
 i don't know why i thought a french company would be less bad than an american/chinese company. seems like it's not the case.
+
+
+---
+
+guesses / interesting
+```
+CMD_STORED_MEASURED_SIGNAL_GET
+```
+
+WAM = withings activity monitor
+WSD = withings service discovery
+WPM = withings protocl manager
+WSM = withings sleep monitor
