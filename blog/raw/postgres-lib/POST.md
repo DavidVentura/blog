@@ -51,7 +51,7 @@ This gives a ~100MB static file with 875 object files inside, a lot of them are 
 
 ## Analyzing Postgres startup
 
-Postgres is usually compiled to a binary (`postgres`) which runs as a server and dispatches incoming connections to a `fork()`ed process, which handles client's queries.
+Postgres is usually compiled to a binary (`postgres`) that runs as a server (`postmaster`) and `fork()`s a new process to handle each connection.
 
 _Surely_ it should be possible to bypass the whole server/connection dance and just execute the query code directly.
 
@@ -63,13 +63,22 @@ I assume that because a bunch of state is global, Postgres relies on `fork()` to
 
 
 
-It turns out that postgres has [single user mode](https://www.postgresql.org/docs/current/app-postgres.html#APP-POSTGRES-SINGLE-USER) which does exactly this, all we need to do is somehow call this code directly.
+It turns out that postgres has [single user mode](https://www.postgresql.org/docs/18/app-postgres.html#APP-POSTGRES-SINGLE-USER) which does exactly this, all we need to do is somehow call this code directly.
 
-The plan is to emulate single-user mode by performing _some_ amount of setup, then querying the DB directly via the [Server Programming Interface](https://www.postgresql.org/docs/8.1/spi.html).
+The plan is to emulate single-user mode by performing _some_ amount of setup, then querying the DB directly via the [Server Programming Interface](https://www.postgresql.org/docs/18/spi.html).
 
-## Initializing Postgres
+## Bootstrapping single-user mode
 
-This is the init dance I ended up with. It's probably wrong, but it seems to work. I copied and pasted all of this from different parts of the initialization code, but it was mostly segfault-driven-development.
+To run queries, we need two things:
+
+- An on-disk set of files (the [database cluster](https://www.postgresql.org/docs/current/glossary.html#GLOSSARY-DB-CLUSTER), usually created with `initdb`)
+- Some code that interacts with the on-disk data
+
+Creating the database cluster is complex, so for now I'll use `initdb` and come back to this later.
+
+To interact with the on-disk data, we need to initialize various postgres subsystems.
+
+This is the init dance I ended up with. It's probably wrong, but it seems to work. I copied and pasted most of this from different parts of the initialization code, but it was mostly segfault-driven-development.
 
 ```c
 static int
@@ -135,7 +144,7 @@ With Postgres' global state more or less matching what the query executor expect
 
 There are _some_ preconditions that I guessed at, either via reading code, reading error messages when lucky or backtraces in GDB when unlucky.
 
-The summarized code for the query executor looks like this (no shaming my memory allocation "strategy" at this point)
+The summarized code for the query executor looks like this
 
 ```c
 pg_result * pg_embedded_exec(const char *query) {
@@ -186,7 +195,7 @@ pg_result * pg_embedded_exec(const char *query) {
 		if (ret > 0 && SPI_tuptable != NULL) {
 			SPITupleTable *tuptable = SPI_tuptable;
             // Lifetime of SPI_tuptable is tied to the SPI connection
-            // so we need to copy it
+            // copy_tuptable uses `malloc()` to decouple lifetimes
             copy_tuptable(SPI_tuptable, result);
 		}
 
@@ -368,7 +377,7 @@ Given how I wrote the C "API", results force unnecessary allocation to avoid dea
 
 ## Creating a db cluster on disk
 
-While this library works, it requires an existing "cluster"—a set of files on disk. The classic way you get a database cluster is by running `initdb`.
+While this library works, it requires an existing [database cluster](https://www.postgresql.org/docs/current/glossary.html#GLOSSARY-DB-CLUSTER)—a set of files on disk. The classic way you get a database cluster is by running `initdb`.
 
 Up to this point, I'd probably spent around 6 hours messing with postgres, and thought surely, _surely_, writing an empty cluster to disk can't be _that_ hard.
 
@@ -391,7 +400,8 @@ During this process, I learned a few things that I considered a bit cursed, and 
 To deal with the differing global state requirements, `initdb` has a "solution": calling `fork` like its life depends on it
 
 ```text
-execve(["./initdb", "-L", "asd", "pgdata4", "--wal-segsize=1", "--locale=C", "--encoding=UTF-8", "--no-sync", "--no-instructions", "--auth-local=trust"], []) = 0
+$ strace -f initdb ...
+execve(["./initdb", ...], []) = 0
 [pid 792826] execve(["postgres", "-V"], [] <unfinished ...>
 [pid 792828] execve(["postgres", "--check", "-F", "-c", "log_checkpoints=false", "-c", "max_connections=100", "-c", "autovacuum_worker_slots=16", "-c", "shared_buffers=1000", "-c", "dynamic_shared_memory_type=posix"], [] <unfinished ...>
 [pid 792830] execve(["postgres", "--check", "-F", "-c", "log_checkpoints=false", "-c", "max_connections=100", "-c", "autovacuum_worker_slots=16", "-c", "shared_buffers=16384", "-c", "dynamic_shared_memory_type=posix"], [] <unfinished ...>
@@ -423,7 +433,7 @@ After this bootstrap, more of the initial template needs to be populated, and it
  - src/backend/catalog/system\_views.sql
  - src/backend/catalog/information\_schema.sql
 
-I'm not entirely sure if using SQL to bootstrap the database is cursed or genius, so I'll let it slide. However, requiring these files on the host filesystem is definitely crazy.
+I haven't convinced myself whether using SQL to bootstrap the database is cursed or genius, so I'll let it slide. However, requiring these files on the host filesystem is definitely crazy.
 Users are not expected to modify them, and it's an internal bringup detail. Why are they not bundled in the binary?
 
 ## Benchmarks
@@ -451,14 +461,14 @@ Postgres seems... slower than I expected. I used `strace` to see if there was an
 To validate these numbers, I re-wrote the Postgres benchmark in C (with musl), and the syscall-per-query disappeared; I assume it's related to the extra allocations that I'm doing to cross the FFI boundary.
 
 
-|Benchmark|DB|Language|durable|non durable|
+|Benchmark|DB|Method|durable|non durable|
 |---------|----|--|--------|----------|
-|Insert 1k rows       |Sqlite  |N/A |1158ms|4ms|
-|Insert 1k rows       |Postgres|Rust|240ms|10ms|
-|Insert 1k rows       |Postgres|C   |235ms|9ms|
-|Insert 25k rows in TX|Sqlite  |N/A |56ms|3ms|
-|Insert 25k rows in TX|Postgres|Rust|158ms|149ms|
-|Insert 25k rows in TX|Postgres|C   |130ms|130ms|
+|Insert 1k rows       |Sqlite  |CLI          |1158ms|4ms|
+|Insert 1k rows       |Postgres|Rust bindings|240ms|10ms|
+|Insert 1k rows       |Postgres|C bindings   |235ms|9ms|
+|Insert 25k rows in TX|Sqlite  |CLI          |56ms|3ms|
+|Insert 25k rows in TX|Postgres|Rust bindings|158ms|149ms|
+|Insert 25k rows in TX|Postgres|C bindings   |130ms|130ms|
 
 
 Compared to the numbers I got on [pglite's web benchmark](https://pglite.dev/benchmarks), the **non**-durable versions of these benchmarks are about 3x faster. Keep in mind that this compares completely different environments (browser WASM vs native program).
@@ -485,4 +495,4 @@ Some features are not implemented:
 - Loading of dynamic extensions
 - Prepared statements
 
-There is a fundamental limitation with this approach, the library is single-threaded only, so you can't execute concurrent queries.
+There is a fundamental limitation with this approach: the library is single-threaded only, so you can't execute concurrent queries.
