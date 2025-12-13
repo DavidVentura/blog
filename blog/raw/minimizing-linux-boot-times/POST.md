@@ -4,7 +4,7 @@ date: 2024-02-05
 tags: firecracker, linux, optimization
 slug: minimizing-linux-boot-times
 description: Getting Linux to boot in 6ms
-series: Boot time optimization
+# series: Boot time optimization
 ---
 
 I recently read about [a project](https://www.usenix.org/publications/loginonline/freebsd-firecracker) to boot the FreeBSD kernel as fast as possible, and that made me wonder: How fast can you boot linux?

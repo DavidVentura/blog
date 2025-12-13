@@ -1,7 +1,7 @@
 ---
 title: Postgres server as a library
 date: 2025-12-09
-tags: postgres
+tags: postgres, cursed
 slug: postgres-library
 description: global state was a mistake
 ---

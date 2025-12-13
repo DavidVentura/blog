@@ -687,7 +687,7 @@ TcpSocketEvent { event: ReceivedReset, ... }
 I had some reservations before when using `kprobe`s, as there are no stability guarantees for them,
 _we_ need to provide the guarantees! Meaning that we get to add integration testing for each supported kernel version, yay.
 
-I've [written](https://blog.davidv.dev/posts/abusing-firecracker/#running-tests) a little bit about [firetest](https://github.com/DavidVentura/firetest) (a tool to run a binary inside a vm)
+I've [written](/posts/abusing-firecracker/#running-tests) a little bit about [firetest](https://github.com/DavidVentura/firetest) (a tool to run a binary inside a vm)
 before[^firetest], and now is a great time to put it in use:
 
 [^firetest]: The examples are even the same! Just don't compare the publication dates.

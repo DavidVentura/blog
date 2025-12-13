@@ -4,7 +4,7 @@ date: 2025-10-31
 tags: firecracker, linux, optimization
 slug: faster-linux-boot-times
 description: Getting Linux to boot in 3ms
-series: Boot time optimization
+# series: Boot time optimization
 incomplete: true
 ---
 

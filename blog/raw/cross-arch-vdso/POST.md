@@ -6,7 +6,7 @@ slug: self-modifying-code-crashes
 description: Replacing vDSO entries on more architectures with a bang
 ---
 
-I wanted to run some [self-modifying code](/posts/cursing-a-process-vdso-for-time-hacking) on my "[cluster](/posts/cross-arch-nomad)", which includes RISC-V and AArch64 {^SBCs|single board computers}, but as soon as I ran the project on these boards, I noticed that it would _sometimes_ crash with `SIGBUS` or `SIGSEGV`.
+I wanted to run some [self-modifying code](/posts/cursing-a-process-vdso-for-time-hacking/) on my "[cluster](/posts/cross-arch-nomad/)", which includes RISC-V and AArch64 {^SBCs|single board computers}, but as soon as I ran the project on these boards, I noticed that it would _sometimes_ crash with `SIGBUS` or `SIGSEGV`.
 
 The execution flow of the program:
 

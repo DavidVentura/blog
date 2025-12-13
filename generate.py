@@ -101,7 +101,7 @@ class PostMetadata:
     @property
     def relative_url(self) -> str:
         # Used in template only
-        return "/posts/%s" % self.get_slug()
+        return "/posts/%s/" % self.get_slug()
 
     def get_slug(self) -> str:
         if self.slug:
@@ -120,6 +120,7 @@ class PostMetadata:
         meta = {}
         for line in text.splitlines():
             line = line.strip()
+            if line.startswith('#'): continue
             if line != '---':
                 if started:
                     k, _, v = line.partition(':')
@@ -229,6 +230,7 @@ def generate_post(header: str, body: str, meta: PostMetadata):
     rendered = BODY_TEMPLATE.render(header=header,
             post=body,
             title=meta.get_title(),
+            title_escaped=meta.get_title().replace('"', ''),
             tags=meta.tags,
             date=meta.date,
             description=meta.description,
@@ -476,6 +478,18 @@ def copy_relative_assets(html, assets_dir, post_dir):
         else:
             print(f"Relative-referenced file {src} does not exist")
 
+    # Anchors
+    for source in html.find_all('a'):
+        href = source.attrs.get('href')
+        assert href is not None
+        if href.startswith('/') or href.startswith('http') or href.strip() == "":
+            continue
+        og_file = post_dir / href
+        if og_file.exists():
+            shutil.copyfile(og_file, assets_dir / og_file.name)
+        elif '#' not in href and 'mailto:' not in href:
+            print(f"Relative-referenced file '{href}' does not exist")
+
 def main(filter_name: Optional[str]):
     this_script = __file__
     _all_time_start = time.time()
@@ -495,6 +509,7 @@ def main(filter_name: Optional[str]):
                 continue
 
 
+        print(post_file)
         md_str = post_file.open(encoding='utf-8').read()
         r = PostMetadata.from_text(md_str)
 
@@ -546,8 +561,13 @@ def main(filter_name: Optional[str]):
                     print(anchor.text)
                     print(anchor.parent.text)
                     bad = True
+
+                href = anchor.attrs.get('href')
+                if href.startswith("/posts/") and not href.endswith("/") and '#' not in href:
+                    print(f'Anchor "{anchor.text}" does not end in trailing slash: "{href}"')
+                    bad = True
         if bad:
-            print("bad anchor text on ", r.get_slug())
+            print("bad anchor on ", r.get_slug())
             sys.exit(1)
 
         # TODO: this should also be considered for 'newer'??
