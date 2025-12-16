@@ -1,10 +1,10 @@
 ---
 date: 2025-12-15
-incomplete: true
 tags: postgres
 title: Postgres lib 2
 description: extension boogaloo
-series: embedded-postgres
+series: Embedded postgres server
+slug: postgres-extensions
 ---
 
 In the previous episode we got a Postgres server compiled to a static library, linked to a project, and got to execute some queries.
@@ -14,21 +14,18 @@ That's _fine_ but kids these days demand more. Postgres is seemingly just a cont
 By this, I mean [extensions](https://www.postgresql.org/docs/current/external-extensions.html).
 
 In summary, if you can pack your code as a shared object (`.so` file), comply with a [simple ABI](https://www.postgresql.org/docs/current/xfunc-c.html#XFUNC-C-DYNLOAD)
-and write two text files (`extension--version.sql` and `extension.control`), you can use a Postgres instance as your very own execution environment!
+and write two text files (`extension--version.sql` and `extension.control`), you can use a Postgres instance as your very own computing environment!
 
-That's all nice, but what to do in the static library context?
+That's nice, but the `.so` extensions are meant to be dynamically loaded by a process. What can we do in a static library context?
 
 ## Loading an extension
 
-The process for 'installing' an extension onto a database is roughly:
+When a user runs `CREATE EXTENSION <extension>`, the server will:
 
-1. Run `CREATE EXTENSION <extension>`
 1. Read `<extension>.control` from a very specific path
 1. Execute `<extension>-<version>.sql` from a very specific path
 1. Call `dlopen()` to load the `<extension>.so` file
-1. Call `dlsym()` to find specific function pointers
-
-The specific functions are `_PG_init`, and functions referenced in the `<extension>-<version>.sql` file.
+1. Call `dlsym()` to find some function pointers by name
 
 The control file looks like this:
 ```text
@@ -44,9 +41,20 @@ CREATE FUNCTION add_one(integer) RETURNS integer AS 'example', 'add_one'
 LANGUAGE C STRICT IMMUTABLE;
 ```
 
-If we are building all of Postgres as a static lib, it makes little sense to build extensions as dynamic libraries (ignoring the fact that without a dynamic loader, manually loading a shared library is a pain in the ass), so, the only sane option is to build extensions as static libraries, along with Postgres.
+when this is executed, the server will:
 
-If we take a very simple extension:
+- Run the `_PG_init` function
+- Keep a mapping of the string `add_one` to the function pointer from the library
+
+This `dlopen`/`dlsym` mechanism doesn't really work in a static library context.
+
+Even ignoring the fact that without a dynamic loader, manually loading a shared library is a pain in the ass, 
+it makes little sense to build extensions as dynamic libraries -- the flexibility gained by decoupling deployment of the database vs extensions is not really worth the extra complexity.
+
+So, the only sane option is to build extensions as part of the Postgres static library.
+
+Let's take a trivial extension:
+
 ```c
 #include "postgres.h"
 
@@ -61,14 +69,17 @@ void _PG_init(void) {
 	elog(NOTICE, "Example static extension initialized");
 }
 ```
-Building it is trivial (`musl-gcc -static -I../src -o example.a`), but how to plug it into Postgres?
 
-Well, we can make a registry of extensions in-process
+Building it is trivial (`musl-gcc -static -I../src -o example.a`), but how to plug it into the static Postgres?
+
+What we need is fairly simple. Per library, keep a mapping: function name &rarr; function pointer
+
+The easiest way to do that, is to have a linked-list of metadata for each extension
 
 ```c
 typedef struct StaticExtensionLib {
     struct StaticExtensionLib *next;
-    const char *library;
+    const char *library; // "pgvector", "example", ...
     PG_init_t init_func;
     bool init_called;
     const StaticExtensionFunc *functions;
@@ -76,7 +87,7 @@ typedef struct StaticExtensionLib {
 } StaticExtensionLib;
 ```
 
-then, each extension needs a little bit of code to register itself
+Each extension needs to add itself to the list of extensions. If we use the previous 'example' extension:
 
 ```c
 const StaticExtensionFunc example_static_functions[] = {
@@ -99,7 +110,8 @@ void register_example(void) {
 }
 ```
 
-but of course, just creating some 'registry' doesn't mean that postgres will do anything, we need to patch Postgres a little bit:
+but of course, just creating some 'registry' doesn't mean that Postgres will magically use it. We need to replace the
+dynamic extension loading with code that will look in the registry:
 
 In `src/backend/utils/fmgr/dfmgr.c`:
 ```diff
@@ -133,6 +145,14 @@ gives
 Result: 42
 ```
 
+In summary:
+- We built a trivial extension (`example.c`) into a static library (`example.a`)
+- We linked the extension (`example.a`) along with postgres (`libpostgres.a`)
+- We had some code call `register_example` to add the extension functions to a global registry
+- We patched Postgres to look into the global registry instead of doing `dlopen`/`dlsym`
+
+With all of this in place, when `SELECT add_one(41)` was executed, our `add_one` function got called.
+
 ## Loading _two_ extensions
 
 The static build system works great, but if we add a second extension there's a small problem. You know how the extension ABI requires you to declare `_PG_init`? Well, if you have two extensions, you have two `_PG_init` symbols.
@@ -145,13 +165,13 @@ In our static world, we just get a linker error:
 extension_static.c: multiple definition of `_PG_init'; ../extension/example/example.a(example.o): first defined here
 ```
 
-This is easy enough to fix, we can rename the symbol with `objcopy`[^rename]
+This is easy enough to fix, we can rename the symbol:
 
 ```bash
 objcopy --redefine-sym=_PG_init=example_PG_init example.o;
 ```
 
-Why `objcopy` instead of renaming `_PG_init`? Well, I want to build existing extensions unmodified, instead of keeping patches.
+Why `objcopy` instead of renaming `_PG_init` in the `example.c` file? Well, I want to build existing extensions unmodified, instead of keeping patches.
 
 ## Building _all_ the extensions
 
@@ -164,9 +184,13 @@ void register_example(void) { };
 ```
 and it was _fine_ for my toy extension, but then I got to `pgvector`, which exports 104 functions, and I'm not doing that manually.
 
-My solution for this? Build the extension statically into `<extension>.a`, then list all the symbols, and conveniently the ABI requires every symbol to be accompanied by a meta function, which has the prefix `pg_finfo_`.
+My solution for this? Build the extension statically into `<extension>.a`, then list all the symbols.
 
-So, I made a python script that essentially runs `nm <extension>.a` and generates some C code that looks like 
+Not _every_ symbol in the archive file is a function for Postgres to call though. Helper functions shouldn't be added to the static registry.
+
+How to tell extensions and helper functions apart? Well, _conveniently_ the ABI requires every extension function to be accompanied by a meta function, which has the prefix `pg_finfo_`.
+
+So, I made a python script that essentially runs `nm <extension>.a | grep pg_finfo` and generates a _wrapper_ static library which looks like 
 
 ```c
 #include "postgres.h"
@@ -207,18 +231,22 @@ note that this file has `extern void vector_PG_init` -- it links to the objcopy-
 
 With this file, I can generate _another_ static library, `<extension>_static.a`, which is the one I finally link to Postgres.
 
+
+TODO: is this clear without a diagram
+
 ### A detour on pgvector and PGXS
 
 When trying to build `pgvector` statically for my extension, I had some issues because it depends on `pgxs` in its `Makefile`:
-```
+
+```make
 PG_CONFIG ?= pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 ```
 
-The PGXS included Makefile is _thousands_ of lines long, pulls a version of clang I don't have installed and hardcodes `-shared`.
+The PGXS included Makefile is _thousands_ of lines long, pulls a version of Clang I don't even have installed and even _dares_ hardcode `-shared` when calling `clang`.
 
-I didn't feel like debugging/patching it, so I did not use it. Instead of thousands of lines of Makefile, I used 14 lines of bash:
+I didn't feel like patching it, so I did not use it. Instead of thousands of lines of Makefile, I used 14 lines of bash:
 
 ```bash
 CC="${CC:-musl-gcc}"
@@ -240,7 +268,94 @@ wait
 ar rcs "$OUTPUT_LIB" src/*.o
 ```
 
-## Postgres and its fixation with random files
+With this, `pgvector` loaded, and worked just fine:
 
+```c
+pg_embedded_exec("CREATE EXTENSION vector");
+pg_embedded_exec("CREATE TABLE items (id bigserial PRIMARY KEY, embedding vector(3))");
+pg_embedded_exec("INSERT INTO items (embedding) VALUES ('[1,2,3]'), ('[4,5,6]')");
+result = pg_embedded_exec("SELECT * FROM items ORDER BY embedding <-> '[3,1,2]' LIMIT 5");
+for (int row = 0; row < result->rows; row++)
+    printf("  id: %s, embedding: %s\n", result->values[row][0], result->values[row][1]);
+```
+Which prints
+```text
+Found 5 results:
+  id: 1, embedding: [1,2,3]
+  id: 2, embedding: [4,5,6]
+```
 
-here need to do the timezonesets stuff, then note that i avoided mentioning extensions only work because i carefully placed .sql and .control files in appropriate paths
+<div class="aside">
+I do not understand the point in <code>pgxs</code>. It seems to "simplify" building with the correct flags. What does <em>correct</em> mean?? Am I expected to build the extension on the same host
+where my database is running???
+</div>
+
+## Making the library self contained
+
+Up to this point, everything works fine, but it requires a carefully crafted filesystem, as Postgres expects some files to be available on-disk.
+
+When building the library, I'm passing `--prefix=/tmp/pg-embedded-install`, and if that directory is empty, Postgres will log
+
+```text
+ERROR: could not open directory "/tmp/pg-embedded-install/share/postgresql/timezonesets":
+No such file or directory
+```
+
+and refuse to start.
+
+<div class="aside">
+I initially spent some time trying to parse the `timezonesets/Default` file at compile time, but it was harder than expected—this helper depends on _most_ of Postgres, and it would require patching out
+quite a bit of parsing code, but I am trying _quite_ hard to keep the patchset for Postgres small.
+</div>
+
+My solution for this was to wrap specific `AllocateFile` calls (Postgres version of `fopen`) with a some code that checks if the filename is `Default` and just returns a `const char*` with the data preloaded.
+
+Once this is in place, the database starts up again, without `/tmp/pg-embedded-install` present on the host.
+
+However, now extensions don't work! Trying to load an extension fails and logs
+
+```text
+ERROR: Query failed: extension "example" is not available
+```
+
+Tracing a little bit, I found a bunch of `stat` and `AllocateFile` calls, looking for `<extension>.control` and `<extension>--<ver>.sql` in `<PREFIX>/share/postgresql/extension/`. These little bits of path are hardcoded across parts of the codebase, so changing it is not really feasible.
+
+For extensions, I ended up patching `extension.c`
+
+```diff
+-	if (stat(filename, &fst) == 0)
++	if (has_embedded_file(filename) || stat(filename, &fst) == 0)
+```
+and
+```diff
+-	if ((file = AllocateFile(filename, "r")) == NULL)
++	if ((file = embedded_AllocateFile(filename, "r")) == NULL)
+```
+
+```diff
+-	src_str = read_whole_file(filename, &len);
++	src_str = get_embedded_file_data(filename, &len) || read_whole_file(filename, &len);
+```
+
+these are repeated a total of 5 times.
+
+To do this, I had to update the extension registry a little bit, by adding two 'file' members to `StaticExtensionLib`:
+
+```c
+const EmbeddedFile *control_file;
+const EmbeddedFile *script_file;
+```
+
+where `EmbeddedFile` is just
+```c
+typedef struct EmbeddedFile {
+	const char *filename;
+	const unsigned char *data;
+	unsigned int len;
+} EmbeddedFile;
+```
+
+and `embedded_AllocateFile` does `fmemopen` to return a `FILE*` from `const char*` 🤮
+
+It's _nasty_, but now we don't need any files on the host besides the database cluster directory!
+
