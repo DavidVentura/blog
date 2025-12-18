@@ -1,15 +1,15 @@
 ---
-date: 2025-12-15
-tags: postgres
-title: Postgres lib 2
-description: extension boogaloo
+date: 2025-12-16
+tags: postgres, cursed
+title: Implementing extension support on libpostgres
+description: The dynamic linker is for the weak
 series: Embedded postgres server
 slug: postgres-extensions
 ---
 
 In the previous episode we got a Postgres server compiled to a static library, linked to a project, and got to execute some queries.
 
-That's _fine_ but kids these days demand more. Postgres is seemingly just a contrived vessel onto which one should deploy all kinds of code.
+That's _fine_ but Kids These Days demand more. Postgres has seemingly become just a contrived vessel onto which one should deploy all kinds of code.
 
 By this, I mean [extensions](https://www.postgresql.org/docs/current/external-extensions.html).
 
@@ -23,7 +23,7 @@ That's nice, but the `.so` extensions are meant to be dynamically loaded by a pr
 When a user runs `CREATE EXTENSION <extension>`, the server will:
 
 1. Read `<extension>.control` from a very specific path
-1. Execute `<extension>-<version>.sql` from a very specific path
+1. Execute `<extension>-<version>.sql` from the same specific path
 1. Call `dlopen()` to load the `<extension>.so` file
 1. Call `dlsym()` to find some function pointers by name
 
@@ -43,13 +43,23 @@ LANGUAGE C STRICT IMMUTABLE;
 
 when this is executed, the server will:
 
-- Run the `_PG_init` function
+- Run the `_PG_init` function from the extension's `.so`
 - Keep a mapping of the string `add_one` to the function pointer from the library
+
+At least, that's the case in a normal Postgres server, with dynamically loaded extensions.
+
+However, my friend M&aring;rten rejects dynamic loaders
+
+<center>
+![DMs where Mårten says 'No dynamic' 'Include the .a in your gcc command' as an alternative to dlopen](assets/no_dynamic.png)
+</center>
+
+## Dynamic loader, who?
 
 This `dlopen`/`dlsym` mechanism doesn't really work in a static library context.
 
-Even ignoring the fact that without a dynamic loader, manually loading a shared library is a pain in the ass, 
-it makes little sense to build extensions as dynamic libraries -- the flexibility gained by decoupling deployment of the database vs extensions is not really worth the extra complexity.
+Without a loader (`ld.so`), manually loading a shared library is a pain in the ass. Even putting that aside,
+it makes little sense to build extensions as dynamic libraries -- the flexibility gained by decoupling deployment of the database vs extensions is not worth the extra complexity.
 
 So, the only sane option is to build extensions as part of the Postgres static library.
 
@@ -70,7 +80,7 @@ void _PG_init(void) {
 }
 ```
 
-Building it is trivial (`musl-gcc -static -I../src -o example.a`), but how to plug it into the static Postgres?
+Building it is trivial (`musl-gcc -static -I../src -o example.o`), but how to plug it into the static Postgres?
 
 What we need is fairly simple. Per library, keep a mapping: function name &rarr; function pointer
 
@@ -231,12 +241,13 @@ note that this file has `extern void vector_PG_init` -- it links to the objcopy-
 
 With this file, I can generate _another_ static library, `<extension>_static.a`, which is the one I finally link to Postgres.
 
-
-TODO: is this clear without a diagram
+<center>
+    <img src="assets/Page-2.svg" style="width: 35rem; max-width: 100%" />
+</center>
 
 ### A detour on pgvector and PGXS
 
-When trying to build `pgvector` statically for my extension, I had some issues because it depends on `pgxs` in its `Makefile`:
+When trying to build `pgvector` statically for my extension, I had issues with its build system, specifically, because it uses `pgxs` in its `Makefile`:
 
 ```make
 PG_CONFIG ?= pg_config
@@ -253,8 +264,7 @@ CC="${CC:-musl-gcc}"
 CFLAGS="${CFLAGS:--static -fPIC}"
 INCLUDE_DIR="${INCLUDE_DIR:-../pl/vendor/pg18/src/include}"
 OUTPUT_LIB="${OUTPUT_LIB:-libvector.a}"
-OPTFLAGS="-march=native -ftree-vectorize -fassociative-math -fno-signed-zeros -fno-trapping-math"
-FULL_CFLAGS="$CFLAGS -I$INCLUDE_DIR $OPTFLAGS"
+FULL_CFLAGS="$CFLAGS -I$INCLUDE_DIR"
 SOURCES=(src/*.c)
 
 rm -f src/*.o
@@ -280,7 +290,6 @@ for (int row = 0; row < result->rows; row++)
 ```
 Which prints
 ```text
-Found 5 results:
   id: 1, embedding: [1,2,3]
   id: 2, embedding: [4,5,6]
 ```
@@ -292,7 +301,7 @@ where my database is running???
 
 ## Making the library self contained
 
-Up to this point, everything works fine, but it requires a carefully crafted filesystem, as Postgres expects some files to be available on-disk.
+Up to this point, everything works fine, as long as it's running on a carefully crafted filesystem. This is because Postgres expects some non-database files to be available on-disk.
 
 When building the library, I'm passing `--prefix=/tmp/pg-embedded-install`, and if that directory is empty, Postgres will log
 
@@ -304,11 +313,11 @@ No such file or directory
 and refuse to start.
 
 <div class="aside">
-I initially spent some time trying to parse the `timezonesets/Default` file at compile time, but it was harder than expected—this helper depends on _most_ of Postgres, and it would require patching out
-quite a bit of parsing code, but I am trying _quite_ hard to keep the patchset for Postgres small.
+I initially spent some time trying to parse the <code>timezonesets/Default</code> file at compile time, but it was harder than expected—this helper depends on <em>most</em> of Postgres, and it would require patching out
+quite a bit of parsing code, but I am trying <em>quite</em> hard to keep the patchset for Postgres small.
 </div>
 
-My solution for this was to wrap specific `AllocateFile` calls (Postgres version of `fopen`) with a some code that checks if the filename is `Default` and just returns a `const char*` with the data preloaded.
+My solution for this was to wrap specific `AllocateFile` calls (Postgres version of `fopen`) with some code that checks if the filename is `Default` and just returns a `const char*` with the data preloaded.
 
 Once this is in place, the database starts up again, without `/tmp/pg-embedded-install` present on the host.
 
@@ -355,7 +364,240 @@ typedef struct EmbeddedFile {
 } EmbeddedFile;
 ```
 
+`control_file` and `script_file` are generated by the script when it generates `<extension>_static.c`.
+
 and `embedded_AllocateFile` does `fmemopen` to return a `FILE*` from `const char*` 🤮
 
 It's _nasty_, but now we don't need any files on the host besides the database cluster directory!
 
+Pgvector was a good testing ground, time to spice it up.
+
+## PostGIS
+
+PostGIS is an extension for Postgres that processes spatial data; it's fairly popular, and a quick skim of its build system
+tells me it's not going to go gentle into that good ~night~ archive.
+
+Like `pgvector`, `PostGIS` uses `pgxs` and a fairly complex build system. As far as I understood, the minimal dependency tree looks like:
+
+```text
+PostGIS
+  GEOS
+  PROJ
+    SQLite
+  libxml2
+```
+
+Yep, that's right, if you load the PostGIS extension, _some of your Postgres queries will depend on SQLite_.
+
+Much worse than that is the fact that some of these dependencies are written in C++, which is famously _lovely_ to get statically compiled.
+<TODO do not statically link stdc++>
+
+The resulting build script is quite straightforward, but it took me a few hours of hair-pulling.
+
+### Building PostGIS dependencies
+
+Building GEOS (which ignored my `CC` and `CXX` vars)
+```bash
+cmake -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+      -DBUILD_TESTING=OFF \
+      -DBUILD_GEOSOP=OFF \
+      -DCMAKE_C_COMPILER="$CC" \
+      -DCMAKE_CXX_COMPILER="$CXX" \
+      ..
+```
+
+PROJ
+```bash
+cmake -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+      -DENABLE_TIFF=OFF \
+      -DENABLE_CURL=OFF \
+      -DBUILD_TESTING=OFF \
+      -DBUILD_APPS=OFF \
+      -DSQLite3_INCLUDE_DIR="$SQLITE_DIR" \
+      -DSQLite3_LIBRARY="$SQLITE_DIR/libsqlite3.a" \
+      ..
+```
+
+
+SQLite, as always, is a delight
+```bash
+$CC -O2 -fPIC -DSQLITE_OMIT_LOAD_EXTENSION -c sqlite3.c -o sqlite3.o
+```
+
+libxml2
+```bash
+./autogen.sh --prefix=/usr --disable-shared --enable-static --with-pic --without-python --without-lzma --without-zlib
+make -j8 libxml2.la
+```
+
+### Building PostGIS itself
+
+This is a little bit more complicated, I don't think they were optimizing for "ease of building without our build system".
+
+The core of the build script (summarized) looks something like this
+
+```bash
+INCLUDES="-I$PG_INCLUDE"
+INCLUDES="$INCLUDES -I../$POSTGIS_DIR/liblwgeom"
+INCLUDES="$INCLUDES -I../$POSTGIS_DIR/libpgcommon"
+INCLUDES="$INCLUDES -I../$POSTGIS_DIR/deps/ryu/.."
+INCLUDES="$INCLUDES -I../$POSTGIS_DIR/deps/flatgeobuf"
+INCLUDES="$INCLUDES -I../$POSTGIS_DIR/deps/flatgeobuf/include"
+INCLUDES="$INCLUDES -I../$POSTGIS_DIR"
+INCLUDES="$INCLUDES -I../$GEOS_CAPI_INCLUDE"
+INCLUDES="$INCLUDES -I../$XML_INCLUDE"
+DEFINES="-DHAVE_GEOS=1 -DHAVE_LIBPROJ=1 -DHAVE_LIBXML2=1"
+
+for srcdir in "liblwgeom" "liblwgeom/topo" "libpgcommon" "deps/ryu" "postgis"; do
+    prefix=$(basename "$srcdir")
+    for src in ../$POSTGIS_DIR/$srcdir/*.c; do
+        $CC $CFLAGS $INCLUDES $DEFINES -c "$src" -o "${prefix}_$(basename "$src" .c).o" &
+    done
+done
+
+# ew
+for src in ../$POSTGIS_DIR/deps/flatgeobuf/*.cpp; do
+    $CXX $CFLAGS $INCLUDES -c "$src" -o "flatgeobuf_$(basename "$src" .cpp).o" &
+done
+
+wait
+
+ar rcs "../bare_postgis.a" *.o
+```
+
+This creates `bare_postgis.a` which does not have the dependencies bundled, for that, I wrote a small `ar` script:
+
+```text
+CREATE libpostgis_all.a
+ADDLIB bare_postgis.a
+ADDLIB $VENDOR_DIR/geos/build/lib/libgeos_c.a
+ADDLIB $VENDOR_DIR/geos/build/lib/libgeos.a
+ADDLIB $VENDOR_DIR/proj/build/lib/libproj.a
+ADDLIB $VENDOR_DIR/sqlite/libsqlite3.a
+ADDLIB $VENDOR_DIR/libxml2/.libs/libxml2.a
+ADDLIB $LIBSTDCXX
+SAVE
+END
+```
+
+which I then ran with `ar -M`.
+
+This creates a 45MB `libpostgis_all.a`.
+
+To convert this library to the 'static registry' format we discussed before, we need both the `.control` and `.sql` files.
+
+This was... unexpectedly difficult. The `.sql` file is generated with an unholy combination of C preprocessor macros and `perl`.
+
+After pushing through all of this, we are greeted by a beautiful sight:
+```text
+-- SELECT PostGIS_Full_Version();
+postgis ver='POSTGIS="3.6.2dev 11021e0" [EXTENSION] PGSQL="180" GEOS="3.12.2-CAPI-1.18.2" (compiled against GEOS 0.3.12) PROJ="9.5.1" (compiled against PROJ 0.9.0) LIBXML="20912"'
+```
+
+Though it did increase the size of the compiled binary by 17MB, 7MB of which are from `postgis--3.6.2dev.sql`. Oof.
+
+If we create some more meaningful data:
+```sql
+CREATE TABLE locations (id SERIAL PRIMARY KEY, name TEXT, geom GEOMETRY(Point, 4326));
+
+INSERT INTO locations (name, geom) VALUES
+  ('San Francisco', ST_SetSRID(ST_MakePoint(-122.4194, 37.7749), 4326)),
+  ('New York', ST_SetSRID(ST_MakePoint(-74.0060, 40.7128), 4326)),
+  ('London', ST_SetSRID(ST_MakePoint(-0.1278, 51.5074), 4326))");
+```
+
+When running a query like this
+```sql
+SELECT l1.name, l2.name, ROUND(ST_Distance(l1.geom::geography, l2.geom::geography) / 1000)::integer AS distance_km
+FROM locations l1, locations l2
+WHERE l1.name = 'San Francisco' AND l2.name != 'San Francisco'
+ORDER BY distance_km";
+```
+
+The DB logs
+
+```text
+proj_create: Cannot find proj.db
+proj_create: no database context specified
+proj_create_operation_factory_context: Cannot find proj.db
+pj_obj_create: Cannot find proj.db
+proj_coordoperation_is_instantiable: Cannot find proj.db
+pj_obj_create: Cannot find proj.db
+```
+
+... but still gives a result?
+
+```text
+New York,4139 km
+London,8639 km
+```
+
+The missing `proj.db` lines seem to be a common issue, as there's [an FAQ entry](https://proj.org/en/stable/faq.html#why-am-i-getting-the-error-cannot-find-proj-db) on PROJ's website about it.
+
+There seem to be _some_ fallback values, as the query _did_ work. From some quick research, the magic number `4326` seems to be blessed with fallbacks. Other numbers are not so lucky.
+
+Regardless, depending on the filesystem to do calculations is just silly.
+Grepping for this message, I found `proj/src/iso19111/factory.cpp`, which is a cool 10052 lines.
+
+I ended up patching the `open` function:
+
+```diff
+@@ -1198,20 +1199,13 @@ void DatabaseContext::Private::open(const std::string &databasePath,
+     }
+ 
+     setPjCtxt(ctx);
+-    std::string path(databasePath);
+-    if (path.empty()) {
+-        path.resize(2048);
+-        const bool found =
+-            pj_find_file(pjCtxt(), "proj.db", &path[0], path.size() - 1) != 0;
+-        path.resize(strlen(path.c_str()));
+-        if (!found) {
+-            throw FactoryException("Cannot find proj.db");
+-        }
+     }
+ 
+-    sqlite_handle_ = SQLiteHandleCache::get().getHandle(path, ctx);
+-
+-    databasePath_ = std::move(path);
++    sqlite3 *embedded_db = get_embedded_proj_db();
++    if (!embedded_db) {
++        throw FactoryException("Cannot load embedded proj.db");
++    sqlite_handle_ = SQLiteHandle::initFromExisting(embedded_db, false, 0, 0);
++    databasePath_ = ":memory:";
+ }
+```
+
+where `get_embedded_proj_db` just calls `sqlite3_deserialize` on a `const char* db`. This `db` is generated by running the 9MiB(**!!**) `proj.db` through `xxd -include`.
+
+This allows the extension to work without looking for the DB on disk, but it does bloat the binary size by another 9MiB.
+
+Breaking it down, the self-contained `PostGIS` feature adds 26MiB to the binary:
+
+- 9MiB for `proj.db`
+- 7.2MiB for `postgis--3.6.2dev.sql`
+- 9.8MiB of code
+
+I did a quick test, and standard `gzip` can compress `proj.db` to 1.7MiB and `postgis--3.6.2dev.sql` to 0.5MB. Could save 14MB of `.rodata` someday.
+
+## Wrapping up
+
+Making extensions work in this libpostgres was fun, but wrangling multiple build systems was not.
+
+I tried to keep all the modifications that I needed in my project, instead of patching dependencies, because updating a tree of submodules is never fun.
+
+For some of these projects, I had to write some patches, which I kept as `.patch` files on my repo. I don't know if this is a good strategy, and it feels like it won't well if the patchset grows.
+
+This project, even at the experimental stage, lands in an interesting niche. I can 
+
+For example, a very nice emergent property is that extensions become compile-time features:
+
+```bash
+cargo build --feature pgvector
+```
+
+gives you a 13MB binary with the pgvector extension! It _almost_ feels like SQLite, though it gets a little nastier with PostGIS, which adds 26MB by itself.
