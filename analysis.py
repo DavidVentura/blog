@@ -1,6 +1,8 @@
 from pathlib import Path
 from collections import defaultdict
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import numpy as np
 
 from generate import PostMetadata
 
@@ -57,8 +59,8 @@ def analyze_posts_with_gaps(directory):
             'total_words': stats['total_words'],
             'avg_words_per_post': round(avg_words, 2)
         })
-    
-    return results, (dates, gaps)
+
+    return results, (dates, gaps), all_posts
 
 
 def create_and_save_plots(stats, gap_data):
@@ -95,7 +97,7 @@ def create_and_save_plots(stats, gap_data):
                 ha='center', va='bottom')
     
     plt.tight_layout()
-    plt.savefig('posts_per_year.svg', format='svg', bbox_inches='tight')
+    #plt.savefig('posts_per_year.svg', format='svg', bbox_inches='tight')
     plt.close()
     
     # 2. Average Words per Post
@@ -113,7 +115,7 @@ def create_and_save_plots(stats, gap_data):
         ax.text(x, y, f'{int(y)}', ha='center', va='bottom')
     
     plt.tight_layout()
-    plt.savefig('avg_words_per_post.svg', format='svg', bbox_inches='tight')
+    #plt.savefig('avg_words_per_post.svg', format='svg', bbox_inches='tight')
     plt.close()
     
     # 3. Total Words per Year
@@ -134,29 +136,67 @@ def create_and_save_plots(stats, gap_data):
                 ha='center', va='bottom')
     
     plt.tight_layout()
-    plt.savefig('total_words_per_year.svg', format='svg', bbox_inches='tight')
+    #plt.savefig('total_words_per_year.svg', format='svg', bbox_inches='tight')
     plt.close()
     
     # 4. Days Since Last Post
     dates, gaps = gap_data
     if dates and gaps:
         fig, ax = plt.subplots(**plot_kwargs)
-        ax.plot(dates, gaps, marker='o', color='#9C27B0', linewidth=2, markersize=4)
+        ax.plot(dates, gaps, marker='o', color='#9C27B0', linewidth=0, markersize=4)
         ax.set_title('Days Since Last Post', pad=15, fontsize=14)
         ax.set_xlabel('Date', fontsize=12)
         ax.set_ylabel('Days', fontsize=12)
+        ax.set_yscale('linear')
+        ax.set_ylim(bottom=0, top=400)
+        ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda y, _: f'{int(y)}'))
         ax.grid(True, linestyle='--', alpha=0.7)
-        
+
         # Format x-axis dates
         ax.tick_params(axis='x', rotation=45)
-        
+
         plt.tight_layout()
-        plt.savefig('days_since_last_post.svg', format='svg', bbox_inches='tight')
+        #plt.savefig('days_since_last_post.svg', format='svg', bbox_inches='tight')
         plt.close()
 
 
-def create_combined_plot(stats, gap_data):
-    """Create a 2x2 combined plot with all four charts."""
+def create_histogram_distribution_plot(stats, gap_data):
+    """Alternative visualization: histogram with variable-width bins."""
+    dates, gaps = gap_data
+
+    if not dates or not gaps:
+        return
+
+    plot_kwargs = {
+        'figsize': (10, 6),
+        'dpi': 300
+    }
+
+    fig, ax = plt.subplots(**plot_kwargs)
+    # Custom bins: dense at low end (0-100), sparse at high end
+    bins = list(range(0, 110, 10)) + [150, 200, 300, 500]
+    counts, bin_edges = np.histogram(gaps, bins=bins)
+
+    # Create labels for each bin
+    labels = [f'{int(bin_edges[i])}-{int(bin_edges[i+1])}' for i in range(len(bin_edges)-1)]
+
+    # Plot as bar chart with equal widths
+    x_pos = np.arange(len(labels))
+    ax.bar(x_pos, counts, color='#9C27B0', alpha=0.7, edgecolor='black')
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(labels, rotation=45, ha='right')
+    ax.set_title('Distribution of Days Between Posts', pad=15, fontsize=14)
+    ax.set_xlabel('Days', fontsize=12)
+    ax.set_ylabel('Number of Gaps', fontsize=12)
+    ax.grid(True, linestyle='--', alpha=0.7, axis='y')
+
+    plt.tight_layout()
+    plt.savefig('days_between_posts_histogram.svg', format='svg', bbox_inches='tight')
+    plt.close()
+
+
+def create_combined_plot(stats, gap_data, all_posts):
+    """Create a 2x2 combined plot with all four charts and a stats table."""
     # Extract data for plotting
     years = [stat['year'] for stat in stats]
     years_str = [str(year) for year in years]
@@ -164,9 +204,34 @@ def create_combined_plot(stats, gap_data):
     avg_words = [stat['avg_words_per_post'] for stat in stats]
     total_words = [stat['total_words'] for stat in stats]
     dates, gaps = gap_data
-    
-    # Create 2x2 subplot
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12), dpi=300)
+
+    # Calculate overall statistics
+    total_posts = sum(posts)
+    total_words_count = sum(total_words)
+
+    if all_posts and len(all_posts) > 1:
+        first_post_date = all_posts[0]['date']
+        last_post_date = all_posts[-1]['date']
+        days_span = (last_post_date - first_post_date).days
+        avg_days_between_posts = days_span / (len(all_posts) - 1) if len(all_posts) > 1 else 0
+        years_span = days_span / 365.25
+        avg_words_per_year = total_words_count / years_span if years_span > 0 else 0
+        avg_posts_per_year = total_posts / years_span if years_span > 0 else 0
+    else:
+        days_span = 0
+        avg_days_between_posts = 0
+        avg_words_per_year = 0
+        avg_posts_per_year = 0
+
+    # Create figure with custom layout: 2x2 grid for plots, 1 narrow column for stats
+    fig = plt.figure(figsize=(18, 12), dpi=300)
+    gs = fig.add_gridspec(2, 3, width_ratios=[1, 1, 0.05], hspace=0.3, wspace=0.2)
+
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax_stats = fig.add_subplot(gs[:, 2])
     
     # 1. Posts per Year (top-left)
     bars1 = ax1.bar(years, posts, color='#2196F3', alpha=0.7)
@@ -207,14 +272,34 @@ def create_combined_plot(stats, gap_data):
     
     # 4. Days Since Last Post (bottom-right)
     if dates and gaps:
-        ax4.plot(dates, gaps, marker='o', color='#9C27B0', linewidth=2, markersize=4)
+        ax4.plot(dates, gaps, marker='o', color='#9C27B0', linewidth=0, markersize=4)
         ax4.set_title('Days Since Last Post', pad=15, fontsize=12)
         ax4.set_xlabel('Date', fontsize=10)
         ax4.set_ylabel('Days', fontsize=10)
+        ax4.set_yscale('linear')
+        ax4.set_ylim(bottom=0, top=300)
+        ax4.yaxis.set_major_formatter(ticker.FuncFormatter(lambda y, _: f'{int(y)}'))
         ax4.grid(True, linestyle='--', alpha=0.7)
         ax4.tick_params(axis='x', rotation=45, labelsize=8)
-    
-    plt.tight_layout()
+
+    # 5. Stats Table (right side - margin note style)
+    ax_stats.axis('off')
+    #ax_stats.set_title('Overall Statistics', pad=15, fontsize=10, fontweight='bold', loc='left')
+
+    stats_text = f"""Total Posts: {total_posts}
+Total Words: {total_words_count:,}
+Days Span: {days_span}
+Avg Days Between Posts: {avg_days_between_posts:.1f}
+Avg Words per Year: {avg_words_per_year:,.0f}
+Avg Posts per Year: {avg_posts_per_year:.1f}"""
+
+    ax_stats.text(-2.05, 0.94, stats_text,
+                  transform=ax_stats.transAxes,
+                  fontsize=12,
+                  verticalalignment='center',
+                  horizontalalignment='left',
+                  family='monospace')
+
     plt.savefig('blog_stats_combined.svg', format='svg', bbox_inches='tight')
     plt.close()
 
@@ -222,8 +307,7 @@ def create_combined_plot(stats, gap_data):
 if __name__ == "__main__":
     blog_directory = "blog/raw/"
 
-    data = analyze_posts_with_gaps(blog_directory)
-    stats, gap_data = data
+    stats, gap_data, all_posts = analyze_posts_with_gaps(blog_directory)
 #    if os.path.isfile('out.json'):
 #        with open('out.json', 'r') as fd:
 #            data = json.load(fd)
@@ -234,7 +318,7 @@ if __name__ == "__main__":
 #        with open('out.json', 'w') as fd:
 #            json.dump(data, fd)
 #        stats, gap_data = data
-    
+
     # Print statistics
     print("\nBlog Statistics by Year:")
     print("-" * 65)
@@ -245,10 +329,10 @@ if __name__ == "__main__":
         total += year_stat['total_words']
         print(f"{year_stat['year']:<10} {year_stat['posts']:<10} "
               f"{year_stat['total_words']:<15} {year_stat['avg_words_per_post']:<15.2f}")
-    
+
     # Create and save visualizations
     create_and_save_plots(stats, gap_data)
-    create_combined_plot(stats, gap_data)
+    create_combined_plot(stats, gap_data, all_posts)
     print(f"\nIndividual plots saved as SVG files")
     print(f"Combined plot saved as 'blog_stats_combined.svg'")
     print(f"total {total}")
