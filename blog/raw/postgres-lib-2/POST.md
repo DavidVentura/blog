@@ -1,11 +1,13 @@
 ---
 date: 2025-12-16
 tags: postgres, cursed
-title: Implementing extension support on libpostgres
-description: The dynamic linker is for the weak
+title: Building extensions into libpostgres
+description: the dynamic linker is for the weak
 series: Embedded postgres server
 slug: postgres-extensions
 ---
+
+<link href="/css/telegram.css" rel="stylesheet" type="text/css"/>
 
 In the previous episode we got a Postgres server compiled to a static library, linked to a project, and got to execute some queries.
 
@@ -48,18 +50,21 @@ when this is executed, the server will:
 
 At least, that's the case in a normal Postgres server, with dynamically loaded extensions.
 
-However, my friend M&aring;rten rejects dynamic loaders
-
-<center>
-![DMs where Mårten says 'No dynamic' 'Include the .a in your gcc command' as an alternative to dlopen](assets/no_dynamic.png)
-</center>
-
 ## Dynamic loader, who?
 
-This `dlopen`/`dlsym` mechanism doesn't really work in a static library context.
+This `dlopen`/`dlsym` mechanism doesn't really work in a static context.
 
 Without a loader (`ld.so`), manually loading a shared library is a pain in the ass. Even putting that aside,
 it makes little sense to build extensions as dynamic libraries -- the flexibility gained by decoupling deployment of the database vs extensions is not worth the extra complexity.
+
+My friend Mårten is with me on this one:
+
+<div class="chat">
+   <div class="message-from" data-timestamp="23:48"><span>you are a smart man</span></div>
+   <div class="message-from" data-timestamp="23:48"><span>what's the smart man's alternative to dlopen</span></div>
+   <div class="message-to"   data-timestamp="23:49"><span>No dynamic</span></div>
+   <div class="message-to"   data-timestamp="23:50"><span>Include the .a in your gcc command</span></div>
+</div>
 
 So, the only sane option is to build extensions as part of the Postgres static library.
 
@@ -80,9 +85,9 @@ void _PG_init(void) {
 }
 ```
 
-Building it is trivial (`musl-gcc -static -I../src -o example.o`), but how to plug it into the static Postgres?
+Building it is trivial (`musl-gcc -static -I../src -c example.c -o example.o`), but how to plug it into the static Postgres?
 
-What we need is fairly simple. Per library, keep a mapping: function name &rarr; function pointer
+What we need is fairly simple: for each library, keep a mapping of function name &rarr; function pointer
 
 The easiest way to do that, is to have a linked-list of metadata for each extension
 
@@ -145,7 +150,8 @@ In `src/backend/utils/fmgr/dfmgr.c`:
 Let's try it
 
 ```c
-pg_embedded_exec("CREATE EXTENSION example");
+register_example();
+pg_embedded_exec("CREATE EXTENSION example"); // _PG_init will be called
 result = pg_embedded_exec("SELECT add_one(41)");
 printf("Result: %s\n", result->values[0][0]);
 ```
@@ -161,27 +167,31 @@ In summary:
 - We had some code call `register_example` to add the extension functions to a global registry
 - We patched Postgres to look into the global registry instead of doing `dlopen`/`dlsym`
 
-With all of this in place, when `SELECT add_one(41)` was executed, our `add_one` function got called.
+With all of this in place, when `SELECT add_one(41)` was executed, the `add_one` function got called.
 
 ## Loading _two_ extensions
 
-The static build system works great, but if we add a second extension there's a small problem. You know how the extension ABI requires you to declare `_PG_init`? Well, if you have two extensions, you have two `_PG_init` symbols.
+The static build system works great, but if we add a second extension there's a small problem. You know how the extension ABI requires the `_PG_init` and `Pg_magic_func` functions? Well, if you have two extensions, you will have two definitions of each!
 
 In the dynamic library world, this is not a problem, because `dlsym` takes a `handle` parameter, effectively namespacing the symbol.
 
-In our static world, we just get a linker error:
+In our static world, we just get linker errors:
 
 ```
 extension_static.c: multiple definition of `_PG_init'; ../extension/example/example.a(example.o): first defined here
+extension_static.c: multiple definition of `Pg_magic_func'; ../extension/example/example.a(example.o): first defined here
 ```
 
-This is easy enough to fix, we can rename the symbol:
+This is easy enough to fix, we can rename the `_PG_init` symbol and make `Pg_magic_func` file-local:
 
 ```bash
-objcopy --redefine-sym=_PG_init=example_PG_init example.o;
+objcopy --redefine-sym=_PG_init=example_PG_init \
+        --localize-symbol=Pg_magic_func example.o
 ```
 
 Why `objcopy` instead of renaming `_PG_init` in the `example.c` file? Well, I want to build existing extensions unmodified, instead of keeping patches.
+
+What about `Pg_magic_func`? This function is used to verify that both Postgres and the extension agree on the ABI. We are compiling them statically into the same bundle, so they will always agree.
 
 ## Building _all_ the extensions
 
@@ -192,13 +202,9 @@ const StaticExtensionFunc example_static_functions[] = {...};
 const StaticExtensionFInfo example_static_finfo[] = {...};
 void register_example(void) { };
 ```
-and it was _fine_ for my toy extension, but then I got to `pgvector`, which exports 104 functions, and I'm not doing that manually.
+and it was _fine_ for a toy extension, but then I got to [pgvector](https://github.com/pgvector/pgvector), which exports 104 functions. No way I'm doing that manually.
 
-My solution for this? Build the extension statically into `<extension>.a`, then list all the symbols.
-
-Not _every_ symbol in the archive file is a function for Postgres to call though. Helper functions shouldn't be added to the static registry.
-
-How to tell extensions and helper functions apart? Well, _conveniently_ the ABI requires every extension function to be accompanied by a meta function, which has the prefix `pg_finfo_`.
+Since the ABI _conveniently_ requires every extension function to have a companion `pg_finfo_` meta function, we can programmatically filter for extension functions from the archive (`<extension>.a`).
 
 So, I made a python script that essentially runs `nm <extension>.a | grep pg_finfo` and generates a _wrapper_ static library which looks like 
 
@@ -241,9 +247,13 @@ note that this file has `extern void vector_PG_init` -- it links to the objcopy-
 
 With this file, I can generate _another_ static library, `<extension>_static.a`, which is the one I finally link to Postgres.
 
+Something like this:
+
 <center>
     <img src="assets/Page-2.svg" style="width: 35rem; max-width: 100%" />
 </center>
+
+There's nothing that _yet another layer of indirection_ can't beat.
 
 ### A detour on pgvector and PGXS
 
@@ -257,21 +267,17 @@ include $(PGXS)
 
 The PGXS included Makefile is _thousands_ of lines long, pulls a version of Clang I don't even have installed and even _dares_ hardcode `-shared` when calling `clang`.
 
-I didn't feel like patching it, so I did not use it. Instead of thousands of lines of Makefile, I used 14 lines of bash:
+I didn't feel like patching it, so I did not use it. Instead of thousands of lines of Makefile, I used this little script:
 
 ```bash
-CC="${CC:-musl-gcc}"
-CFLAGS="${CFLAGS:--static -fPIC}"
+set -eu
 INCLUDE_DIR="${INCLUDE_DIR:-../pl/vendor/pg18/src/include}"
 OUTPUT_LIB="${OUTPUT_LIB:-libvector.a}"
-FULL_CFLAGS="$CFLAGS -I$INCLUDE_DIR"
 SOURCES=(src/*.c)
-
-rm -f src/*.o
 
 for src in "${SOURCES[@]}"; do
     obj="${src%.c}.o"
-    $CC $FULL_CFLAGS -c "$src" -o "$obj" &
+    $CC $CFLAGS -I$INCLUDE_DIR -c "$src" -o "$obj" &
 done
 wait
 
@@ -317,7 +323,7 @@ I initially spent some time trying to parse the <code>timezonesets/Default</code
 quite a bit of parsing code, but I am trying <em>quite</em> hard to keep the patchset for Postgres small.
 </div>
 
-My solution for this was to wrap specific `AllocateFile` calls (Postgres version of `fopen`) with some code that checks if the filename is `Default` and just returns a `const char*` with the data preloaded.
+My solution for this was to wrap specific `AllocateFile` calls (Postgres' version of `fopen`) with some code that checks if the filename is `Default` and just returns a `const char*` with the data preloaded.
 
 Once this is in place, the database starts up again, without `/tmp/pg-embedded-install` present on the host.
 
@@ -328,6 +334,8 @@ ERROR: Query failed: extension "example" is not available
 ```
 
 Tracing a little bit, I found a bunch of `stat` and `AllocateFile` calls, looking for `<extension>.control` and `<extension>--<ver>.sql` in `<PREFIX>/share/postgresql/extension/`. These little bits of path are hardcoded across parts of the codebase, so changing it is not really feasible.
+
+Like before, I'd rather embed these constant values into `.rodata` than read them from the filesystem.
 
 For extensions, I ended up patching `extension.c`
 
@@ -374,8 +382,8 @@ Pgvector was a good testing ground, time to spice it up.
 
 ## PostGIS
 
-PostGIS is an extension for Postgres that processes spatial data; it's fairly popular, and a quick skim of its build system
-tells me it's not going to go gentle into that good ~night~ archive.
+[PostGIS](https://postgis.net/) is an extension for Postgres that processes spatial data; it's fairly popular, and a quick skim of its build system
+tells me it's not going to go gentle into that good ~~night~~ archive.
 
 Like `pgvector`, `PostGIS` uses `pgxs` and a fairly complex build system. As far as I understood, the minimal dependency tree looks like:
 
@@ -389,14 +397,11 @@ PostGIS
 
 Yep, that's right, if you load the PostGIS extension, _some of your Postgres queries will depend on SQLite_.
 
-Much worse than that is the fact that some of these dependencies are written in C++, which is famously _lovely_ to get statically compiled.
-<TODO do not statically link stdc++>
-
 The resulting build script is quite straightforward, but it took me a few hours of hair-pulling.
 
 ### Building PostGIS dependencies
 
-Building GEOS (which ignored my `CC` and `CXX` vars)
+Building [GEOS](https://libgeos.org/)
 ```bash
 cmake -DCMAKE_BUILD_TYPE=Release \
       -DBUILD_SHARED_LIBS=OFF \
@@ -408,7 +413,7 @@ cmake -DCMAKE_BUILD_TYPE=Release \
       ..
 ```
 
-PROJ
+Building [PROJ](https://proj.org/en/stable/)
 ```bash
 cmake -DCMAKE_BUILD_TYPE=Release \
       -DBUILD_SHARED_LIBS=OFF \
@@ -417,18 +422,20 @@ cmake -DCMAKE_BUILD_TYPE=Release \
       -DENABLE_CURL=OFF \
       -DBUILD_TESTING=OFF \
       -DBUILD_APPS=OFF \
+      -DCMAKE_C_COMPILER="$CC" \
+      -DCMAKE_CXX_COMPILER="$CXX" \
       -DSQLite3_INCLUDE_DIR="$SQLITE_DIR" \
       -DSQLite3_LIBRARY="$SQLITE_DIR/libsqlite3.a" \
       ..
 ```
 
 
-SQLite, as always, is a delight
+[SQLite](https://sqlite.org/), as always, is a delight
 ```bash
 $CC -O2 -fPIC -DSQLITE_OMIT_LOAD_EXTENSION -c sqlite3.c -o sqlite3.o
 ```
 
-libxml2
+Building [libxml2](https://gitlab.gnome.org/GNOME/libxml2)
 ```bash
 ./autogen.sh --prefix=/usr --disable-shared --enable-static --with-pic --without-python --without-lzma --without-zlib
 make -j8 libxml2.la
@@ -461,7 +468,7 @@ done
 
 # ew
 for src in ../$POSTGIS_DIR/deps/flatgeobuf/*.cpp; do
-    $CXX $CFLAGS $INCLUDES -c "$src" -o "flatgeobuf_$(basename "$src" .cpp).o" &
+    $CXX $CXXFLAGS $INCLUDES -c "$src" -o "flatgeobuf_$(basename "$src" .cpp).o" &
 done
 
 wait
@@ -469,7 +476,7 @@ wait
 ar rcs "../bare_postgis.a" *.o
 ```
 
-This creates `bare_postgis.a` which does not have the dependencies bundled, for that, I wrote a small `ar` script:
+This creates `bare_postgis.a` which does not have the dependencies bundled, for that, I wrote a small `ar` script (did you know that `ar` supports scripting?):
 
 ```text
 CREATE libpostgis_all.a
@@ -479,7 +486,6 @@ ADDLIB $VENDOR_DIR/geos/build/lib/libgeos.a
 ADDLIB $VENDOR_DIR/proj/build/lib/libproj.a
 ADDLIB $VENDOR_DIR/sqlite/libsqlite3.a
 ADDLIB $VENDOR_DIR/libxml2/.libs/libxml2.a
-ADDLIB $LIBSTDCXX
 SAVE
 END
 ```
@@ -498,7 +504,7 @@ After pushing through all of this, we are greeted by a beautiful sight:
 postgis ver='POSTGIS="3.6.2dev 11021e0" [EXTENSION] PGSQL="180" GEOS="3.12.2-CAPI-1.18.2" (compiled against GEOS 0.3.12) PROJ="9.5.1" (compiled against PROJ 0.9.0) LIBXML="20912"'
 ```
 
-Though it did increase the size of the compiled binary by 17MB, 7MB of which are from `postgis--3.6.2dev.sql`. Oof.
+Though it did increase the size of the compiled binary by 17MB. Oof.
 
 If we create some more meaningful data:
 ```sql
@@ -507,7 +513,7 @@ CREATE TABLE locations (id SERIAL PRIMARY KEY, name TEXT, geom GEOMETRY(Point, 4
 INSERT INTO locations (name, geom) VALUES
   ('San Francisco', ST_SetSRID(ST_MakePoint(-122.4194, 37.7749), 4326)),
   ('New York', ST_SetSRID(ST_MakePoint(-74.0060, 40.7128), 4326)),
-  ('London', ST_SetSRID(ST_MakePoint(-0.1278, 51.5074), 4326))");
+  ('London', ST_SetSRID(ST_MakePoint(-0.1278, 51.5074), 4326));
 ```
 
 When running a query like this
@@ -543,33 +549,14 @@ There seem to be _some_ fallback values, as the query _did_ work. From some quic
 Regardless, depending on the filesystem to do calculations is just silly.
 Grepping for this message, I found `proj/src/iso19111/factory.cpp`, which is a cool 10052 lines.
 
-I ended up patching the `open` function:
+I ended up replacing the `open` function body with:
 
-```diff
-@@ -1198,20 +1199,13 @@ void DatabaseContext::Private::open(const std::string &databasePath,
-     }
- 
-     setPjCtxt(ctx);
--    std::string path(databasePath);
--    if (path.empty()) {
--        path.resize(2048);
--        const bool found =
--            pj_find_file(pjCtxt(), "proj.db", &path[0], path.size() - 1) != 0;
--        path.resize(strlen(path.c_str()));
--        if (!found) {
--            throw FactoryException("Cannot find proj.db");
--        }
-     }
- 
--    sqlite_handle_ = SQLiteHandleCache::get().getHandle(path, ctx);
--
--    databasePath_ = std::move(path);
-+    sqlite3 *embedded_db = get_embedded_proj_db();
-+    if (!embedded_db) {
-+        throw FactoryException("Cannot load embedded proj.db");
-+    sqlite_handle_ = SQLiteHandle::initFromExisting(embedded_db, false, 0, 0);
-+    databasePath_ = ":memory:";
- }
+```cpp
+sqlite3 *embedded_db = get_embedded_proj_db();
+if (!embedded_db)
+    throw FactoryException("Cannot load embedded proj.db");
+sqlite_handle_ = SQLiteHandle::initFromExisting(embedded_db, false, 0, 0);
+databasePath_ = ":memory:";
 ```
 
 where `get_embedded_proj_db` just calls `sqlite3_deserialize` on a `const char* db`. This `db` is generated by running the 9MiB(**!!**) `proj.db` through `xxd -include`.
@@ -586,18 +573,10 @@ I did a quick test, and standard `gzip` can compress `proj.db` to 1.7MiB and `po
 
 ## Wrapping up
 
-Making extensions work in this libpostgres was fun, but wrangling multiple build systems was not.
+Making extensions work in libpostgres was fun, but wrangling multiple build systems was not.
 
-I tried to keep all the modifications that I needed in my project, instead of patching dependencies, because updating a tree of submodules is never fun.
+For some of these projects, I needed to write some patches, which I kept as `.patch` files on my repo. I don't know if this is a good strategy, and it feels like it won't work well if the patchset grows.
 
-For some of these projects, I had to write some patches, which I kept as `.patch` files on my repo. I don't know if this is a good strategy, and it feels like it won't well if the patchset grows.
+I'm not sure if there's a niche for this project. Developer experience is _pretty good_, but configuring Docker is not that hard.
 
-This project, even at the experimental stage, lands in an interesting niche. I can 
-
-For example, a very nice emergent property is that extensions become compile-time features:
-
-```bash
-cargo build --feature pgvector
-```
-
-gives you a 13MB binary with the pgvector extension! It _almost_ feels like SQLite, though it gets a little nastier with PostGIS, which adds 26MB by itself.
+It's definitely been a lot of (type-2) fun.

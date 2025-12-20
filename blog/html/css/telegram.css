@@ -1,0 +1,115 @@
+.chat {
+  max-width: 30rem;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.message-from,
+.message-to {
+  position: relative;
+  padding: 8px 12px;
+  margin-bottom: 2px;
+  border-radius: 18px;
+  font-size: 15px;
+  max-width: 75%;
+  word-wrap: break-word;
+  width: fit-content;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  column-gap: 8px;
+  row-gap: 0;
+}
+
+.message-from {
+  background: #2b5278;
+  color: #ddd;
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.message-to {
+  background: #182533;
+  color: #ddd;
+  margin-right: auto;
+  margin-left: 0;
+}
+
+.message-from::after,
+.message-to::after {
+  content: attr(data-timestamp);
+  font-size: 14px;
+  white-space: nowrap;
+  margin-left: auto;
+  transform: translateY(5px);
+  margin-top: -5px;
+  color: #7da8d388;
+}
+.message-from::after {
+  content: attr(data-timestamp) " " url("/images/tg-check.svg");
+}
+
+.message-from + .message-to,
+.message-to + .message-from {
+  margin-top: 8px;
+}
+
+/* consecutive messages have top-right with less radius */
+.message-from + .message-from {
+  border-top-right-radius: 6px;
+}
+
+/* and first-of-consecutive has bottom-right with less radius */
+.message-from:has(+ .message-from) {
+  border-bottom-right-radius: 6px;
+}
+
+/* consecutive messages have top-left with less radius */
+.message-to + .message-to {
+  border-top-left-radius: 6px;
+}
+
+/* and first-of-consecutive has bottom-left with less radius */
+.message-to:has(+ .message-to) {
+  border-bottom-left-radius: 6px;
+}
+
+  /* Tail on last message-from in a consecutive group */
+.message-from:not(:has(+ .message-from))::before {
+  content: "";
+  mask-image: url("/images/tg-bubble-tail.svg");
+  mask-size: contain;
+  mask-repeat: no-repeat;
+
+  position: absolute;
+  right: -8px;
+  bottom: -1px;
+  width: 11px;
+  height: 20px;
+  transform: scaleX(-1);
+  background-color: #2b5278;
+}
+
+.message-from:not(:has(+ .message-from)) {
+  border-bottom-right-radius: 0px;
+}
+
+/* Tail on last message-to in a consecutive group */
+.message-to:not(:has(+ .message-to))::before {
+  content: "";
+  mask-image: url("/images/tg-bubble-tail.svg");
+  mask-size: contain;
+  mask-repeat: no-repeat;
+
+  position: absolute;
+  left: -8px;
+  bottom: -1px;
+  width: 11px;
+  height: 20px;
+  background-color: #182533;
+}
+
+.message-to:not(:has(+ .message-to)) {
+  border-bottom-left-radius: 0px;
+}
+
