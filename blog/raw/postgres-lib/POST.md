@@ -4,6 +4,7 @@ date: 2025-12-09
 tags: postgres, cursed
 slug: postgres-library
 description: global state was a mistake
+series: Embedded postgres server
 ---
 
 I feel like I just woke up from a fever dream. I've spent a large chunk of my waking hours over the last 3 days deep in the Postgres codebase.

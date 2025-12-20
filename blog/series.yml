@@ -17,3 +17,12 @@
     - espressobin
     - network_monitoring
     - network_segregation
+- name: Embedded postgres server
+  posts:
+    - postgres-lib
+    - postgres-lib-2
+
+#- name: Boot time optimization
+#  posts:
+#    - minimizing-linux-boot-times
+#    - minimizing-linux-boot-times-2
