@@ -35,7 +35,7 @@ valid_title_chars = re.compile(r'[^a-zA-Z0-9._-]')
 EMBED_FILE_RE = re.compile(r'{embed-file (?P<fname>[^}]+)}')
 EMBED_MERMAID_RE = re.compile(r'{embed-mermaid (?P<fname>[^}]+)}')
 TOOLTIP_RE = re.compile(r'{\^(?P<hint>[^|]+)[|](?P<content>[^}]+)}')
-md = Markdown(extras=["fenced-code-blocks", "cuddled-lists", "footnotes", "metadata", "tables", "header-ids"])
+md = Markdown(extras=["fenced-code-blocks", "cuddled-lists", "footnotes", "metadata", "tables", "header-ids", "strike"])
 
 @dataclass
 class BlogPosting:
@@ -78,7 +78,7 @@ class SeriesMetadata:
             for post in series['posts']:
                 posts.append(PostMetadata.from_path(f"blog/raw/{post}/POST.md", False))
             break
-        assert posts
+        assert posts, series
 
         return SeriesMetadata(name, posts)
 
