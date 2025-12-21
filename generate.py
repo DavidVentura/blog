@@ -597,7 +597,54 @@ def main(filter_name: Optional[str]):
 # of 1 class per token
 # also, because `p` and `n` are both unstyled, merge them
 def merge_spans(html):
+    from bs4 import NavigableString
+
     for pre in html.find_all('pre'):
+        code = pre.find('code')
+        if not code:
+            continue
+
+        # Pass 0: Merge raw text + whitespace spans into single n span
+        children = list(code.children)
+        i = 0
+        while i < len(children):
+            child = children[i]
+            is_text = isinstance(child, NavigableString) and child.strip()
+            is_w_span = hasattr(child, 'name') and child.name == 'span' and child.get('class') == ['w']
+
+            if is_text or is_w_span:
+                collected = []
+                j = i
+                while j < len(children):
+                    c = children[j]
+                    c_is_text = isinstance(c, NavigableString) and c.strip()
+                    c_is_w_span = hasattr(c, 'name') and c.name == 'span' and c.get('class') == ['w']
+
+                    if c_is_text or c_is_w_span:
+                        if isinstance(c, NavigableString):
+                            collected.append(str(c))
+                        else:
+                            collected.append(c.get_text())
+                        j += 1
+                    else:
+                        break
+
+                if len(collected) > 0:
+                    new_span = html.new_tag('span', **{'class': 'n'})
+                    new_span.string = ''.join(collected)
+
+                    children[i].insert_before(new_span)
+                    for k in range(i, j):
+                        if hasattr(children[k], 'decompose'):
+                            children[k].decompose()
+                        elif isinstance(children[k], NavigableString):
+                            children[k].extract()
+
+                    children = list(code.children)
+                    i = 0
+                    continue
+            i += 1
+
         spans = pre.find_all('span')
 
         # Pass 1: Absorb whitespace spans (class w) into next sibling
