@@ -552,6 +552,7 @@ def main(filter_name: Optional[str]):
             header.attrs["id"] = header.text.lower().replace(' ', '-').replace("'", "")
             anchor = html.new_tag("a", href=f'#{header.attrs["id"]}', **{"data-header":"1"})
             header.wrap(anchor)
+        html = merge_spans(html)
 
         # lint pass
         bad = False
@@ -590,6 +591,57 @@ def main(filter_name: Optional[str]):
     taken_all = time.time() - _all_time_start
     debug(f'time to build all {taken_all}')
 
+
+# pygments is pretty silly, generating about 2x as many DOM elements
+# as necessary. this squashes it to something more reasonable, instead
+# of 1 class per token
+# also, because `p` and `n` are both unstyled, merge them
+def merge_spans(html):
+    for pre in html.find_all('pre'):
+        spans = pre.find_all('span')
+
+        # Pass 1: Absorb whitespace spans (class w) into next sibling
+        for span in spans:
+            if span.get('class') == ['w'] and span.next_sibling and span.next_sibling.name == 'span':
+                next_span = span.next_sibling
+                next_span.string = span.get_text() + next_span.get_text()
+                span.decompose()
+
+        # Pass 2: Convert all class p to class n
+        spans = pre.find_all('span')
+        for span in spans:
+            if span.get('class') == ['p']:
+                span['class'] = ['n']
+
+        # Pass 3: Merge consecutive spans with same class
+        spans = list(pre.find_all('span'))
+        i = 0
+        while i < len(spans):
+            current = spans[i]
+            current_class = current.get('class', [])
+
+            j = i + 1
+            while j < len(spans) and spans[j].get('class', []) == current_class:
+                if spans[j].previous_sibling == current or (isinstance(spans[j].previous_sibling, str) and spans[j].previous_sibling.strip() == ''):
+                    between = []
+                    for sibling in current.next_siblings:
+                        if sibling == spans[j]:
+                            break
+                        if isinstance(sibling, str):
+                            between.append(sibling)
+
+                    current.string = current.get_text() + ''.join(between) + spans[j].get_text()
+                    spans[j].decompose()
+                    for text in between:
+                        if hasattr(text, 'extract'):
+                            text.extract()
+                    j += 1
+                else:
+                    break
+
+            i = j if j > i + 1 else i + 1
+
+    return html
 
 def generate_feed():
     fg = FeedGenerator()
