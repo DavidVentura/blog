@@ -3,6 +3,7 @@ title: Building ebpf.party
 date: 2025-12-27
 tags: ebpf, meta
 slug: building-ebpf-party
+description: idk yet
 incomplete: true
 ---
 
@@ -71,7 +72,7 @@ If we imagine the user submitted this program, they will expect:
 
 Let's go down the list
 
-## Checkning syntax and types
+## Checking syntax and types
 
 to even typecheck this program, we need to first create `vmlinux.h`
 
@@ -421,6 +422,20 @@ just blobs of bytes
 
 ## Drawing the rest of the owl
 
+Now that all the main concepts are validated / have a PoC, they "just" need to be integrated together.
+
+This is not _technologically_ interesting, but putting a bit of extra thought behind decisions makes for a much
+nicer experience.
+
+### A _nice_ editor
+
+- syntax highlight
+- error highlight
+
+it's still not vim, and if you want to use vim, you can just call the API.
+
+### A _nice_ debug experience
+
 
 ### Mapping types
 
@@ -429,3 +444,34 @@ use TCC to return types
 
 bless C, types are globally unique.
 
+## Smaller unrelated optimizations
+
+clang was taking roughly 80ms to build the BPF object, and another 15ms were needed for running `llvm-strip -g` on it.
+
+because there's a humongous header (~400KB), i precompiled it
+```
+clang -g -fpch-debuginfo -O2 -target bpf -x c-header task.h -o task.h.pch
+```
+
+and this dropped the build time by 10ms (80->70ms)
+
+but there were still 500KB of symbols added+removed, I had a hunch this was taking significant time, reading clang's `--help`, this option was interesting
+```
+  -gmodules               Generate debug info with external references to clang modules or precompiled headers
+```
+
+when using it, along with the precompiled header
+```
+clang -gmodules  -g  -O2 -target bpf -D__TARGET_ARCH_x86 -include-pch task.h.pch  -I/usr/include/bpf  -c execsnoop.bpf.c -o execsnoop2.bpf.o
+```
+
+the compiled artifact is now 9KB (up from 3.1KB stripped, or down from 495KB unstripped), and I don't need to run `llvm-strip` on it (well, saving 6KB is not worth the 15ms imo)
+
+the build now takes 40ms.
+
+then, using a statically built `clang` makes startup quicker roughly by 10ms.
+
+this made the compile pipeline go from ~100ms to ~30ms.
+
+
+Handling the `pch` file is slightly annoying (definitions and compiler flags have to match, need to remember to update it if i update the header), but well worth the time savings.
