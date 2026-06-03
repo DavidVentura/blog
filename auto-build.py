@@ -32,14 +32,11 @@ class ChangeHandler(FileSystemEventHandler):
     def on_modified(self, event):
         if event.is_directory:
             return
-        print(event)
         
         current_time = time.time()
         if current_time - self.last_modified < self.cooldown:
             return
-        print(current_time,self.last_modified)
-
-        
+        print('modified at', current_time, 'last modified', self.last_modified)
         print('filter = ', self.filter)
         # Run generate script
         try:
@@ -69,6 +66,7 @@ def main():
     if Path(assets_dir).exists():
         observer.schedule(event_handler, assets_dir, recursive=False)
     observer.schedule(event_handler, "generate.py")
+    observer.schedule(event_handler, "../pygments/pygments/lexers/linkerscript.py")
 
     print("watching...")
     observer.start()
