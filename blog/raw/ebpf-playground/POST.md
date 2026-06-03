@@ -427,6 +427,9 @@ Now that all the main concepts are validated / have a PoC, they "just" need to b
 This is not _technologically_ interesting, but putting a bit of extra thought behind decisions makes for a much
 nicer experience.
 
+For the frontend, I picked [Astro](https://docs.astro.build/en/concepts/why-astro/) because it seems to optimize for what I want: content-driven pages which
+are built once and served statically.
+
 ### A _nice_ editor
 
 - syntax highlight
@@ -475,3 +478,22 @@ this made the compile pipeline go from ~100ms to ~30ms.
 
 
 Handling the `pch` file is slightly annoying (definitions and compiler flags have to match, need to remember to update it if i update the header), but well worth the time savings.
+
+
+
+
+## stuff
+
+jelly of AYA
+
+DEBUG_x impl
+
+debugging verifier errors: 
+
+- dwarf stack debug
+
+
+## things that didn't go so well
+
+- shiki (mdx) vs lezer (codemirror) don't agree
+- used last tcc release, 0.9.27, but there's been 8 years of development on some random branch. maybe good? some of my patches were there already
