@@ -795,11 +795,29 @@ def generate_series_index(series):
     fpath.parent.mkdir(parents=True, exist_ok=True)
     open(str(fpath), 'w', encoding='utf-8').write(rendered)
 
-def generate_sitemap(tags: set[str]):
-    with Path('blog/html/sitemap.txt').open('w') as fd:
-        fd.write(f'{BLOG_URL}\n')
-        for t in sorted(tags):
-            fd.write(f'{BLOG_URL}tags/{t}/\n')
+def generate_sitemap():
+    items: List[PostMetadata] = []
+    for f in glob.glob("blog/raw/*/POST.md"):
+        item = PostMetadata.from_path(f)
+        if item.incomplete and not DEVMODE:
+            continue
+        items.append(item)
+
+    s_items = sorted(items, key=lambda k: k.date, reverse=True)
+
+    root = ET.Element('urlset', xmlns="http://www.sitemaps.org/schemas/sitemap/0.9")
+
+    url_elem = ET.SubElement(root, 'url')
+    ET.SubElement(url_elem, 'loc').text = BLOG_URL
+
+    for item in s_items:
+        url_elem = ET.SubElement(root, 'url')
+        ET.SubElement(url_elem, 'loc').text = item.full_url
+        ET.SubElement(url_elem, 'lastmod').text = item.date.isoformat()
+
+    tree = ET.ElementTree(root)
+    ET.indent(tree, space="  ")
+    tree.write('blog/html/sitemap.xml', encoding='utf-8', xml_declaration=True)
 
 if __name__ == '__main__':
     DEVMODE = False
@@ -815,5 +833,5 @@ if __name__ == '__main__':
         tags = get_all_tags()
         for tag in tags:
             generate_tag_index(tag)
-        generate_sitemap(tags)
+        generate_sitemap()
     generate_index()
