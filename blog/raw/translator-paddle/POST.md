@@ -4,7 +4,6 @@ date: 2026-05-25
 tags: android, ocr
 slug: mobile-translator-ppocr
 description: signs and menus in shambles
-incomplete: true
 series: On-device translation for Android
 ---
 
@@ -83,7 +82,7 @@ Because we know the four corners of the document (the user can pick them on the 
 
 Given `H`, it's the same idea as before: for each pixel `(sx, sy)` of a clean output rectangle, we map it back to the original via `H * (sx, sy, 1)`, which gives a result `(x', y', w')`; the source pixel is `(x'/w', y'/w')`.
 
-The division by `w'` is the part the basic mapping didn't have, `w'` is different per-pixel, so the far side of the document shrinks more than the near side.
+Because `w'` is different per-pixel, the far side of the document shrinks more than the near side.
 
 
 So, we let the user pick corners (a bit of sloppiness is fine):
@@ -120,7 +119,7 @@ The previous deskew idea was based on one assumption: the text runs along a stra
 
 If we can loosen the assumption from "text follows a straight line" to "text follows any one line", any reasonable curve can be approximated by some equation, and luckily for labels and bottles a parabola is enough. No big brain math needed.
 
-All we need to do is find a parabola that passes as close as possible to the contour points, and call this curve the "spine" of the text.
+All we need to do is find a parabola that passes as close as possible to the contour points. We'll call this curve the "spine" of the text.
 
 The beauty of generalizing the previous approach is that the 'flat' case doesn't need special handling: its spine just comes out as a straight line.
 
@@ -144,7 +143,7 @@ Paddle also released a [script recognition model](https://github.com/PaddlePaddl
 
 The model, however, has some downsides: it's not particularly fast, and it's not very accurate (spuriously classifies text as Chinese or Cyrillic in my tests).
 
-The solution I've found for this is the same as before: run it on the 5 longest strips.
+The solution I've found is quite basic: run it on the 5 longest strips.
 
 On multi-script input, the strips will not reach consensus of which recognizer model to use, so I'm just going to assume that mixed script content is a mix of latin and a single non-latin script.
 
