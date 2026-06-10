@@ -3,7 +3,7 @@
     - mozilla-translate
     - tesseract-translate
     - translator-paddle
-#    - translator-live
+    - translator-live
 - name: Learning about PCI-e
   posts: 
     - learning-pcie
