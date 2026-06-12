@@ -1,10 +1,9 @@
 ---
 title: Live image/video translation
-date: 2026-05-25
-tags: android, ocr
-slug: mobile-translator-live
+date: 2026-06-12
+tags: android, ocr, cv
+slug: mobile-translator-video
 description: Lens who?
-incomplete: true
 series: On-device translation for Android
 ---
 
@@ -25,13 +24,11 @@ First, the detection model scales linearly with pixel count and is _quite_ resil
 
 [^pix-budget]: I picked 650k pixels as my budget, seemed fine. 0.14x the pixel count of the full size screenshot.
 
-Then, the recognition model can be quantized. The published version uses `fp32` for its calculations, and it can be quantized to either `fp16` or `int8`, both of which have instructions that accelerate common operations at the hardware level ([sdot](https://developer.arm.com/documentation/ddi0596/2020-12/SIMD-FP-Instructions/SDOT--vector---Dot-Product-signed-arithmetic--vector--) and [fp16](https://developer.arm.com/documentation/101754/0624/armclang-Reference/Other-Compiler-specific-Features/Supported-architecture-features/Floating-point-extensions)). By quantizing to int8, the same screenshot executes in ~800ms.
+Then, the recognition model can be quantized. The published version uses `fp32` for its calculations, and it can be quantized to either `fp16` or `int8`, both of which have instructions that accelerate common operations at the hardware level ([sdot](https://developer.arm.com/documentation/ddi0596/2020-12/SIMD-FP-Instructions/SDOT--vector---Dot-Product-signed-arithmetic--vector--) and [fp16](https://developer.arm.com/documentation/101754/0624/armclang-Reference/Other-Compiler-specific-Features/Supported-architecture-features/Floating-point-extensions)). By quantizing to int8, the same screenshot executes in ~1200ms.
 
-While this is a huge win for low effort, this brings us down to ~1s, which is not fast enough.
+While this is a huge win for low effort, this brings us down to ~1.3s, which is not fast enough.
 
-Though, the recognition scales with text length (obviously, more text = more to recognize), so for small signs / few words, it's actually.. okay.
-
-In this example, recognition has little work to do, and it finishes in 50~100ms, which is good enough to try out a live overlay:
+But that ~1.3s is for a screenshot _packed_ with text. Recognition scales with the amount of text (obviously, more text = more to recognize), so for small sign it should finish in 50~100ms, which is good enough to try out a live overlay:
 
 <center>
 <video controls>
@@ -39,29 +36,19 @@ In this example, recognition has little work to do, and it finishes in 50~100ms,
 </video>
 </center>
 
-I spent a long while here, trying to match the contours back to their positions, doing heuristics to map 'previous frame detection' to 'current frame detection', smoothing the movement, etc. but it was never going to work.
+I spent a long while here, trying to match contours across frames but the heatmap from the detection model is not stable... and even if it was, inference is not fast enough to run on every frame.
 
-The heatmap obtained from the inference pass is too jittery to track across frames, and anyway the inference pass is too slow to run every frame.
-
-What to do?
-
-if there's not enough info (or there's too much variance) to use contours as trackers, then we need to discard the idea and use something else for tracking.
-
-and if the inference steps are too slow, well, then we need to run them less often and compensate with tricks.
-
-the plan:
-
-Run detection/recognition/translation _once_, on a single "anchor" frame, then, for every frame, keep track of how the scene has moved, and project the translated text warped accordingly.
+So, we need a different way to track scene movement, which has the upside that we only need to run detection/recognition/translation _once_, on an initial "anchor" frame.
 
 Given that we want to translate text, and text is usually on some kind of plane (a sign, paper, etc), we saw in the previous post that there's a single [Homography](https://en.wikipedia.org/wiki/Homography_(computer_vision)) that can express the exact transformation between two planes.
 
-We can take this homography and apply it to the original text detection/recognition overlay, which warps it _exactly_ in the same way that the image itself has changed relative to the anchor.
+We can take this homography and apply it to the translated overlay, warping it the same way the scene has moved relative to the anchor.
 
 How do we get there though?
 
-Detect some [image features](https://en.wikipedia.org/wiki/Feature_(computer_vision)) using [FAST](https://en.wikipedia.org/wiki/Features_from_accelerated_segment_test), which is a "corner" detecting algorithm. And it's fast. 
+Detect some [image features](https://en.wikipedia.org/wiki/Feature_(computer_vision)) using [FAST](https://en.wikipedia.org/wiki/Features_from_accelerated_segment_test), which is a "corner" detecting algorithm.
 
-Then, describe the surroundings of each feature using [rotated BRIEF](https://sites.cc.gatech.edu/classes/AY2024/cs4475_summer/images/ORB_an_efficient_alternative_to_SIFT_or_SURF.pdf), which is a way of converting the neighbors of the feature into a bunch of bits in a way that is rotation invariant and cheap.
+Then, describe the surroundings of each feature using [rotated BRIEF](https://sites.cc.gatech.edu/classes/AY2024/cs4475_summer/images/ORB_an_efficient_alternative_to_SIFT_or_SURF.pdf), which is a way of converting the neighbors of the feature into a bunch of bits in a way that is rotation invariant and cheap to compare.
 
 This gives us features + surroundings _on the anchor_, but some time has passed, and we now have a new, slightly different frame.
 
@@ -77,14 +64,13 @@ The first version of this was almost like a miracle
 </video>
 </center>
 
-Even though this is amazing, it's still jittery. Due to motion, sensor noise, etc, FAST finds slightly different corners each frame on top of this, we generate a new homography each frame, which must be fit from the slightly different set of matches these corners produce, causing variation and the resulting transform wobbles.
+It's still jittery though. Due to motion and sensor noise, FAST finds slightly different corners each frame, so each frame's homography gets fit from a different set of matches, and the resulting transform wobbles.
 
-To mitigate it, we can restrict the idea; these frames are not independent. They are a continuous sample of a video stream, there's temporal/spatial continuity between them.
+But we don't need to start from scratch on every frame, these frames are consecutive samples of a video stream, so we can use the temporal/spatial continuity between them to refine the feature search.
 
-There's an algorithm, [Lucas-Kanade](https://en.wikipedia.org/wiki/Lucas%E2%80%93Kanade_method), which solves this by carrying the previous frame's confirmed matches onto the new frame.
+The [Lucas-Kanade](https://en.wikipedia.org/wiki/Lucas%E2%80%93Kanade_method) algorithm can carry confirmed matches from frame N to frame N+1 through optical flow ("seems like everything moved left, search for the features to the left").
 
-We are also producing independent homographies each frame, for this, we can use an
-[Extended Kalman Filter](https://en.wikipedia.org/wiki/Extended_Kalman_filter) on the previous homography state, which allows us to merge both the old and proposed homographies smoothly, giving different merge coefficients for different DoF (translation, rotation, perspective, ...).
+Similarly, instead of computing a new homography per frame, we can use an [Extended Kalman Filter](https://en.wikipedia.org/wiki/Extended_Kalman_filter) to merge the new proposed H with the previous one, using different merge coefficients per degree of freedom (translation, perspective, rotation, ...).
 
 With these new algorithms, the homography is stable over consecutive frames:
 
@@ -94,28 +80,33 @@ With these new algorithms, the homography is stable over consecutive frames:
 </video>
 </center>
 
-This works _amazingly well_
+This works _amazingly well_, if a bit slow.
 
-## Improving performance
+To make it faster, we have two phases to optimize, the single-shot detection/recognition/translation (inference), and the continuous homography tracking+overlay rendering.
 
-There are two modes in this live translation; the single-shot detection/recognition/translation, and the continuous homography tracking+overlay rendering.
+## Improving inference performance
 
-For the single-shot det/rec, we already discussed quantization and scaling, I also worked on replacing [marian-nmt](https://github.com/marian-nmt/marian-dev) with a fork of [slimt](https://github.com/DavidVentura/slimt) which is about ~4x faster, though translation is not the bottleneck, recognition is.
+We already discussed quantization and scaling, another easy win was to replace the translation engine ([marian-nmt](https://github.com/marian-nmt/marian-dev) &rarr; [slimt](https://github.com/DavidVentura/slimt)) which is ~4x faster, leaving recognition as the main bottleneck.
 
-To improve the speed of the recognition model, it runs in batches; the problem here is that some lines are much wider than others, causing the whole batch to be delayed by the longest strip.
+To improve the wall-clock time of the recognition model, we use 4 parallel sessions which work in batches; the problem here is that some lines are much wider than others, causing the whole batch to be delayed by the longest strip.
 
-A good way to ensure no single strip is 'too wide' is to cap the max-width, by splitting on spaces. Spaces are cheap to compute, per dewarped strip, find lines perpendicular to reading direction in which there's no sharp contrast (text usually has sharp contrast to its background).
+A good way to ensure no single strip is 'too wide' is to cap the max-width, by splitting on spaces. Spaces are cheap to compute: per dewarped strip, find lines perpendicular to reading direction in which there's no sharp contrast (text usually has sharp contrast to its background).
+
+Then, I profiled the detection model and noticed it spent 25% of its time in upsampling layers, this is only useful to make the box geometry smoother, but it's not really valuable for this app, so I dropped these two layers.
+
+## Improving tracking performance
 
 The continuous overlay warping+rendering went through many phases of optimization, mostly because my initial solution was extremely naive.
 
 The overlay was initially rendered on CPU, taking about ~15ms per frame just to blit. Moving it to be an OpenGL texture, and doing the warping+blitting on GPU made it 0.3ms.
 
-Then, the actual FAST+BRIEF+RANSAC was taking ~10ms per frame, which was fine on my phone (~5 years old), but when I tried on my Pixel 3a, it was taking around ~35ms.
+Then, the actual FAST+BRIEF+RANSAC was taking ~10ms per frame, which was fine on my (old) phone, but on a Pixel 3a (even older) it took ~35ms, which is more than the 30fps frame budget.
 
 Turns out, that once we have a high quality set of descriptors, we can get by for a few frames with just KLT+EKF, so I moved the expensive FAST+BRIEF+RANSAC to execute asynchronously, resetting the accumulated drift every time it runs.
 
+With the tracking executed async, even the Pixel 3a can run at 30fps.
 
-## Improving _perceived_ performance
+## Improving perceived performance
 
 The videos so far were carefully cropped to show the tracking after the detection/recognition/translation steps.
 
@@ -127,7 +118,7 @@ Those steps are not _too_ slow, but the user does not have any idea if the app i
 </video>
 </center>
 
-Here it takes 1.5 seconds between the homography lock (pill goes to green, debug view only) and the translation showing on screen.
+Here it takes 1.5 seconds between the tracker locking on and the translation showing on screen.
 
 We can do two things to make this _seem_ faster; show the detection boxes ("text seems to be here") _and_ stream the text as it's recognized/translated:
 
@@ -137,24 +128,35 @@ We can do two things to make this _seem_ faster; show the detection boxes ("text
 </video>
 </center>
 
-Here, the detection is shown ~200ms after the homography lock, the translation takes the same time, but it _feels_ much better.
+Here, the detection boxes show up ~200ms after the tracker locks; recognition+translation did not speed up, but it _feels_ much more responsive.
 
+## Just getting lucky
+
+By the time I was finishing this section, PaddlePaddle released the [v6 models](https://arxiv.org/pdf/2606.13108), which are about twice as fast. My existing optimizations continue to work, it just lowers the inference time of what was left. Easy win.
+
+<center>
+<video controls>
+    <source src="assets/v6_translation.mp4" />
+</video>
+</center>
+
+Detection runs in 90ms and the recognition+translation in 900ms.
 
 ## Bonus: screen translation
 
 If we already have all these tricks to work on the camera.. can it also work on translating the screen?
 
-Kind of. The homography trick works on a plane, is the screen a plane? Sometimes! If you are scrolling a website, it is. Content is only translated (no rotation/perspective changes).
+Kind of. The homography trick works on a plane, is the screen a plane? Sometimes! If you are scrolling a website, it is. Content only shifts up and down; there's no rotation or perspective.
 
 But if you are watching a video.. the subtitles are on a plane and the content is on another. What should be tracked? Definitely don't make the subtitles pan horizontally following the camera pan!
 
-So, okay, we disable homography and figure out a different way of doing content tracking.
+So, okay, for the screen we drop the homography and pin the overlay in place.
 
-There is a big problem: When capturing screen content on Android, you can't exclude your own windows, so after rendering the overlay once, the app continuously masks the content under it, and starts running recognition on the translated overlay!
+There is a big problem though: on Android you capture the _display output_, including your own overlays! After rendering the first frame of the overlay, the app goes into a loop of capturing and translating itself.
 
-The first trick I thought about was to make the overlay semi-transparent, then, some of the underlying content can be seen, and if we subtract our (known) overlay, we would be left with only the original content. However, this compresses the original signal dramatically, making detection/recognition not really reliable.
+The first idea I had was to make the overlay semi-transparent, then, some of the underlying content can be seen, and if we subtract our (known) overlay, we would be left with only the original content. However, this compresses the original signal dramatically, making detection/recognition not really reliable.
 
-Thinking about it, transparency means make every pixel is N% opaque. What if instead we defined it as N pixels 0% opaque and (M-N) pixels 100% opaque?
+Thinking about it, transparency means every pixel is partially see-through. What if instead we made a few pixels _fully_ see-through and the rest fully opaque? The average looks the same, but the see-through pixels carry the underlying content unmodified.
 
 This is interesting, because modern phones have ridiculously high pixel densities.
 
@@ -162,13 +164,13 @@ My phone's screen is ~160mm tall, while displaying at a resolution of 1440x3216.
 
 What if, we define a grid of 1x1 pixel 'holes' in the overlay, and observe the world through that? It'd be the equivalent of a nearest-neighbor downscale of the original image.
 
-It could look something like this
+To the user, it could look something like this
 
 <center>
 ![](assets/dots-shifted.png)
 </center>
 
-and the view through the overlay looks like this:
+and the view through the overlay looks like this (pinholes are only placed on the text body, not on the pills):
 
 <center>
 ![](assets/pinholes.png)
@@ -176,7 +178,7 @@ and the view through the overlay looks like this:
 
 The see-through view is not good enough to run text detection/recognition, though it feels like it should be. I can definitely read under it. But when it's not perfect contrast, it gets murky.
 
-What we can do is detect when obscured content changes, drop _that specific area_, recapture it, and run it through the pipeline.
+What we can do is watch through those holes: when the content under an overlay changes, drop _that specific overlay_, recapture the area, and run it through the pipeline again.
 
 An example, which drops & re-renders the overlays as subtitles change:
 <center>
@@ -185,11 +187,11 @@ An example, which drops & re-renders the overlays as subtitles change:
 </video>
 </center>
 
-## On impostor syndrome
+## Fast and dull
 
-I have mixed feelings about this part of the project. The _whole_ of the homography was written by a friendly robot. Doing this by myself would've taken something like 2~6 months, but I'd probably not even started it. This took exactly 2 _weeks_.
+I have mixed feelings about this part of the project. The _whole_ of the homography tracking was written by a friendly robot. Doing this by myself would've taken something like 2~6 months, but I'd probably not even started it. This took exactly 2 _weeks_.
 
-During these two weeks, I was spoon fed information about existing literature, how it can be combined to do what I want, things I need to be careful, etc.
+During these two weeks, I was spoon fed information about existing literature, how it can be combined to do what I want, things I need to consider carefully, etc.
 
 It felt like having someone with infinite patience answer all my questions.
 
@@ -197,8 +199,13 @@ The weird part, was that after getting an idea of how everything would fit toget
 
 This felt like giving projects to juniors/interns at work. Give them a task, they come up with some result which maybe behaves right, but even a quick skim of the decisions raises flags (allocating and copying a 16MB bitmap every frame???)
 
-At the same time, it's _not_ like giving a project to someone else. Then, it'd be clear that someone else built it, and I just guided them to get there. 
+At the same time, it's _not_ like giving a project to someone else. Then, it'd be clear that someone else built it, and I just guided them to get there. Did _I_ build this? I definitely spent 2 weeks in front of my screen and made a lot of implementation decisions.
 
-This combination of the AI teaching me concepts and guiding my understanding, followed by me micromanaging how it implements _those same things_ falls into a bucket I have no name for.
+It's empowering and depressing at the same time.
 
-It's empowering, because I've never learned so fast, nor gotten results so fast. It's also depressing, to sit there, micromanaging a computer, waiting 15 minutes for it to make extremely dumb mistakes, or forget to set an environment variable.
+I've never learned or gotten results so fast, however, most of the work is to sit there micromanaging a computer, waiting 15 minutes between actions.
+
+Moving fast while going insane from boredom.
+
+This combination of learning, boredom, speed and micromanagement falls into a bucket I have no name for.
+
