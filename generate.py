@@ -735,6 +735,8 @@ def generate_index():
 
     s_items = sorted(items, key=lambda k: k.date)
     for item in s_items:
+        if item.incomplete:
+            continue
         tstamp = make_rss_entry(feed, item)
         if last_update is None:
             last_update = tstamp
